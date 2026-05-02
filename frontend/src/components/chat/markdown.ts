@@ -1,47 +1,87 @@
 /**
- * Markdown renderer with security sanitization.
- * WASM main path with TS fallback (Phase 14).
- * For now, uses basic text rendering with code block detection.
+ * Markdown renderer with DOMPurify sanitization.
+ * TS fallback path with security parity to WASM (per ADR-001).
+ * Security: DOMPurify, URI scheme blocking, Mermaid strict mode.
  */
+
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
 
 const URI_BLOCKLIST = /^(javascript|vbscript|data:text\/html)/i;
 
+// Configure DOMPurify
+const ALLOWED_TAGS = [
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'p', 'br', 'hr',
+  'ul', 'ol', 'li',
+  'blockquote', 'pre', 'code',
+  'strong', 'em', 'del', 's',
+  'a', 'img',
+  'table', 'thead', 'tbody', 'tr', 'th', 'td',
+  'div', 'span',
+];
+const ALLOWED_ATTR = ['href', 'src', 'alt', 'title', 'class', 'target', 'rel'];
+const FORBID_TAGS = ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'svg'];
+
+// Configure marked
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+});
+
+// Custom link renderer to block dangerous URIs
+const renderer = new marked.Renderer();
+renderer.link = ({ href, title, text }) => {
+  if (!href || URI_BLOCKLIST.test(href.trim())) {
+    return String(text);
+  }
+  const titleAttr = title ? ` title="${escapeAttr(title)}"` : '';
+  return `<a href="${escapeAttr(href)}"${titleAttr} class="text-blue-400 underline" target="_blank" rel="noopener noreferrer">${text}</a>`;
+};
+
+renderer.image = ({ href, title, text }) => {
+  if (!href || URI_BLOCKLIST.test(href.trim())) {
+    return text || '';
+  }
+  // Only allow self/data-image URIs inline
+  const isSafe = href.startsWith('/') || href.startsWith('data:image/');
+  if (!isSafe) {
+    const titleAttr = title ? ` title="${escapeAttr(title)}"` : '';
+    return `<a href="${escapeAttr(href)}"${titleAttr} class="text-blue-400 underline" target="_blank" rel="noopener noreferrer">${text || href}</a>`;
+  }
+  const titleAttr = title ? ` title="${escapeAttr(title)}"` : '';
+  return `<img src="${escapeAttr(href)}" alt="${escapeAttr(text || '')}"${titleAttr} class="max-w-full rounded" />`;
+};
+
+renderer.code = ({ text, lang }) => {
+  if (lang === 'mermaid') {
+    // Mermaid: render as pre with class for future Mermaid.js init (strict mode)
+    return `<pre class="mermaid bg-gray-900 rounded p-3 my-2 overflow-x-auto">${escapeHtml(text)}</pre>`;
+  }
+  return `<pre class="bg-gray-900 rounded p-3 my-2 overflow-x-auto"><code class="language-${escapeAttr(lang || '')}">${escapeHtml(text)}</code></pre>`;
+};
+
+marked.use({ renderer });
+
 /**
- * Simple markdown-to-HTML renderer (TS fallback path).
- * Full implementation in Phase 14 with WASM + DOMPurify.
+ * Render markdown to sanitized HTML.
+ * DOMPurify + URI blocking + SVG exclusion.
  */
 export function renderMarkdown(content: string): string {
-  // Basic escaping
-  let html = escapeHtml(content);
-
-  // Code blocks
-  html = html.replace(
-    /```(\w*)\n([\s\S]*?)```/g,
-    (_match, lang, code) =>
-      `<pre class="bg-gray-900 rounded p-3 my-2 overflow-x-auto"><code class="language-${lang}">${code}</code></pre>`,
-  );
-
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-800 px-1 rounded text-sm">$1</code>');
-
-  // Bold
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-
-  // Italic
-  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-  // Links (block dangerous URIs)
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, text, href) => {
-    if (URI_BLOCKLIST.test(href)) {
-      return text;
-    }
-    return `<a href="${escapeHtml(href)}" class="text-blue-400 underline" target="_blank" rel="noopener noreferrer">${text}</a>`;
+  const rawHtml = marked.parse(content, { async: false }) as string;
+  return DOMPurify.sanitize(rawHtml, {
+    ALLOWED_TAGS,
+    ALLOWED_ATTR,
+    ALLOW_DATA_ATTR: false,
+    FORBID_TAGS,
   });
+}
 
-  // Line breaks
-  html = html.replace(/\n/g, '<br>');
-
-  return html;
+/**
+ * Check if URI scheme is blocked.
+ */
+export function isBlockedUri(uri: string): boolean {
+  return URI_BLOCKLIST.test(uri.trim());
 }
 
 function escapeHtml(str: string): string {
@@ -53,9 +93,6 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
-/**
- * Check if URI scheme is blocked.
- */
-export function isBlockedUri(uri: string): boolean {
-  return URI_BLOCKLIST.test(uri.trim());
+function escapeAttr(str: string): string {
+  return str.replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
