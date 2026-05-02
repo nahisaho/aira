@@ -346,6 +346,7 @@ THE SYSTEM SHALL allow users to configure MCP servers per project with server na
 - [ ] 設定がプロジェクトに保存される
 - [ ] 設定した MCP がエージェント実行時に `--additional-mcp-config` で渡される
 - [ ] 環境変数の値は API レスポンス・ログ・UI 上でマスクされる (`***` 表示)
+- [ ] CLI 出力 (チャットストリーム) にシークレット値が含まれる場合、ベストエフォートで redact される
 - [ ] 一時設定ファイルは owner-only パーミッション (0600 / NTFS ACL) で作成され、プロセス終了後に即時削除される
 
 **トレーサビリティ**: DES-MCP-001
