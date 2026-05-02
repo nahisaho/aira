@@ -732,9 +732,9 @@ THE SYSTEM SHALL operate as a single-user localhost application in v1.0, requiri
 - [ ] アプリケーションレベルのログイン画面が不要
 
 **バインド戦略**:  
-Node.js の `server.listen(port, '::')` は OS の dual-stack 設定に依存するため、**2 ソケット方式**を採用する:
-1. `server.listen(port, '127.0.0.1')` — IPv4 ループバック
-2. `server.listen(port, '::1')` — IPv6 ループバック  
+Node.js の単一 `http.Server` は 1 アドレスにしか bind できないため、**2 つの `http.Server` インスタンス**を同一リクエストハンドラーで起動する:
+1. サーバー 1: `listen(port, '127.0.0.1')` — IPv4 ループバック
+2. サーバー 2: `listen(port, '::1')` — IPv6 ループバック  
 
 いずれか一方のバインドが失敗した場合 (例: IPv6 無効環境)、もう一方のみで起動しログに警告を出力する。
 

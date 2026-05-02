@@ -252,7 +252,16 @@ type WSEvent =
 
 **対応要件**: REQ-AUTH-001〜005
 
-v1.0 は localhost シングルユーザーモデル。API サーバーはループバックインターフェース (`127.0.0.1` および `::1`) に**2 ソケット方式**でバインドする (dual-stack 非依存)。  
+v1.0 は localhost シングルユーザーモデル。API サーバーはループバックインターフェース (`127.0.0.1` および `::1`) に**2 ソケット方式**でバインドする (dual-stack 非依存)。
+
+**2 ソケット実装**: Node.js の単一 `http.Server` は 1 アドレスにしか bind できないため、**2 つの `http.Server` インスタンス**を同じ Hono アプリ (リクエストハンドラー) を共有して起動する。WebSocket upgrade も両サーバーに同じハンドラーを登録する:
+```
+const app = new Hono();
+const server4 = createServer(app.fetch); server4.listen(port, '127.0.0.1');
+const server6 = createServer(app.fetch); server6.listen(port, '::1');
+// WS upgrade: 両方に登録
+```
+いずれか一方のバインドが失敗した場合 (例: IPv6 無効環境)、もう一方のみで起動しログに警告を出力する。  
 GitHub Token はサーバーサイドの環境変数 (`GITHUB_TOKEN`) または  
 設定 API 経由で `data/settings.json` に保存 (OS ファイル権限 0600 / NTFS ACL で保護)。  
 エージェントプロセスには環境変数として注入する。Token は API レスポンスに含めない。
@@ -320,6 +329,7 @@ projects/
 
 **プロセスセキュリティ**:
 - エージェントは `child_process.spawn()` で起動。**POSIX (macOS) では `detached: true` を指定し、子プロセスを独立したプロセスグループ/セッションで起動する**。これにより `process.kill(-pid, signal)` でプロセスツリー全体にシグナル送信が可能
+- **CLI コマンド解決**: プリフライトおよびランタイム spawn で同一の解決済みコマンドパスを使用する。macOS: `copilot` (PATH 検索)。Windows: `copilot.cmd` (npm グローバルインストール時) を `spawn` に `shell: true` なしで渡す。プリフライトで `--version` を実行して存在確認し、解決済みパスをキャッシュする
 - cwd を `projects/{project_id}/workspace/` に制限
 - Token 注入: `AgentService` が解決済み Token を `spawn(..., { env: { GITHUB_TOKEN } })` で渡す
   - 解決優先順位: `process.env.GITHUB_TOKEN` > `data/settings.json` > 未設定 (エラー)
@@ -338,12 +348,14 @@ projects/
    - 結果が絶対パス (例: `/etc/passwd`)
    - 結果が `..` で始まる (例: `../sibling-project/secret`)
    - Windows: 比較前に両方を `.toLowerCase()` で case-fold
-3. 存在するファイルに対しては `fs.realpath()` で解決後に再度ステップ 2 を適用 (シンボリックリンク経由の escape 防止)
+3. **祖先パス検証** (シンボリックリンク/ジャンクション escape 防止):
+   - 対象パスが存在する場合: `fs.realpath()` で解決後にステップ 2 を再適用
+   - 対象パスが存在しない場合 (create/write): **最近接存在祖先** (nearest existing ancestor) を特定し、その `fs.realpath()` 結果がワークスペース内に収まることを検証。祖先から対象までの中間セグメントが symlink でないことを `fs.lstat()` で確認
+   - いずれの場合も `lstat.isSymbolicLink()` が true のパスコンポーネントは拒否 (403)
 4. Windows (`process.platform === 'win32'`) の場合:
    - 予約名チェック: ファイル名 (拡張子除去後) が `/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i` にマッチ → 拒否 (400)
    - 末尾ドット/スペース: ファイル名が `.` または ` ` で終わる → 拒否 (400)
-5. シンボリックリンク/ジャンクション: `lstat` で判定、リンクの場合は拒否 (403)
-6. 適用箇所: `FileService.resolve()` メソッドに集約し、全ファイル操作 API で呼び出す
+5. 適用箇所: `FileService.resolve()` メソッドに集約し、全ファイル操作 API で呼び出す
 
 **レンダリングセキュリティ (XSS 防御)**:
 - Markdown: DOMPurify でサニタイズ。生 HTML は除去、許可タグのホワイトリスト方式
