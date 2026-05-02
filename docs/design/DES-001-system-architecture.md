@@ -165,10 +165,10 @@ Skills は `skills/` ディレクトリにローカルキャッシュされ、`s
 プリセット MCP (GitHub MCP Tools, ToolUniverse, Deep Research) は  
 `mcp-presets.json` に定義される。
 
-**MCP 環境変数のシークレット保護**:
-- DB 保存: `config_json.env` にキー・値ペアとして格納 (v1.0 は平文、settings.json と同レベル)
-- API レスポンス: `GET /api/projects/:id/mcp` は env 値を `"***"` にマスクして返す。設定画面で再編集時は空欄表示 (再入力を要求)
-- ログ出力: env 値は一切ログに出力しない。CLI の stdout/stderr にシークレットが含まれる可能性があるため、ストリーミング前にベストエフォートで redact を行う: `config_json.env` の各値を正規表現マッチし `***` に置換。完全な防止は保証しない (部分一致・エンコード変換等) が、平文漏洩リスクを低減する
+**MCP シークレット保護** (env / headers 共通):
+- DB 保存: `config_json.env` および `config_json.headers` にキー・値ペアとして格納 (v1.0 は平文、settings.json と同レベル)
+- API レスポンス: `GET /api/projects/:id/mcp` は env / headers の値を `"***"` にマスクして返す。設定画面で再編集時は空欄表示 (再入力を要求)
+- ログ出力: env / headers 値は一切ログに出力しない。CLI の stdout/stderr にシークレットが含まれる可能性があるため、ストリーミング前にベストエフォートで redact を行う: `config_json.env` および `config_json.headers` の各値を正規表現マッチし `***` に置換。完全な防止は保証しない (部分一致・エンコード変換等) が、平文漏洩リスクを低減する
 - 一時設定ファイル: `os.tmpdir()` 配下にランダム名で作成、パーミッション 0600 (Windows: icacls でカレントユーザーのみ)。プロセス終了 (正常・異常とも) の finally ブロックで即時削除 (`fs.unlink`)。削除失敗はログ警告のみ (次回起動時のプリフライトでも残存一時ファイルをクリーンアップ)
 
 **MCP プロバイダ障害時の動作**:
@@ -302,11 +302,11 @@ projects/
 シングルユーザー・localhost 専用のため、コンテナ隔離は不要。
 
 **プロセスセキュリティ**:
-- エージェントは `child_process.spawn()` で起動
+- エージェントは `child_process.spawn()` で起動。**POSIX (macOS) では `detached: true` を指定し、子プロセスを独立したプロセスグループ/セッションで起動する**。これにより `process.kill(-pid, signal)` でプロセスツリー全体にシグナル送信が可能
 - cwd を `projects/{project_id}/workspace/` に制限
 - Token 注入: `AgentService` が解決済み Token を `spawn(..., { env: { GITHUB_TOKEN } })` で渡す
   - 解決優先順位: `process.env.GITHUB_TOKEN` > `data/settings.json` > 未設定 (エラー)
-- タイムアウト: 10 分。macOS: SIGTERM → 5秒後 SIGKILL (プロセスグループ)、Windows: `taskkill /T /F /PID`
+- タイムアウト: 10 分。macOS: `process.kill(-pid, 'SIGTERM')` → 5秒後 `process.kill(-pid, 'SIGKILL')` (プロセスグループ全体)。Windows: `taskkill /T /F /PID` (プロセスツリー)
 - 最大同時実行数: デフォルト 5 プロセス (REQ-NFR-002 で設定可能)
 
 **入力バリデーション**:

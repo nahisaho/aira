@@ -487,12 +487,12 @@ WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS
 
 **Open 許可対象ファイル拡張子** (大文字小文字不問):
 - テキスト/コード: `.txt`, `.md`, `.json`, `.yaml`, `.yml`, `.toml`, `.xml`, `.csv`, `.log`, `.env.example`
-- プログラミング: `.ts`, `.tsx`, `.js` (※), `.jsx`, `.py`, `.rs`, `.go`, `.java`, `.c`, `.cpp`, `.h`, `.hpp`, `.cs`, `.rb`, `.php`, `.swift`, `.kt`, `.scala`, `.sql`, `.html`, `.css`, `.scss`, `.less`, `.vue`, `.svelte`
+- プログラミング: `.ts`, `.tsx`, `.jsx`, `.py`, `.rs`, `.go`, `.java`, `.c`, `.cpp`, `.h`, `.hpp`, `.cs`, `.rb`, `.php`, `.swift`, `.kt`, `.scala`, `.sql`, `.html`, `.css`, `.scss`, `.less`, `.vue`, `.svelte`
 - 画像: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`, `.ico`, `.bmp`
 - ドキュメント: `.pdf`, `.docx`, `.xlsx`, `.pptx`
 - その他: `.zip`, `.tar.gz`, `.wasm`
 
-> **※ `.js` の扱い**: Windows WSH (JScript) での実行リスクがあるが、コード編集が主用途のため許可。OS default association が VS Code 等のエディタであることを前提とする。
+> **注**: `.js` は Windows WSH (JScript) で実行されるリスクがあるため Open 許可リストから除外。View / Download で内容確認可能。
 
 > **注意**: 許可リストにない拡張子のファイルには「開く」ボタンを非表示とし、「View」「Download」のみ表示。ユーザーが直接実行したい場合は「フォルダで表示」機能または手動でファイルシステムから操作する。
 
