@@ -46,9 +46,16 @@ const translations = {
     'project.delete': '削除',
 
     // Files
-    'files.title': 'ファイル',
+    'files.title': '出力ファイル',
     'files.noFiles': 'ファイルなし',
     'files.download': 'ダウンロード',
+
+    // Right panel
+    'panel.status': 'ステータス',
+    'panel.idle': '進行状況',
+    'panel.runHistory': '実行履歴',
+    'panel.stop': '停止',
+    'panel.noProject': 'プロジェクト未選択',
   },
   en: {
     // Sidebar
@@ -96,8 +103,15 @@ const translations = {
 
     // Files
     'files.title': 'Files',
-    'files.noFiles': 'No files',
+    'files.noFiles': 'No files yet',
     'files.download': 'Download',
+
+    // Right panel
+    'panel.status': 'Status',
+    'panel.idle': 'Idle',
+    'panel.runHistory': 'Run History',
+    'panel.stop': 'Stop',
+    'panel.noProject': 'No project selected',
   },
 } as const;
 
