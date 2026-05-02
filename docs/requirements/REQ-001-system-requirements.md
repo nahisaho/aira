@@ -109,7 +109,7 @@ WHEN a user sends a message in a project, THE SYSTEM SHALL create a new Run, inv
 **受入基準**:
 - [ ] プロジェクト選択中のチャットでは、そのプロジェクトの Skills が使用される
 - [ ] プロジェクト選択中のチャットでは、そのプロジェクトの MCP 設定が適用される
-- [ ] 異なるプロジェクト間での並行実行が可能 (最大 5 プロセス)
+- [ ] 異なるプロジェクト間での並行実行が可能 (デフォルト最大 5 プロセス、REQ-NFR-002 で設定可能)
 - [ ] 同一プロジェクトで実行中に新メッセージ送信した場合、キューイングされる
 - [ ] 右パネルは選択中プロジェクトの Run 状態を表示する
 
@@ -476,16 +476,18 @@ WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS
 **OS 別実行方法**:
 | OS | コマンド | 注意事項 |
 |---|---|---|
-| macOS | `open <path>` | spawn で直接実行可 |
-| Windows | `cmd.exe /c start "" "<path>"` | `start` は cmd 組み込みのため shell 経由が必要。パスにスペース・日本語を含む場合のクオート必須 |
+| macOS | `open <path>` | spawn で直接実行可。パスはシェルエスケープ不要 (引数として渡す) |
+| Windows | `powershell.exe -NoProfile -Command "Start-Process -LiteralPath '<path>'"` | `-LiteralPath` でメタ文字 (`&`, `%`, `^` 等) を安全に処理。パスに `'` が含まれる場合は `''` でエスケープ |
 
 **受入基準**:
 - [ ] ファイル行に「開く」ボタンがある
 - [ ] クリックで OS のデフォルトアプリケーションが起動する
-- [ ] バックエンド API (`POST /api/projects/:id/files/:fileId/open`) でファイルを開く
-- [ ] macOS では `open` コマンド、Windows では `cmd.exe /c start "" "<path>"` を使用する
+- [ ] バックエンド API (`POST /api/projects/:id/files/:fileId/open`) が成功時 200、失敗時 404/500 を返す
+- [ ] macOS では `open` コマンド、Windows では `Start-Process -LiteralPath` を使用する
 - [ ] パスにスペース・日本語文字を含むファイルが正しく開ける
+- [ ] パスにシェルメタ文字 (`&`, `%`, `^`, `(`, `)`) を含むファイルが正しく開ける
 - [ ] ファイルが存在しない場合は 404 エラーを返す
+- [ ] OS コマンド実行失敗時は 500 エラーとエラー詳細を返す
 
 **トレーサビリティ**: DES-FILE-001
 
@@ -606,15 +608,21 @@ THE SYSTEM SHALL require a valid GitHub Token to be configured before invoking t
 
 **Token ライフサイクル**:
 1. **入力元**: 環境変数 (`GITHUB_TOKEN`) またはサーバー設定 API 経由
-2. **保存場所**: サーバーサイドの `data/settings.json` に暗号化保存 (環境変数が優先)
-3. **永続性**: サーバー再起動後も保持される (永続保存)
-4. **クライアント通知**: Token の設定有無 (boolean) のみ API レスポンスに含む
-5. **子プロセス注入**: `child_process.spawn()` の `env` オプションで渡す
-6. **失効時**: エージェント実行エラーとしてユーザーに通知し、再設定を促す
+2. **保存場所**: サーバーサイドの `data/settings.json` に保存 (環境変数が優先)
+3. **保護方式 (v1.0)**: OS ファイル権限 (0600) による保護。アプリケーションレベルの暗号化は v1.1+ スコープ
+4. **永続性**: サーバー再起動後も保持される (永続保存)
+5. **クライアント通知**: Token の設定有無 (boolean) のみ API レスポンスに含む
+6. **子プロセス注入**: `child_process.spawn()` の `env` オプションで渡す
+7. **失効時**: エージェント実行エラーとしてユーザーに通知し、再設定を促す
+
+> **注意 (v1.0 セキュリティ前提)**: localhost シングルユーザーのため、Token は平文保存 + ファイル権限保護で許容する。  
+> v1.1+ で OS ネイティブ秘密ストア (macOS Keychain / Windows DPAPI) への移行を計画。
 
 **受入基準**:
 - [ ] 環境変数 `GITHUB_TOKEN` が設定されていればそちらを使用する
 - [ ] 環境変数未設定時は、設定 API で Token を登録できる
+- [ ] `data/settings.json` のファイル権限が 0600 (owner read/write only) で作成される
+- [ ] Windows では `data/settings.json` が NTFS ACL でカレントユーザーのみ読み書き可能に設定される
 - [ ] Token が未設定の場合、チャット送信時に「Token 未設定」エラーが表示される
 - [ ] GET /api/settings は Token の設定有無 (boolean) のみ返す (Token 値は返さない)
 - [ ] Token の有効性を検証するエンドポイント (POST /api/settings/validate-token) がある
@@ -760,7 +768,7 @@ THE SYSTEM SHALL confine all API-level and UI-level file operations to the resol
 **受入基準**:
 - [ ] ファイル API が `realpath()` でパスを解決し、ワークスペース外を 403 で拒否する
 - [ ] エージェントプロセスの cwd が `projects/{id}/workspace/` に設定される
-- [ ] 最大同時実行数が 5 プロセスに制限される
+- [ ] 最大同時実行数がデフォルト 5 プロセスに制限される (REQ-NFR-002 で設定可能)
 - [ ] パストラバーサル攻撃 (`../`) が API レベルで防止される
 
 **トレーサビリティ**: DES-SEC-001
@@ -772,14 +780,23 @@ THE SYSTEM SHALL confine all API-level and UI-level file operations to the resol
 **優先度**: P0
 
 **要件**:  
-THE SYSTEM SHALL enforce a maximum execution time of 10 minutes per agent invocation and terminate the process if exceeded.
+THE SYSTEM SHALL enforce a maximum execution time of 10 minutes per agent invocation and terminate the process tree if exceeded.
 
-**説明**: エージェント実行にタイムアウトを設定し、無限ループや過度なリソース消費を防止する。
+**説明**: エージェント実行にタイムアウトを設定し、無限ループや過度なリソース消費を防止する。プロセスツリー全体 (子プロセスの孫プロセスを含む) を確実に停止する。
+
+**OS 別プロセス停止戦略**:
+| OS | 手順 | 詳細 |
+|---|---|---|
+| macOS | `SIGTERM` → 5秒待機 → `SIGKILL` | `process.kill(-pid, signal)` でプロセスグループ全体を停止 |
+| Windows | `taskkill /T /F /PID <pid>` | `/T` でプロセスツリー全体、`/F` で強制終了。Node の `child_process.spawn('taskkill', ...)` で実行 |
 
 **受入基準**:
 - [ ] プロセスに 10 分のタイムアウトが設定される
-- [ ] タイムアウト超過でプロセスが SIGTERM → SIGKILL で停止される
+- [ ] macOS: タイムアウト超過で SIGTERM → 5秒後 SIGKILL (プロセスグループ)
+- [ ] Windows: タイムアウト超過で `taskkill /T /F /PID` によるツリー停止
+- [ ] タイムアウト/キャンセル後、Copilot CLI プロセスおよび子孫プロセスが両 OS で残存しない
 - [ ] タイムアウト発生がユーザーに通知される
+- [ ] Run ステータスが `timeout` に更新される
 
 **トレーサビリティ**: DES-SEC-001
 
@@ -826,11 +843,25 @@ IF the GitHub token is missing, expired, or invalid, THE SYSTEM SHALL notify the
 **要件**:  
 IF a WebSocket connection is lost during an active Run, THE SYSTEM SHALL automatically attempt reconnection and resync the Run state upon reconnection.
 
+**再接続プロトコル**:
+1. **切断検知**: WebSocket `close` / `error` イベント
+2. **リトライ**: 指数バックオフ (1s → 2s → 4s → 8s → 16s、最大 16s)
+3. **再接続後の状態同期**: スナップショット方式
+   - クライアントが `GET /api/projects/:id/runs/current` で現在の Run 状態を取得
+   - クライアントが `GET /api/projects/:id/files` で最新ファイル一覧を取得
+   - 右パネルの UI をスナップショットで完全再構築
+4. **リトライ上限**: 5 回連続失敗後は自動リトライ停止、手動リロードを促す
+
+> **設計判断**: イベント再送 (replay) 方式はバッファ管理・シーケンス管理が複雑なため、v1.0 ではスナップショット方式を採用。再接続時にイベント間のギャップは生じるが、スナップショットにより最終状態は常に正確。
+
 **受入基準**:
-- [ ] 切断検知後 3 秒以内にリコネクト試行が開始される
-- [ ] リコネクト中は UI にインジケーターが表示される
-- [ ] 再接続後、未受信イベントが再配信される (サーバー側バッファ 60 秒)
-- [ ] 5 回連続失敗後は手動リロードを促す
+- [ ] 切断検知後 1 秒以内にリコネクト試行が開始される
+- [ ] 指数バックオフでリトライ間隔が増加する (1s → 2s → 4s → 8s → 16s)
+- [ ] リコネクト中は UI に接続状態インジケーターが表示される (`connected` / `reconnecting` / `disconnected`)
+- [ ] 再接続後に `GET /api/projects/:id/runs/current` で Run スナップショットを取得する
+- [ ] 再接続後に `GET /api/projects/:id/files` でファイル一覧を再取得する
+- [ ] 5 回連続失敗後に「ページを再読み込みしてください」メッセージが表示される
+- [ ] 再接続成功後にリトライカウンターがリセットされる
 
 **トレーサビリティ**: DES-PROGRESS-001
 
@@ -895,7 +926,7 @@ IF a file operation (delete, open, read) fails due to OS-level permission denial
 - [ ] ファイル削除時に `EBUSY` / `EPERM` / `EACCES` エラーが発生した場合、具体的なエラーメッセージが表示される
 - [ ] エラーメッセージに「ファイルを使用中のアプリケーションを閉じてください」を含む
 - [ ] Windows でのファイルロック状態が正しく検知される
-- [ ] ファイルオープン失敗時に 409 (Conflict) または 403 を返す
+- [ ] ファイルオープン/削除失敗時にファイルロックが原因なら 423 (Locked) を返し、権限エラーなら 403 を返す
 
 **トレーサビリティ**: DES-FILE-001
 
@@ -1065,13 +1096,20 @@ THE SYSTEM SHALL run on both Windows (native, not WSL) and macOS without platfor
 **優先度**: P0
 
 **要件**:  
-THE SYSTEM SHALL perform a preflight health check on startup, verifying Copilot CLI availability, workspace directory writability, and OS compatibility, and display actionable error messages for any failures.
+THE SYSTEM SHALL perform a preflight health check on startup, verifying OS compatibility, Copilot CLI availability, and workspace directory writability, and display actionable error messages for any failures.
+
+**プリフライトチェック項目**:
+1. **OS 判定**: `process.platform` が `darwin` (macOS) または `win32` (Windows) であることを確認。それ以外 (Linux/WSL 含む) は警告表示
+2. **CLI 検出**: ランタイム spawn パスと同じコマンドで `copilot --version` (または相当) を実行し、バージョン文字列を取得
+3. **ワークスペース**: `data/` ディレクトリが書き込み可能か `fs.access(W_OK)` で確認
+4. **Token**: 環境変数または settings.json の存在確認 (未設定は警告のみ)
 
 **受入基準**:
-- [ ] 起動時に Copilot CLI の存在確認を行う (`which` / `where`)
+- [ ] 起動時に `copilot --version` (または同等コマンド) を実行して CLI の存在と応答を確認する
+- [ ] `process.platform` が `darwin` / `win32` 以外の場合、警告ログが出力される
 - [ ] ワークスペースのベースディレクトリが書き込み可能か確認する
 - [ ] 確認失敗時に具体的なエラーメッセージと解決手順を表示する
-- [ ] プリフライト結果が API (`GET /api/health`) で確認可能
+- [ ] プリフライト結果が API (`GET /api/health`) で JSON として取得可能 (`{ cli: bool, workspace: bool, os: string, token: bool }`)
 - [ ] Token 未設定は警告のみ (エージェント実行時にエラー)
 
 **トレーサビリティ**: DES-SEC-001, DES-CHAT-001
@@ -1089,8 +1127,10 @@ THE SYSTEM SHALL handle cross-platform path edge cases: case-insensitive path co
 
 **受入基準**:
 - [ ] Windows で大文字小文字の異なるパスが同一ファイルとして扱われる
-- [ ] Windows 予約ファイル名 (CON, PRN, AUX, NUL, COM1-9, LPT1-9) がファイル作成時に拒否される
+- [ ] Windows 予約ファイル名 (CON, PRN, AUX, NUL, COM1-9, LPT1-9) およびその拡張子付き形式 (例: `CON.txt`) がファイル作成時に拒否される
+- [ ] 末尾にドット (`.`) やスペースを含むファイル名が拒否される (Windows で自動削除されるため)
 - [ ] パスにスペース・日本語を含むファイルが正常に操作できる
+- [ ] ファイル名にシェルメタ文字 (`&`, `%`, `^`, `(`, `)`) を含むファイルが正常に操作できる
 - [ ] シンボリックリンク/ジャンクションは追跡しない (ワークスペース内の実ファイルのみ対象)
 
 **トレーサビリティ**: DES-WORKSPACE-001, DES-FILE-001, DES-SEC-001
