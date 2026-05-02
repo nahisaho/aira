@@ -71,7 +71,7 @@ export function RightPanel() {
           {runHistory.map((run) => (
             <div key={run.id} className={`flex items-center gap-2 text-xs ${light ? 'text-gray-500' : 'text-gray-400'}`}>
               <RunStatusBadge status={run.status} />
-              <span>{new Date(run.created_at).toLocaleTimeString()}</span>
+              <span>{new Date(run.created_at.endsWith('Z') ? run.created_at : run.created_at + 'Z').toLocaleTimeString()}</span>
             </div>
           ))}
         </div>

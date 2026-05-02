@@ -64,7 +64,7 @@ export function Sidebar() {
               <span className="block truncate">{project.name}</span>
               {project.last_activity && (
                 <span className={`block text-xs mt-0.5 ${light ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {new Date(project.last_activity).toLocaleString()}
+                  {new Date(project.last_activity.endsWith('Z') ? project.last_activity : project.last_activity + 'Z').toLocaleString()}
                 </span>
               )}
             </button>
