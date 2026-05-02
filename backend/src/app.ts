@@ -6,6 +6,8 @@ import {
   cspMiddleware,
   generateCsrfToken,
 } from './middleware/security.js';
+import { healthRoutes } from './routes/health.js';
+import { settingsRoutes } from './routes/settings.js';
 
 const app = new Hono();
 
@@ -21,9 +23,8 @@ app.get('/api/csrf-token', (c) => {
   return c.json({ token });
 });
 
-// Health check
-app.get('/api/health', (c) => {
-  return c.json({ status: 'ok' });
-});
+// Routes
+app.route('/', healthRoutes);
+app.route('/', settingsRoutes);
 
 export { app };
