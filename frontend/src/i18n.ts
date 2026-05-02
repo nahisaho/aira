@@ -56,6 +56,33 @@ const translations = {
     'panel.runHistory': '実行履歴',
     'panel.stop': '停止',
     'panel.noProject': 'プロジェクト未選択',
+
+    // Skills
+    'skills.title': 'Agent Skills',
+    'skills.assigned': '割り当て済み',
+    'skills.available': '利用可能なスキル',
+    'skills.import': 'インポート',
+    'skills.importTitle': 'スキルをインポート',
+    'skills.name': 'スキル名',
+    'skills.repoUrl': 'リポジトリURL',
+    'skills.noSkills': 'スキルなし',
+    'skills.assign': '追加',
+    'skills.unassign': '解除',
+    'skills.delete': '削除',
+    'skills.importing': 'インポート中...',
+
+    // MCP
+    'mcp.title': 'MCP サーバー',
+    'mcp.add': '追加',
+    'mcp.addTitle': 'MCP サーバーを追加',
+    'mcp.name': 'サーバー名',
+    'mcp.type': 'タイプ',
+    'mcp.command': 'コマンド',
+    'mcp.args': '引数 (カンマ区切り)',
+    'mcp.url': 'URL',
+    'mcp.noConfigs': 'MCP サーバーなし',
+    'mcp.enabled': '有効',
+    'mcp.disabled': '無効',
   },
   en: {
     // Sidebar
@@ -112,6 +139,33 @@ const translations = {
     'panel.runHistory': 'Run History',
     'panel.stop': 'Stop',
     'panel.noProject': 'No project selected',
+
+    // Skills
+    'skills.title': 'Agent Skills',
+    'skills.assigned': 'Assigned',
+    'skills.available': 'Available Skills',
+    'skills.import': 'Import',
+    'skills.importTitle': 'Import Skill',
+    'skills.name': 'Skill Name',
+    'skills.repoUrl': 'Repository URL',
+    'skills.noSkills': 'No skills',
+    'skills.assign': 'Add',
+    'skills.unassign': 'Remove',
+    'skills.delete': 'Delete',
+    'skills.importing': 'Importing...',
+
+    // MCP
+    'mcp.title': 'MCP Servers',
+    'mcp.add': 'Add',
+    'mcp.addTitle': 'Add MCP Server',
+    'mcp.name': 'Server Name',
+    'mcp.type': 'Type',
+    'mcp.command': 'Command',
+    'mcp.args': 'Arguments (comma separated)',
+    'mcp.url': 'URL',
+    'mcp.noConfigs': 'No MCP servers',
+    'mcp.enabled': 'Enabled',
+    'mcp.disabled': 'Disabled',
   },
 } as const;
 

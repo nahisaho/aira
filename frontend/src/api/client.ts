@@ -173,6 +173,73 @@ export const settingsApi = {
     request<{ valid: boolean; login?: string; scopes?: string[] }>('/settings/validate-token', { method: 'POST' }),
 };
 
+// ─── Skills ───
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string | null;
+  source_type: string;
+  source_url: string;
+  local_path: string;
+  status: string;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const skillsApi = {
+  listAll: () => request<Skill[]>('/skills'),
+  import: (name: string, repo_url: string) =>
+    request<Skill>('/skills/import', {
+      method: 'POST',
+      body: JSON.stringify({ name, repo_url }),
+    }),
+  delete: (skillId: string) =>
+    request<void>(`/skills/${skillId}`, { method: 'DELETE' }),
+  listProject: (projectId: string) =>
+    request<Skill[]>(`/projects/${projectId}/skills`),
+  assign: (projectId: string, skillId: string) =>
+    request<{ status: string }>(`/projects/${projectId}/skills/${skillId}`, { method: 'POST' }),
+  unassign: (projectId: string, skillId: string) =>
+    request<void>(`/projects/${projectId}/skills/${skillId}`, { method: 'DELETE' }),
+};
+
+// ─── MCP ───
+
+export interface McpConfig {
+  id: string;
+  project_id: string;
+  name: string;
+  type: 'stdio' | 'sse';
+  config: Record<string, unknown>;
+  enabled: boolean;
+  preset_id: string | null;
+  created_at: string;
+}
+
+export const mcpApi = {
+  list: (projectId: string) =>
+    request<McpConfig[]>(`/projects/${projectId}/mcp`),
+  create: (projectId: string, name: string, type: 'stdio' | 'sse', config: Record<string, unknown>) =>
+    request<McpConfig>(`/projects/${projectId}/mcp`, {
+      method: 'POST',
+      body: JSON.stringify({ name, type, config }),
+    }),
+  update: (projectId: string, configId: string, data: Record<string, unknown>) =>
+    request<McpConfig>(`/projects/${projectId}/mcp/${configId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  toggle: (projectId: string, configId: string, enabled: boolean) =>
+    request<{ status: string }>(`/projects/${projectId}/mcp/${configId}/toggle`, {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }),
+  delete: (projectId: string, configId: string) =>
+    request<void>(`/projects/${projectId}/mcp/${configId}`, { method: 'DELETE' }),
+};
+
 // ─── Health ───
 
 export const healthApi = {

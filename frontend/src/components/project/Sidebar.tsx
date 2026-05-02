@@ -4,6 +4,7 @@ import { usePreferencesStore } from '../../stores/preferences';
 import { useT } from '../../useT';
 import { NewProjectModal } from './NewProjectModal';
 import { DeleteProjectDialog } from './DeleteProjectDialog';
+import { ProjectSettingsPane } from './ProjectSettingsPane';
 import { SettingsPane } from '../settings/SettingsPane';
 
 export function Sidebar() {
@@ -13,6 +14,7 @@ export function Sidebar() {
   const t = useT();
   const [showNewModal, setShowNewModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showProjectSettings, setShowProjectSettings] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,9 +71,19 @@ export function Sidebar() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                setShowProjectSettings(project.id);
+              }}
+              className={`opacity-0 group-hover:opacity-100 px-1 text-xs ${light ? 'text-gray-400 hover:text-gray-600' : 'text-gray-500 hover:text-gray-300'}`}
+              title="Skills / MCP"
+            >
+              ⚙
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
                 setDeleteTarget(project.id);
               }}
-              className="opacity-0 group-hover:opacity-100 px-2 text-xs text-red-400 hover:text-red-300"
+              className="opacity-0 group-hover:opacity-100 px-1 text-xs text-red-400 hover:text-red-300"
               title={t('sidebar.deleteProject')}
             >
               ✕
@@ -91,6 +103,12 @@ export function Sidebar() {
 
       {showNewModal && <NewProjectModal onClose={() => setShowNewModal(false)} />}
       {showSettings && <SettingsPane onClose={() => setShowSettings(false)} />}
+      {showProjectSettings && (
+        <ProjectSettingsPane
+          projectId={showProjectSettings}
+          onClose={() => setShowProjectSettings(null)}
+        />
+      )}
       {deleteTarget && (
         <DeleteProjectDialog
           projectId={deleteTarget}
