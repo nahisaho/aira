@@ -7,10 +7,18 @@ interface MessageItemProps {
 }
 
 const CLI_METADATA_RE = /\n*(?:Changes\s+\+\d+\s+-\d+\s*\n)?(?:Requests\s+.+\n)?(?:Tokens?\s+[↑↓•\d\s.kKmM()cached,]+\s*)$/;
-const MCP_TOOL_LINE_RE = /^● .+?\(MCP:.+?\)[^\n]*\n?(?:[ \t]*└[^\n]*\n?)*/gm;
+// Strip tool call blocks: ●/✗ header + │/└ continuation lines
+const TOOL_BLOCK_RE = /^[●✗][^\n]*\n?(?:[ \t]*[│└][^\n]*\n?)*/gm;
+// Strip tool headers without bullet (e.g. "Create output directories (shell)")
+const TOOL_HEADER_RE = /^[A-Z][^\n]*\((?:shell|MCP:[^)]+)\)\s*\n?/gm;
+// Strip orphan tree lines
+const ORPHAN_TREE_RE = /^[ \t]*[│└][^\n]*\n?/gm;
 
 function stripCliMetadata(text: string): string {
-  let cleaned = text.replace(MCP_TOOL_LINE_RE, '');
+  let cleaned = text;
+  cleaned = cleaned.replace(TOOL_BLOCK_RE, '');
+  cleaned = cleaned.replace(TOOL_HEADER_RE, '');
+  cleaned = cleaned.replace(ORPHAN_TREE_RE, '');
   cleaned = cleaned.replace(CLI_METADATA_RE, '');
   return cleaned.trimStart().trimEnd();
 }
