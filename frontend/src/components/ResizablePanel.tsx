@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { usePreferencesStore } from '../stores/preferences';
 
 interface ResizablePanelProps {
   side: 'left' | 'right';
@@ -19,6 +20,7 @@ export function ResizablePanel({
   collapsed = false,
   children,
 }: ResizablePanelProps) {
+  const theme = usePreferencesStore((s) => s.theme);
   const [width, setWidth] = useState(() => {
     const stored = localStorage.getItem(storageKey);
     return stored ? parseInt(stored, 10) : defaultWidth;
@@ -40,7 +42,6 @@ export function ResizablePanel({
         const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + delta));
         setWidth(newWidth);
 
-        // Debounced localStorage save
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
           localStorage.setItem(storageKey, String(newWidth));
@@ -63,9 +64,11 @@ export function ResizablePanel({
 
   const handle = (
     <div
-      className={`w-1 cursor-col-resize bg-gray-700 hover:bg-blue-500 transition-colors ${
-        side === 'left' ? 'order-last' : 'order-first'
-      }`}
+      className={`w-1 cursor-col-resize transition-colors ${
+        theme === 'light'
+          ? 'bg-gray-200 hover:bg-blue-400'
+          : 'bg-gray-700 hover:bg-blue-500'
+      } ${side === 'left' ? 'order-last' : 'order-first'}`}
       onMouseDown={handleMouseDown}
     />
   );

@@ -1,4 +1,5 @@
 import { renderMarkdown } from './markdown';
+import { usePreferencesStore } from '../../stores/preferences';
 
 interface MessageItemProps {
   role: 'user' | 'assistant' | 'system';
@@ -6,6 +7,9 @@ interface MessageItemProps {
 }
 
 export function MessageItem({ role, content }: MessageItemProps) {
+  const theme = usePreferencesStore((s) => s.theme);
+  const light = theme === 'light';
+
   if (role === 'user') {
     return (
       <div className="flex justify-end">
@@ -21,9 +25,13 @@ export function MessageItem({ role, content }: MessageItemProps) {
 
   return (
     <div className="flex justify-start">
-      <div className="max-w-[80%] px-4 py-2 rounded-lg text-sm bg-gray-800 text-gray-200">
+      <div className={`max-w-[80%] px-4 py-2 rounded-lg text-sm ${
+        light
+          ? 'bg-gray-100 text-gray-900'
+          : 'bg-gray-800 text-gray-200'
+      }`}>
         <div
-          className="prose prose-invert prose-sm max-w-none"
+          className={`prose prose-sm max-w-none ${light ? '' : 'prose-invert'}`}
           dangerouslySetInnerHTML={{ __html: html }}
         />
       </div>

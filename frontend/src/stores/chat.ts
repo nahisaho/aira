@@ -17,7 +17,7 @@ interface ChatStore {
   reset: () => void;
 }
 
-export const useChatStore = create<ChatStore>((set, get) => ({
+export const useChatStore = create<ChatStore>((set) => ({
   messages: [],
   loading: false,
   sending: false,

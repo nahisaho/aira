@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useProjectStore } from '../../stores/project';
+import { usePreferencesStore } from '../../stores/preferences';
+import { useT } from '../../useT';
 
 export function DeleteProjectDialog({
   projectId,
@@ -13,6 +15,9 @@ export function DeleteProjectDialog({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   const { deleteProject } = useProjectStore();
+  const theme = usePreferencesStore((s) => s.theme);
+  const t = useT();
+  const light = theme === 'light';
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -27,11 +32,13 @@ export function DeleteProjectDialog({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 w-96">
-        <h2 className="text-lg font-semibold text-white mb-2">Delete Project</h2>
-        <p className="text-sm text-gray-400 mb-4">
-          Are you sure you want to delete <strong className="text-white">{projectName}</strong>?
-          This will permanently delete all workspace files, messages, and run history.
+      <div className={`rounded-lg p-6 w-96 ${light ? 'bg-white' : 'bg-gray-800'}`}>
+        <h2 className={`text-lg font-semibold mb-2 ${light ? 'text-gray-900' : 'text-white'}`}>
+          {t('project.deleteTitle')}
+        </h2>
+        <p className={`text-sm mb-4 ${light ? 'text-gray-600' : 'text-gray-400'}`}>
+          <strong className={light ? 'text-gray-900' : 'text-white'}>{projectName}</strong>
+          {t('project.deleteConfirm')}
         </p>
 
         {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
@@ -39,17 +46,17 @@ export function DeleteProjectDialog({
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-sm text-gray-400 hover:text-gray-200"
+            className={`px-3 py-1.5 text-sm ${light ? 'text-gray-500 hover:text-gray-700' : 'text-gray-400 hover:text-gray-200'}`}
             disabled={deleting}
           >
-            Cancel
+            {t('project.cancel')}
           </button>
           <button
             onClick={handleDelete}
             className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-500 rounded text-white disabled:opacity-50"
             disabled={deleting}
           >
-            {deleting ? 'Deleting...' : 'Delete'}
+            {deleting ? '...' : t('project.delete')}
           </button>
         </div>
       </div>

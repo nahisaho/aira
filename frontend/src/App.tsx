@@ -3,8 +3,11 @@ import { ResizablePanel } from './components/ResizablePanel';
 import { Sidebar } from './components/project/Sidebar';
 import { ChatPane } from './components/chat/ChatPane';
 import { RightPanel } from './components/files/RightPanel';
+import { usePreferencesStore } from './stores/preferences';
 
 export function App() {
+  const theme = usePreferencesStore((s) => s.theme);
+
   const [leftCollapsed, setLeftCollapsed] = useState(() =>
     localStorage.getItem('aira-left-collapsed') === 'true',
   );
@@ -25,7 +28,11 @@ export function App() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-100">
+    <div className={`flex h-screen ${
+      theme === 'light'
+        ? 'bg-gray-50 text-gray-900'
+        : 'bg-gray-900 text-gray-100'
+    }`}>
       {/* Left Sidebar */}
       <ResizablePanel
         side="left"
@@ -41,10 +48,16 @@ export function App() {
       {/* Center - Chat */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Toggle buttons */}
-        <div className="flex items-center gap-1 px-2 py-1 border-b border-gray-700">
+        <div className={`flex items-center gap-1 px-2 py-1 border-b ${
+          theme === 'light' ? 'border-gray-200' : 'border-gray-700'
+        }`}>
           <button
             onClick={toggleLeft}
-            className="text-xs text-gray-400 hover:text-gray-200 px-1"
+            className={`text-xs px-1 ${
+              theme === 'light'
+                ? 'text-gray-500 hover:text-gray-800'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
             title={leftCollapsed ? 'Show sidebar' : 'Hide sidebar'}
           >
             {leftCollapsed ? '☰' : '◁'}
@@ -52,7 +65,11 @@ export function App() {
           <div className="flex-1" />
           <button
             onClick={toggleRight}
-            className="text-xs text-gray-400 hover:text-gray-200 px-1"
+            className={`text-xs px-1 ${
+              theme === 'light'
+                ? 'text-gray-500 hover:text-gray-800'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
             title={rightCollapsed ? 'Show panel' : 'Hide panel'}
           >
             {rightCollapsed ? '▷' : '▷'}

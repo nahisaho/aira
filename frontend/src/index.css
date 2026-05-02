@@ -1,1 +1,18 @@
 @import "tailwindcss";
+
+@custom-variant light (.light &);
+
+/* Light mode base styles */
+.light {
+  --color-bg: #ffffff;
+  --color-text: #111827;
+  --color-border: #e5e7eb;
+}
+
+/* Dark mode base styles (default) */
+.dark {
+  --color-bg: #111827;
+  --color-text: #f3f4f6;
+  --color-border: #374151;
+}
+
