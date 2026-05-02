@@ -61,15 +61,10 @@ const translations = {
     'skills.title': 'Agent Skills',
     'skills.assigned': '割り当て済み',
     'skills.available': '利用可能なスキル',
-    'skills.import': 'インポート',
-    'skills.importTitle': 'スキルをインポート',
-    'skills.name': 'スキル名',
-    'skills.repoUrl': 'リポジトリURL',
     'skills.noSkills': 'スキルなし',
     'skills.assign': '追加',
     'skills.unassign': '解除',
-    'skills.delete': '削除',
-    'skills.importing': 'インポート中...',
+    'skills.builtin': 'ビルトイン',
 
     // MCP
     'mcp.title': 'MCP サーバー',
@@ -83,6 +78,7 @@ const translations = {
     'mcp.noConfigs': 'MCP サーバーなし',
     'mcp.enabled': '有効',
     'mcp.disabled': '無効',
+    'mcp.delete': '削除',
   },
   en: {
     // Sidebar
@@ -144,15 +140,10 @@ const translations = {
     'skills.title': 'Agent Skills',
     'skills.assigned': 'Assigned',
     'skills.available': 'Available Skills',
-    'skills.import': 'Import',
-    'skills.importTitle': 'Import Skill',
-    'skills.name': 'Skill Name',
-    'skills.repoUrl': 'Repository URL',
     'skills.noSkills': 'No skills',
     'skills.assign': 'Add',
     'skills.unassign': 'Remove',
-    'skills.delete': 'Delete',
-    'skills.importing': 'Importing...',
+    'skills.builtin': 'Built-in',
 
     // MCP
     'mcp.title': 'MCP Servers',
@@ -166,6 +157,7 @@ const translations = {
     'mcp.noConfigs': 'No MCP servers',
     'mcp.enabled': 'Enabled',
     'mcp.disabled': 'Disabled',
+    'mcp.delete': 'Delete',
   },
 } as const;
 

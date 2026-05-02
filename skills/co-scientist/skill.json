@@ -1,0 +1,6 @@
+{
+  "name": "co-scientist",
+  "version": "v1.0.0",
+  "description": "Harness-optimized collaborative research partner suite covering literature review, experimental design, data analysis, academic writing, peer review, reproducibility, and presentation with full Orchestrator routing and verification loops.",
+  "entrypoint": "AGENTS.md"
+}

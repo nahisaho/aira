@@ -62,10 +62,4 @@ skillsRoutes.delete('/api/projects/:id/skills/:skillId', (c) => {
   return c.body(null, 204);
 });
 
-// GET /api/skills/catalog — static skills catalog
-skillsRoutes.get('/api/skills/catalog', (c) => {
-  // v1.0: bundled static catalog
-  return c.json([]);
-});
-
 export { skillsRoutes };

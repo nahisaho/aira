@@ -67,41 +67,25 @@ function SkillsTab({ projectId }: { projectId: string }) {
 
   const [projectSkills, setProjectSkills] = useState<Skill[]>([]);
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
-  const [showImport, setShowImport] = useState(false);
-  const [importName, setImportName] = useState('');
-  const [importUrl, setImportUrl] = useState('');
-  const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
 
   const load = async () => {
-    const [proj, all] = await Promise.all([
-      skillsApi.listProject(projectId),
-      skillsApi.listAll(),
-    ]);
-    setProjectSkills(proj);
-    setAllSkills(all);
+    try {
+      const [proj, all] = await Promise.all([
+        skillsApi.listProject(projectId),
+        skillsApi.listAll(),
+      ]);
+      setProjectSkills(proj);
+      setAllSkills(all);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   };
 
   useEffect(() => { load(); }, [projectId]);
 
   const assignedIds = new Set(projectSkills.map((s) => s.id));
   const unassigned = allSkills.filter((s) => !assignedIds.has(s.id));
-
-  const handleImport = async () => {
-    if (!importName.trim() || !importUrl.trim()) return;
-    setImporting(true);
-    setError('');
-    try {
-      await skillsApi.import(importName.trim(), importUrl.trim());
-      setImportName('');
-      setImportUrl('');
-      setShowImport(false);
-      await load();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-    setImporting(false);
-  };
 
   const handleAssign = async (skillId: string) => {
     await skillsApi.assign(projectId, skillId);
@@ -113,13 +97,10 @@ function SkillsTab({ projectId }: { projectId: string }) {
     await load();
   };
 
-  const handleDelete = async (skillId: string) => {
-    await skillsApi.delete(skillId);
-    await load();
-  };
-
   return (
     <div className="space-y-4">
+      {error && <p className="text-xs text-red-400">{error}</p>}
+
       {/* Assigned skills */}
       <div>
         <h4 className={`text-xs font-semibold uppercase mb-2 ${light ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -133,13 +114,25 @@ function SkillsTab({ projectId }: { projectId: string }) {
             <div key={skill.id} className={`flex items-center justify-between rounded px-3 py-2 text-sm ${
               light ? 'bg-gray-50' : 'bg-gray-700'
             }`}>
-              <div>
-                <span className={light ? 'text-gray-900' : 'text-gray-200'}>{skill.name}</span>
-                <StatusDot status={skill.status} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={light ? 'text-gray-900' : 'text-gray-200'}>{skill.name}</span>
+                  <StatusDot status={skill.status} />
+                  {skill.builtin === 1 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-400 font-medium">
+                      {t('skills.builtin')}
+                    </span>
+                  )}
+                </div>
+                {skill.description && (
+                  <p className={`text-xs mt-0.5 truncate ${light ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {skill.description}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => handleUnassign(skill.id)}
-                className="text-xs text-red-400 hover:text-red-300"
+                className="text-xs text-red-400 hover:text-red-300 ml-2 shrink-0"
               >
                 {t('skills.unassign')}
               </button>
@@ -159,76 +152,32 @@ function SkillsTab({ projectId }: { projectId: string }) {
               <div key={skill.id} className={`flex items-center justify-between rounded px-3 py-2 text-sm ${
                 light ? 'bg-gray-50' : 'bg-gray-700'
               }`}>
-                <div>
-                  <span className={light ? 'text-gray-900' : 'text-gray-200'}>{skill.name}</span>
-                  <StatusDot status={skill.status} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={light ? 'text-gray-900' : 'text-gray-200'}>{skill.name}</span>
+                    <StatusDot status={skill.status} />
+                    {skill.builtin === 1 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-400 font-medium">
+                        {t('skills.builtin')}
+                      </span>
+                    )}
+                  </div>
+                  {skill.description && (
+                    <p className={`text-xs mt-0.5 truncate ${light ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {skill.description}
+                    </p>
+                  )}
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleAssign(skill.id)}
-                    className="text-xs text-blue-400 hover:text-blue-300"
-                  >
-                    {t('skills.assign')}
-                  </button>
-                  <button
-                    onClick={() => handleDelete(skill.id)}
-                    className="text-xs text-red-400 hover:text-red-300"
-                  >
-                    {t('skills.delete')}
-                  </button>
-                </div>
+                <button
+                  onClick={() => handleAssign(skill.id)}
+                  className="text-xs text-blue-400 hover:text-blue-300 ml-2 shrink-0"
+                >
+                  {t('skills.assign')}
+                </button>
               </div>
             ))}
           </div>
         </div>
-      )}
-
-      {/* Import */}
-      {showImport ? (
-        <div className={`rounded p-3 space-y-2 ${light ? 'bg-gray-50' : 'bg-gray-700'}`}>
-          <h4 className={`text-sm font-semibold ${light ? 'text-gray-800' : 'text-gray-200'}`}>
-            {t('skills.importTitle')}
-          </h4>
-          <input
-            value={importName}
-            onChange={(e) => setImportName(e.target.value)}
-            placeholder={t('skills.name')}
-            className={`w-full rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-              light ? 'bg-white border border-gray-300 text-gray-900' : 'bg-gray-600 text-gray-100'
-            }`}
-          />
-          <input
-            value={importUrl}
-            onChange={(e) => setImportUrl(e.target.value)}
-            placeholder="https://github.com/owner/repo"
-            className={`w-full rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-              light ? 'bg-white border border-gray-300 text-gray-900' : 'bg-gray-600 text-gray-100'
-            }`}
-          />
-          {error && <p className="text-xs text-red-400">{error}</p>}
-          <div className="flex gap-2">
-            <button
-              onClick={handleImport}
-              disabled={importing}
-              className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded text-white disabled:opacity-50"
-            >
-              {importing ? t('skills.importing') : t('skills.import')}
-            </button>
-            <button
-              onClick={() => setShowImport(false)}
-              className={`px-3 py-1 text-xs ${light ? 'text-gray-500' : 'text-gray-400'}`}
-            >
-              {t('project.cancel')}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          onClick={() => setShowImport(true)}
-          className="text-xs text-blue-400 hover:text-blue-300"
-        >
-          + {t('skills.import')}
-        </button>
       )}
     </div>
   );
@@ -318,7 +267,7 @@ function McpTab({ projectId }: { projectId: string }) {
                 onClick={() => handleDelete(cfg.id)}
                 className="text-xs text-red-400 hover:text-red-300"
               >
-                {t('skills.delete')}
+                {t('mcp.delete')}
               </button>
             </div>
           </div>

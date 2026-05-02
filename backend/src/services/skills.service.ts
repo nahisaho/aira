@@ -1,16 +1,57 @@
 import crypto from 'node:crypto';
+import path from 'node:path';
 import { getDatabase } from '../db/index.js';
 
 export interface Skill {
   id: string;
   name: string;
   description: string | null;
-  repo_url: string;
-  local_path: string;
+  source_type: string;
+  source_url: string | null;
+  skill_path: string;
   status: 'available' | 'importing' | 'error';
+  builtin: number;
   last_error: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Built-in skills bundled with AIRA */
+const BUILTIN_SKILLS = [
+  {
+    slug: 'co-scientist',
+    name: 'co-scientist',
+    description: 'Harness-optimized collaborative research partner suite covering literature review, experimental design, data analysis, academic writing, peer review, reproducibility, and presentation with full Orchestrator routing and verification loops.',
+    repo_url: 'https://github.com/nahisaho/coreclaw-marketplace/tree/main/coreclaw-skills-hub/skills/co-scientist',
+  },
+];
+
+/**
+ * Seed built-in skills into the DB on startup.
+ * Idempotent — skips if already present.
+ */
+export function seedBuiltinSkills(): void {
+  const db = getDatabase();
+  const projectRoot = path.resolve(import.meta.dirname, '..', '..', '..');
+
+  // Ensure builtin column exists
+  try {
+    db.exec('ALTER TABLE skills ADD COLUMN builtin INTEGER NOT NULL DEFAULT 0');
+  } catch {
+    // Column already exists
+  }
+
+  for (const skill of BUILTIN_SKILLS) {
+    const existing = db.prepare('SELECT id FROM skills WHERE name = ? AND builtin = 1').get(skill.slug);
+    if (existing) continue;
+
+    const id = crypto.randomUUID();
+    const skillPath = path.join(projectRoot, 'skills', skill.slug);
+    db.prepare(
+      `INSERT INTO skills (id, name, description, source_type, source_url, skill_path, status, builtin)
+       VALUES (?, ?, ?, 'local', ?, ?, 'available', 1)`,
+    ).run(id, skill.name, skill.description, skill.repo_url, skillPath);
+  }
 }
 
 /**
@@ -65,14 +106,14 @@ export class SkillsService {
    */
   createImport(name: string, repoUrl: string): Skill {
     const db = getDatabase();
-    parseGitHubUrl(repoUrl); // Validate URL format
+    parseGitHubUrl(repoUrl);
     const id = crypto.randomUUID();
-    const localPath = `skills/${id}`;
+    const skillPath = `skills/${id}`;
 
     db.prepare(
-      `INSERT INTO skills (id, name, description, repo_url, local_path, status)
-       VALUES (?, ?, NULL, ?, ?, 'importing')`,
-    ).run(id, name, repoUrl, localPath);
+      `INSERT INTO skills (id, name, description, source_type, source_url, skill_path, status)
+       VALUES (?, ?, NULL, 'github', ?, ?, 'importing')`,
+    ).run(id, name, repoUrl, skillPath);
 
     return db.prepare('SELECT * FROM skills WHERE id = ?').get(id) as Skill;
   }

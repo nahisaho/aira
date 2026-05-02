@@ -39,7 +39,7 @@ export function assembleExecContext(projectId: string): ExecContext {
   const skills = skillsService.getProjectSkills(projectId);
   const skillPaths = skills
     .filter(s => s.status === 'available')
-    .map(s => path.resolve(s.local_path, 'SKILL.md'));
+    .map(s => path.resolve(s.skill_path, 'AGENTS.md'));
 
   // MCP temp config
   const mcpConfigFile = mcpService.generateTempConfig(projectId);

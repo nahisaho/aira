@@ -180,9 +180,10 @@ export interface Skill {
   name: string;
   description: string | null;
   source_type: string;
-  source_url: string;
-  local_path: string;
+  source_url: string | null;
+  skill_path: string;
   status: string;
+  builtin: number;
   last_error: string | null;
   created_at: string;
   updated_at: string;
