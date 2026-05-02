@@ -209,7 +209,7 @@ def check_lhs_to_bo_transition(y_lhs, config=BO_CONFIG):
         return False, f"データ不足: {len(y)}/{config['n_initial_lhs']}点"
     
     cv = np.std(y) / np.abs(np.mean(y)) if np.mean(y) != 0 else 0
-    if cv < 0.3:
+    if cv < 0.2:
         return False, f"変動不十分: CV={cv:.3f} < 0.3（追加LHSを推奨）"
     
     max_conductivity = 10**(np.max(y))  # y は log10(σ)
@@ -233,7 +233,7 @@ class BayesianOptimizer:
         self.dim = len(self.bounds)
         self.gp = GaussianProcessSurrogate(
             length_scale=config["kernel_length_scale"],
-            noise_variance=config["noise_variance"]
+            noise_var=config["noise_variance"]
         )
         self.X_observed = []
         self.y_observed = []

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useFilesStore } from '../../stores/files';
 import { useProjectStore } from '../../stores/project';
 import { usePreferencesStore } from '../../stores/preferences';
@@ -78,15 +78,16 @@ export function RightPanel() {
             const end = run.finished_at ? new Date(run.finished_at.endsWith('Z') ? run.finished_at : run.finished_at + 'Z') : null;
             const elapsed = start && end ? Math.round((end.getTime() - start.getTime()) / 1000) : null;
             const formatTime = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            const formatElapsed = (s: number) => s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
 
             return (
               <div key={run.id} className={`rounded p-2 text-xs ${light ? 'bg-gray-50' : 'bg-gray-800/50'}`}>
                 <div className="flex items-center gap-2">
                   <RunStatusBadge status={run.status} />
-                  {elapsed !== null && (
+                  {run.status === 'running' && start ? (
+                    <LiveElapsed startTime={start} light={light} />
+                  ) : elapsed !== null ? (
                     <span className={light ? 'text-gray-600' : 'text-gray-300'}>{formatElapsed(elapsed)}</span>
-                  )}
+                  ) : null}
                 </div>
                 <div className={`mt-1 flex gap-3 ${light ? 'text-gray-400' : 'text-gray-500'}`}>
                   {start && <span>▶ {formatTime(start)}</span>}
@@ -152,6 +153,32 @@ function RunStatusBadge({ status }: { status: string }) {
         <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
       )}
       {status}
+    </span>
+  );
+}
+
+function formatElapsed(s: number): string {
+  if (s >= 3600) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return `${h}h ${m}m`;
+  }
+  return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
+}
+
+function LiveElapsed({ startTime, light }: { startTime: Date; light: boolean }) {
+  const [elapsed, setElapsed] = useState(() => Math.round((Date.now() - startTime.getTime()) / 1000));
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsed(Math.round((Date.now() - startTime.getTime()) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [startTime]);
+
+  return (
+    <span className={`font-mono ${light ? 'text-blue-600' : 'text-blue-400'}`}>
+      {formatElapsed(elapsed)}
     </span>
   );
 }
