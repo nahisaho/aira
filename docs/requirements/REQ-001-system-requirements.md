@@ -85,9 +85,26 @@ WHEN a user sends a message in a project, THE SYSTEM SHALL create a new Run, inv
 **Run (実行) モデル**:
 - 1 プロジェクトにつき同時に 1 Run のみ実行可能
 - 実行中にメッセージを送信した場合はキューイング (最大 1 件)
+- キューが埋まっている状態で追加送信した場合は拒否 (UI でエラー表示)
 - Run の状態遷移: `queued → running → completed | failed | cancelled | timeout`
+- `idle` は UI 表示専用であり Run エンティティの状態ではない (Run が存在しない状態)
 - 右パネルは**現在選択中のプロジェクト**の最新 Run を表示する
 - プロジェクト切り替え時、右パネルの表示も切り替わる
+- Run 履歴は永続保存され、過去の Run をプログレスパネルから参照可能
+
+**Run エンティティ定義**:
+| フィールド | 型 | 説明 |
+|---|---|---|
+| id | UUID | Run 一意識別子 |
+| project_id | FK | 所属プロジェクト |
+| message_id | FK (nullable) | トリガーとなったユーザーメッセージ |
+| status | ENUM | `queued` / `running` / `completed` / `failed` / `cancelled` / `timeout` |
+| created_at | DATETIME | キュー投入時刻 |
+| started_at | DATETIME (nullable) | 実行開始時刻 |
+| finished_at | DATETIME (nullable) | 終了時刻 |
+| exit_code | INTEGER (nullable) | プロセス終了コード |
+| error_type | TEXT (nullable) | エラー種別 (`cli_missing` / `auth_failure` / `timeout` / `spawn_failure` / `unknown`) |
+| cancel_reason | TEXT (nullable) | キャンセル理由 (`user` / `system`) |
 
 **受入基準**:
 - [ ] プロジェクト選択中のチャットでは、そのプロジェクトの Skills が使用される
@@ -456,11 +473,19 @@ WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS
 
 **説明**: ファイルをOSのデフォルトアプリケーション (VS Code, テキストエディタ等) で開く。
 
+**OS 別実行方法**:
+| OS | コマンド | 注意事項 |
+|---|---|---|
+| macOS | `open <path>` | spawn で直接実行可 |
+| Windows | `cmd.exe /c start "" "<path>"` | `start` は cmd 組み込みのため shell 経由が必要。パスにスペース・日本語を含む場合のクオート必須 |
+
 **受入基準**:
 - [ ] ファイル行に「開く」ボタンがある
 - [ ] クリックで OS のデフォルトアプリケーションが起動する
-- [ ] バックエンド API (`/api/projects/:id/files/:fileId/open`) でファイルを開く
-- [ ] サポート対象 OS: Linux (xdg-open), macOS (open), Windows (start)
+- [ ] バックエンド API (`POST /api/projects/:id/files/:fileId/open`) でファイルを開く
+- [ ] macOS では `open` コマンド、Windows では `cmd.exe /c start "" "<path>"` を使用する
+- [ ] パスにスペース・日本語文字を含むファイルが正しく開ける
+- [ ] ファイルが存在しない場合は 404 エラーを返す
 
 **トレーサビリティ**: DES-FILE-001
 
@@ -493,14 +518,15 @@ WHEN a user requests file deletion, THE SYSTEM SHALL prompt for confirmation and
 **優先度**: P0
 
 **要件**:  
-THE SYSTEM SHALL display agent execution progress in a dedicated right panel, showing current run status (idle/running/completed/error), elapsed time, and a real-time activity log.
+THE SYSTEM SHALL display agent execution progress in a dedicated right panel, showing current run status, elapsed time, and a real-time activity log.
 
-**説明**: 画面右側の専用パネルにエージェント実行の進行状況を表示する。
+**説明**: 画面右側の専用パネルにエージェント実行の進行状況を表示する。Run が存在しない場合は `idle` (UI 表示専用、Run の状態ではない) と表示する。
 
 **受入基準**:
 - [ ] 右パネルに進行状況セクションが表示される
-- [ ] ステータスバッジ (idle/running/completed/error) が表示される
-- [ ] 実行中は経過時間がリアルタイムで表示される
+- [ ] Run 未実行時は「idle」表示 (UI 表示のみ、Run エンティティの状態ではない)
+- [ ] Run 実行中は状態バッジ (`queued` / `running`) と経過時間がリアルタイム表示される
+- [ ] Run 完了後は最終状態 (`completed` / `failed` / `cancelled` / `timeout`) が表示される
 - [ ] エージェントのアクティビティログが表示される (ファイル作成、ツール呼び出し等)
 
 **トレーサビリティ**: DES-PROGRESS-001
@@ -528,7 +554,7 @@ WHEN a new file is generated during agent execution, THE SYSTEM SHALL immediatel
 
 #### REQ-PROGRESS-003
 **種別**: EVENT-DRIVEN  
-**優先度**: P1
+**優先度**: P0
 
 **要件**:  
 WHEN a user clicks the stop button during agent execution, THE SYSTEM SHALL terminate the agent process and update the status to "cancelled".
@@ -625,8 +651,9 @@ THE SYSTEM SHALL operate as a single-user localhost application in v1.0, requiri
 **説明**: v1.0 はローカルマシン上で単一ユーザーが使用する前提とする。アプリケーションレベルの認証・認可は不要。すべての API エンドポイントは localhost からのみアクセス可能とする。
 
 **受入基準**:
-- [ ] API サーバーが localhost (127.0.0.1) のみバインドされる
+- [ ] API サーバーがループバックインターフェースのみにバインドされる (`127.0.0.1` および `::1`)
 - [ ] 外部ネットワークからのアクセスが拒否される
+- [ ] `localhost` での接続が Windows / macOS 両方で動作する (IPv4/IPv6 両対応)
 - [ ] アプリケーションレベルのログイン画面が不要
 
 **トレーサビリティ**: DES-AUTH-001
@@ -857,6 +884,57 @@ IF a Skill URL is unreachable or returns an invalid manifest, THE SYSTEM SHALL m
 
 ---
 
+#### REQ-ERR-007
+**種別**: UNWANTED  
+**優先度**: P0
+
+**要件**:  
+IF a file operation (delete, open, read) fails due to OS-level permission denial or file lock (common on Windows), THE SYSTEM SHALL return a specific error indicating the cause and suggest the user close the locking application.
+
+**受入基準**:
+- [ ] ファイル削除時に `EBUSY` / `EPERM` / `EACCES` エラーが発生した場合、具体的なエラーメッセージが表示される
+- [ ] エラーメッセージに「ファイルを使用中のアプリケーションを閉じてください」を含む
+- [ ] Windows でのファイルロック状態が正しく検知される
+- [ ] ファイルオープン失敗時に 409 (Conflict) または 403 を返す
+
+**トレーサビリティ**: DES-FILE-001
+
+---
+
+#### REQ-ERR-008
+**種別**: UNWANTED  
+**優先度**: P0
+
+**要件**:  
+IF the agent child process fails to spawn (ENOENT, EACCES, or other OS error), THE SYSTEM SHALL set the Run status to `failed` with `error_type: spawn_failure` and display the OS-level error message.
+
+**受入基準**:
+- [ ] spawn 失敗 (ENOENT 以外も含む) が Run `failed` 状態に反映される
+- [ ] `error_type` フィールドに `spawn_failure` が設定される
+- [ ] OS エラーメッセージがユーザーに表示される
+- [ ] Windows の権限エラーと macOS の権限エラーの両方が処理される
+
+**トレーサビリティ**: DES-CHAT-001, DES-SEC-001
+
+---
+
+#### REQ-ERR-009
+**種別**: UNWANTED  
+**優先度**: P1
+
+**要件**:  
+IF the workspace file watcher (chokidar) fails to start or encounters an OS-level error, THE SYSTEM SHALL log the error, fall back to post-completion reconciliation scan only, and notify the user that real-time file updates are unavailable.
+
+**受入基準**:
+- [ ] watcher 起動失敗時にエラーがログに記録される
+- [ ] Run は中断されず続行される (リアルタイム更新なしで)
+- [ ] 右パネルに「リアルタイム更新無効」の警告が表示される
+- [ ] 完了後のフルスキャンでファイル一覧が最終的に正確になる
+
+**トレーサビリティ**: DES-WORKSPACE-001, DES-PROGRESS-001
+
+---
+
 ## 3. 非機能要件
 
 ### 3.1 パフォーマンス
@@ -869,8 +947,10 @@ IF a Skill URL is unreachable or returns an invalid manifest, THE SYSTEM SHALL m
 THE SYSTEM SHALL respond to user interactions (button clicks, page transitions) within 200ms under normal load.
 
 **受入基準**:
-- [ ] UI 操作のレスポンスが 200ms 以内
-- [ ] プロジェクト一覧の読み込みが 500ms 以内
+- [ ] UI 操作のレスポンスが 200ms 以内 (Lighthouse CI で計測)
+- [ ] プロジェクト一覧の読み込みが 500ms 以内 (10 プロジェクト時)
+
+**トレーサビリティ**: DES-CHAT-001, DES-PROJECT-001
 
 ---
 
@@ -879,11 +959,17 @@ THE SYSTEM SHALL respond to user interactions (button clicks, page transitions) 
 **優先度**: P1
 
 **要件**:  
-THE SYSTEM SHALL support at least 5 concurrent agent process executions.
+THE SYSTEM SHALL support a configurable maximum number of concurrent agent process executions (default: 5).
+
+**説明**: 最大同時実行数は環境変数 `AIRA_MAX_CONCURRENT_RUNS` またはサーバー設定で変更可能。デフォルト値は 5。
 
 **受入基準**:
-- [ ] 5 プロジェクトの同時チャットが可能
-- [ ] 最大並行数超過時にキューイングされる
+- [ ] デフォルト設定で 5 プロジェクトの同時実行が可能
+- [ ] 最大並行数超過時に Run が `queued` 状態で待機する
+- [ ] 設定値を変更して同時実行数を増減できる
+- [ ] 同時実行テストは CI 環境 (2 vCPU / 4GB RAM 相当) で検証する
+
+**トレーサビリティ**: DES-SEC-001, DES-CHAT-001
 
 ---
 
@@ -915,6 +1001,8 @@ THE SYSTEM SHALL validate all API inputs and sanitize file paths to prevent path
 - [ ] ファイルパスの `../` 等のトラバーサルが防止される
 - [ ] SQL インジェクション対策が施される (プリペアドステートメント)
 
+**トレーサビリティ**: DES-SEC-001
+
 ---
 
 ### 3.3 ユーザビリティ
@@ -927,8 +1015,10 @@ THE SYSTEM SHALL validate all API inputs and sanitize file paths to prevent path
 THE SYSTEM SHALL provide a responsive UI that works on desktop browsers (Chrome, Firefox, Safari, Edge) with a minimum width of 1024px.
 
 **受入基準**:
-- [ ] 主要デスクトップブラウザで動作する
+- [ ] 主要デスクトップブラウザで動作する (Chrome 120+, Firefox 120+, Safari 17+, Edge 120+)
 - [ ] 1024px 以上の画面幅でレイアウトが崩れない
+
+**トレーサビリティ**: DES-CHAT-001, DES-PROGRESS-001
 
 ---
 
@@ -942,6 +1032,9 @@ THE SYSTEM SHALL support Japanese language display including proper rendering of
 **受入基準**:
 - [ ] 日本語テキストが正しく表示される
 - [ ] 生成ファイル内の日本語が文字化けしない
+- [ ] ファイル名に日本語を含むファイルが正しく処理される (Windows/macOS 両方)
+
+**トレーサビリティ**: DES-CHAT-001, DES-FILE-001
 
 ---
 
@@ -963,7 +1056,44 @@ THE SYSTEM SHALL run on both Windows (native, not WSL) and macOS without platfor
 - [ ] npm scripts が両 OS で実行可能 (cross-env 等で環境変数を統一)
 - [ ] CI で Windows + macOS の両方のテストが PASS する
 
-**トレーサビリティ**: DES-SEC-001
+**トレーサビリティ**: DES-SEC-001, DES-WORKSPACE-001, DES-FILE-001, DES-CHAT-001
+
+---
+
+#### REQ-NFR-008
+**種別**: UBIQUITOUS  
+**優先度**: P0
+
+**要件**:  
+THE SYSTEM SHALL perform a preflight health check on startup, verifying Copilot CLI availability, workspace directory writability, and OS compatibility, and display actionable error messages for any failures.
+
+**受入基準**:
+- [ ] 起動時に Copilot CLI の存在確認を行う (`which` / `where`)
+- [ ] ワークスペースのベースディレクトリが書き込み可能か確認する
+- [ ] 確認失敗時に具体的なエラーメッセージと解決手順を表示する
+- [ ] プリフライト結果が API (`GET /api/health`) で確認可能
+- [ ] Token 未設定は警告のみ (エージェント実行時にエラー)
+
+**トレーサビリティ**: DES-SEC-001, DES-CHAT-001
+
+---
+
+#### REQ-NFR-009
+**種別**: UBIQUITOUS  
+**優先度**: P0
+
+**要件**:  
+THE SYSTEM SHALL handle cross-platform path edge cases: case-insensitive path comparison on Windows, rejection of Windows reserved filenames (CON, PRN, NUL, etc.), and proper handling of Unicode/spaces in file paths.
+
+**説明**: Windows と macOS のファイルシステム差異を吸収するためのパス正規化ルール。
+
+**受入基準**:
+- [ ] Windows で大文字小文字の異なるパスが同一ファイルとして扱われる
+- [ ] Windows 予約ファイル名 (CON, PRN, AUX, NUL, COM1-9, LPT1-9) がファイル作成時に拒否される
+- [ ] パスにスペース・日本語を含むファイルが正常に操作できる
+- [ ] シンボリックリンク/ジャンクションは追跡しない (ワークスペース内の実ファイルのみ対象)
+
+**トレーサビリティ**: DES-WORKSPACE-001, DES-FILE-001, DES-SEC-001
 
 ---
 
@@ -1019,7 +1149,7 @@ THE SYSTEM SHALL run on both Windows (native, not WSL) and macOS without platfor
 | REQ-FILE-006 | P0 | ファイル | DES-FILE-001 |
 | REQ-PROGRESS-001 | P0 | 進行状況 | DES-PROGRESS-001 |
 | REQ-PROGRESS-002 | P0 | 進行状況 | DES-PROGRESS-001 |
-| REQ-PROGRESS-003 | P1 | 進行状況 | DES-PROGRESS-001 |
+| REQ-PROGRESS-003 | P0 | 進行状況 | DES-PROGRESS-001 |
 | REQ-UI-001 | P0 | レイアウト | DES-PROGRESS-001, DES-FILE-001 |
 | REQ-AUTH-001 | P0 | 認証 | DES-AUTH-001 |
 | REQ-AUTH-002 | P0 | 認証 | DES-AUTH-001 |
@@ -1036,10 +1166,15 @@ THE SYSTEM SHALL run on both Windows (native, not WSL) and macOS without platfor
 | REQ-ERR-004 | P1 | エラー処理 | DES-MCP-001 |
 | REQ-ERR-005 | P1 | エラー処理 | DES-PROJECT-001 |
 | REQ-ERR-006 | P1 | エラー処理 | DES-SKILLS-001 |
-| REQ-NFR-001 | P1 | 性能 | — |
-| REQ-NFR-002 | P1 | 性能 | — |
+| REQ-ERR-007 | P0 | エラー処理 | DES-FILE-001 |
+| REQ-ERR-008 | P0 | エラー処理 | DES-CHAT-001, DES-SEC-001 |
+| REQ-ERR-009 | P1 | エラー処理 | DES-WORKSPACE-001, DES-PROGRESS-001 |
+| REQ-NFR-001 | P1 | 性能 | DES-CHAT-001, DES-PROJECT-001 |
+| REQ-NFR-002 | P1 | 性能 | DES-SEC-001, DES-CHAT-001 |
 | REQ-NFR-003 | P0 | セキュリティ | DES-SEC-001 |
-| REQ-NFR-004 | P0 | セキュリティ | — |
-| REQ-NFR-005 | P1 | ユーザビリティ | — |
-| REQ-NFR-006 | P1 | ユーザビリティ | — |
-| REQ-NFR-007 | P0 | 互換性 | DES-SEC-001 |
+| REQ-NFR-004 | P0 | セキュリティ | DES-SEC-001 |
+| REQ-NFR-005 | P1 | ユーザビリティ | DES-CHAT-001, DES-PROGRESS-001 |
+| REQ-NFR-006 | P1 | ユーザビリティ | DES-CHAT-001, DES-FILE-001 |
+| REQ-NFR-007 | P0 | 互換性 | DES-SEC-001, DES-WORKSPACE-001, DES-FILE-001, DES-CHAT-001 |
+| REQ-NFR-008 | P0 | 互換性 | DES-SEC-001, DES-CHAT-001 |
+| REQ-NFR-009 | P0 | 互換性 | DES-WORKSPACE-001, DES-FILE-001, DES-SEC-001 |
