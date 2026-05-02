@@ -7,9 +7,12 @@ interface MessageItemProps {
 }
 
 const CLI_METADATA_RE = /\n*(?:Changes\s+\+\d+\s+-\d+\s*\n)?(?:Requests\s+.+\n)?(?:Tokens?\s+[↑↓•\d\s.kKmM()cached,]+\s*)$/;
+const MCP_TOOL_LINE_RE = /^● .+?\(MCP:.+?\)[^\n]*\n?(?:[ \t]*└[^\n]*\n?)*/gm;
 
 function stripCliMetadata(text: string): string {
-  return text.replace(CLI_METADATA_RE, '').trimEnd();
+  let cleaned = text.replace(MCP_TOOL_LINE_RE, '');
+  cleaned = cleaned.replace(CLI_METADATA_RE, '');
+  return cleaned.trimStart().trimEnd();
 }
 
 export function MessageItem({ role, content }: MessageItemProps) {

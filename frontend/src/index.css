@@ -16,3 +16,21 @@
   --color-border: #374151;
 }
 
+/* Prose code block styling for dark mode */
+.prose-invert pre {
+  background-color: #1e293b !important;
+  color: #e2e8f0 !important;
+}
+.prose-invert code {
+  color: #e2e8f0 !important;
+}
+
+/* Prose code block styling for light mode */
+.light .prose pre {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+.light .prose code {
+  color: #1e293b !important;
+}
+
