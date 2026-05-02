@@ -3,6 +3,8 @@ import type { ServerType } from '@hono/node-server';
 import { app } from './app.js';
 import { getDatabase, closeDatabase } from './db/index.js';
 import { runPreflight } from './services/preflight.js';
+import { attachWebSocket } from './services/ws.service.js';
+import type { Server } from 'node:http';
 
 const PORT = parseInt(process.env.AIRA_PORT ?? '3000', 10);
 
@@ -34,6 +36,7 @@ async function startup(): Promise<void> {
   // 4. Start dual-socket servers
   try {
     server4 = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: PORT });
+    attachWebSocket(server4 as unknown as Server, PORT);
     console.log(`[AIRA] Listening on http://127.0.0.1:${PORT}`);
   } catch (err) {
     console.warn(`[AIRA] Failed to bind IPv4: ${err instanceof Error ? err.message : err}`);
@@ -41,6 +44,7 @@ async function startup(): Promise<void> {
 
   try {
     server6 = serve({ fetch: app.fetch, hostname: '::1', port: PORT });
+    attachWebSocket(server6 as unknown as Server, PORT);
     console.log(`[AIRA] Listening on http://[::1]:${PORT}`);
   } catch (err) {
     console.warn(`[AIRA] Failed to bind IPv6: ${err instanceof Error ? err.message : err}`);
