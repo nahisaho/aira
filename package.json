@@ -13,6 +13,7 @@
     "build": "npm run build --workspaces --if-present",
     "build:wasm": "cd wasm && wasm-pack build --target web --out-dir ../frontend/src/wasm/pkg",
     "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npx playwright test",
     "lint": "npm run lint --workspaces --if-present",
     "format": "npm run format --workspaces --if-present",
     "format:check": "npm run format:check --workspaces --if-present"
@@ -23,6 +24,7 @@
   "license": "UNLICENSED",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.59.1",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
