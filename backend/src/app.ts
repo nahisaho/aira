@@ -8,6 +8,8 @@ import {
 } from './middleware/security.js';
 import { healthRoutes } from './routes/health.js';
 import { settingsRoutes } from './routes/settings.js';
+import { projectRoutes } from './routes/projects.js';
+import { messageRoutes } from './routes/messages.js';
 
 const app = new Hono();
 
@@ -26,5 +28,7 @@ app.get('/api/csrf-token', (c) => {
 // Routes
 app.route('/', healthRoutes);
 app.route('/', settingsRoutes);
+app.route('/', projectRoutes);
+app.route('/', messageRoutes);
 
 export { app };
