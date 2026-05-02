@@ -103,11 +103,11 @@
 
 **実行ライフサイクル**:
 1. クライアントが WebSocket 接続を確立 (`/ws/projects/:id/chat`)
-2. ユーザーメッセージ受信 → `messages` テーブルに保存 (role=user)
+2. ユーザーメッセージ受信 → **Run 作成とユーザーメッセージ保存を同一トランザクションで実行** (`BEGIN IMMEDIATE` → `INSERT messages (role=user)` + `INSERT agent_runs (status=queued/running)` → `COMMIT`)。Run が拒否される場合 (429: キュー満杯) はロールバックし、ユーザーメッセージも保存しない。クライアントにはエラーを返し、再送信を促す
 3. `AgentService.spawn()` でプロジェクト専用の子プロセスを起動
 4. 子プロセスの stdout をチャンク単位で WebSocket に転送
 5. プロセス終了 → 完了メッセージを `messages` テーブルに保存 (role=assistant)
-   - **全終端状態** (`completed` / `failed` / `cancelled` / `timeout`) でストリーミング済みの出力を保存する。部分出力であっても `messages` に永続化し、会話履歴に含める。`failed` / `cancelled` / `timeout` の場合はメッセージに `truncated: true` メタデータを付与する
+   - **全終端状態** (`completed` / `failed` / `cancelled` / `timeout`) でストリーミング済みの出力を保存する。部分出力であっても `messages` に永続化し、会話履歴に含める。切り詰めの判定は関連する `agent_runs.status` から導出する (assistant メッセージ自体に truncated フラグは持たない)
 6. ワークスペーススキャン → 新規ファイルをインデックス
 
 **再接続**: WebSocket 切断時、クライアントは指数バックオフで再接続を試みる。再接続後、以下の 3 API でスナップショット同期を行い、全ペインを復元する (REQ-ERR-003 準拠):
