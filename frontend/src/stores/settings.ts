@@ -8,7 +8,7 @@ interface SettingsStore {
   checkToken: () => Promise<void>;
   setToken: (token: string) => Promise<void>;
   deleteToken: () => Promise<void>;
-  validateToken: () => Promise<{ valid: boolean; user?: string }>;
+  validateToken: () => Promise<{ valid: boolean; login?: string }>;
 }
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
@@ -19,7 +19,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     set({ loading: true });
     try {
       const result = await settingsApi.getToken();
-      set({ tokenConfigured: result.configured, loading: false });
+      set({ tokenConfigured: result.token.configured, loading: false });
     } catch {
       set({ loading: false });
     }

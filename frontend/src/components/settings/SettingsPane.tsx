@@ -21,7 +21,7 @@ function AuthSettings() {
     useSettingsStore();
   const [input, setInput] = useState('');
   const [validating, setValidating] = useState(false);
-  const [validationResult, setValidationResult] = useState<{ valid: boolean; user?: string } | null>(null);
+  const [validationResult, setValidationResult] = useState<{ valid: boolean; login?: string } | null>(null);
 
   useEffect(() => {
     checkToken();
@@ -76,7 +76,7 @@ function AuthSettings() {
           {validationResult && (
             <p className={`text-xs ${validationResult.valid ? 'text-green-400' : 'text-red-400'}`}>
               {validationResult.valid
-                ? `✓ Valid (${validationResult.user})`
+                ? `✓ Valid (${validationResult.login})`
                 : '✗ Invalid token'}
             </p>
           )}

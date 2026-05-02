@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useProjectStore } from '../../stores/project';
 import { NewProjectModal } from './NewProjectModal';
+import { DeleteProjectDialog } from './DeleteProjectDialog';
+import { SettingsPane } from '../settings/SettingsPane';
 
 export function Sidebar() {
   const { projects, activeProjectId, loading, fetchProjects, setActiveProject } =
     useProjectStore();
   const [showNewModal, setShowNewModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProjects();
@@ -29,32 +33,57 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto space-y-1">
         {loading && <p className="text-xs text-gray-500">Loading...</p>}
         {projects.map((project) => (
-          <button
+          <div
             key={project.id}
-            onClick={() => setActiveProject(project.id)}
-            className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+            className={`group flex items-center rounded transition-colors ${
               activeProjectId === project.id
                 ? 'bg-blue-600/20 text-blue-400 border border-blue-600/30'
                 : 'text-gray-300 hover:bg-gray-800'
             }`}
           >
-            <span className="block truncate">{project.name}</span>
-            {project.last_activity && (
-              <span className="block text-xs text-gray-500 mt-0.5">
-                {new Date(project.last_activity).toLocaleString()}
-              </span>
-            )}
-          </button>
+            <button
+              onClick={() => setActiveProject(project.id)}
+              className="flex-1 text-left px-3 py-2 text-sm min-w-0"
+            >
+              <span className="block truncate">{project.name}</span>
+              {project.last_activity && (
+                <span className="block text-xs text-gray-500 mt-0.5">
+                  {new Date(project.last_activity).toLocaleString()}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteTarget(project.id);
+              }}
+              className="opacity-0 group-hover:opacity-100 px-2 text-xs text-red-400 hover:text-red-300"
+              title="Delete project"
+            >
+              ✕
+            </button>
+          </div>
         ))}
       </div>
 
       <div className="mt-2 pt-2 border-t border-gray-700">
-        <button className="text-xs text-gray-400 hover:text-gray-300">
+        <button
+          onClick={() => setShowSettings(true)}
+          className="text-xs text-gray-400 hover:text-gray-300"
+        >
           ⚙ Settings
         </button>
       </div>
 
       {showNewModal && <NewProjectModal onClose={() => setShowNewModal(false)} />}
+      {showSettings && <SettingsPane onClose={() => setShowSettings(false)} />}
+      {deleteTarget && (
+        <DeleteProjectDialog
+          projectId={deleteTarget}
+          projectName={projects.find((p) => p.id === deleteTarget)?.name ?? ''}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

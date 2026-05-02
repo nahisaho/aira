@@ -161,16 +161,16 @@ export const filesApi = {
 // ─── Settings ───
 
 export const settingsApi = {
-  getToken: () => request<{ configured: boolean }>('/settings/token'),
+  getToken: () => request<{ token: { configured: boolean; source: string } }>('/settings'),
   setToken: (token: string) =>
-    request<{ status: string }>('/settings/token', {
+    request<void>('/settings/token', {
       method: 'PUT',
       body: JSON.stringify({ token }),
     }),
   deleteToken: () =>
     request<void>('/settings/token', { method: 'DELETE' }),
   validateToken: () =>
-    request<{ valid: boolean; user?: string }>('/settings/validate-token', { method: 'POST' }),
+    request<{ valid: boolean; login?: string; scopes?: string[] }>('/settings/validate-token', { method: 'POST' }),
 };
 
 // ─── Health ───
