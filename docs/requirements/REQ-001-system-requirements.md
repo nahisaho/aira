@@ -488,12 +488,12 @@ WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS
 
 **Open 許可対象ファイル拡張子** (大文字小文字不問):
 - テキスト/コード: `.txt`, `.md`, `.json`, `.yaml`, `.yml`, `.toml`, `.xml`, `.csv`, `.log`, `.env.example`
-- プログラミング: `.ts`, `.tsx`, `.jsx`, `.py`, `.rs`, `.go`, `.java`, `.c`, `.cpp`, `.h`, `.hpp`, `.cs`, `.rb`, `.php`, `.swift`, `.kt`, `.scala`, `.sql`, `.html`, `.css`, `.scss`, `.less`, `.vue`, `.svelte`
-- 画像: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`, `.ico`, `.bmp`
+- プログラミング: `.ts`, `.tsx`, `.jsx`, `.py`, `.rs`, `.go`, `.java`, `.c`, `.cpp`, `.h`, `.hpp`, `.cs`, `.rb`, `.php`, `.swift`, `.kt`, `.scala`, `.sql`, `.css`, `.scss`, `.less`, `.vue`, `.svelte`
+- 画像: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.ico`, `.bmp`
 - ドキュメント: `.pdf`, `.docx`, `.xlsx`, `.pptx`
 - その他: `.zip`, `.tar.gz`, `.wasm`
 
-> **注**: `.js` は Windows WSH (JScript) で実行されるリスクがあるため Open 許可リストから除外。View / Download で内容確認可能。
+> **注**: `.js` は Windows WSH 実行リスク、`.html` はブラウザでのスクリプト実行リスク、`.svg` はインラインスクリプト実行リスクがあるため Open 許可リストから除外。いずれも View / Download で安全に内容確認可能。
 
 > **注意**: 許可リストにない拡張子のファイルには「開く」ボタンを非表示とし、「View」「Download」のみ表示。ユーザーが直接実行したい場合は「フォルダで表示」機能または手動でファイルシステムから操作する。
 
@@ -1025,7 +1025,22 @@ IF a user attempts to delete or rename a project while a Run is active, THE SYST
 
 ---
 
-#### REQ-ERR-006
+#### REQ-ERR-008
+**種別**: EVENT-DRIVEN  
+**優先度**: P0
+
+**要件**:  
+WHEN the server starts, THE SYSTEM SHALL detect any orphaned Runs (status = running or queued with no active process) and mark them as failed with reason 'server_crash'.
+
+**説明**: サーバーがクラッシュ/再起動した場合、前回未完了の Run が DB に残る。起動時にこれらを検出し `failed` に移行することで、プロジェクトが永久にブロックされることを防ぐ。
+
+**受入基準**:
+- [ ] サーバー起動時に `running` / `queued` 状態の Run が `failed` (error_type: server_crash) に移行される
+- [ ] 移行後、キュー昇格ロジックが実行される
+- [ ] 移行された Run のプロジェクトは rename/delete 操作が可能になる
+- [ ] リカバリ処理がサーバー起動ログに記録される
+
+**トレーサビリティ**: DES-CHAT-001
 **種別**: UNWANTED  
 **優先度**: P1
 

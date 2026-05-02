@@ -482,6 +482,14 @@ CREATE UNIQUE INDEX idx_agent_runs_one_queued ON agent_runs(project_id) WHERE st
 4. WS イベント `{ type: 'status', status: 'running' }` をクライアントに送信
 5. 昇格対象がなければ何もしない (プロジェクトは idle 状態に戻る)
 
+**起動時リカバリ (Orphan Run Reconciliation)**:
+サーバー再起動時、前回クラッシュ等で終了処理されなかった Run を検出・回復する:
+1. `SELECT id, project_id FROM agent_runs WHERE status IN ('running', 'queued')` で孤立 Run を取得
+2. 各 Run を `failed` に更新: `UPDATE agent_runs SET status='failed', finished_at=NOW(), error_type='server_crash' WHERE id=?`
+3. ログに「サーバー再起動により Run {id} を failed に移行」と記録
+4. 全孤立 Run の処理後、キュー昇格ロジックを実行 (正常時と同じフロー)
+5. プロジェクトのミューテーション (rename/delete) ブロックが解除される
+
 ### 会話メッセージ (messages)
 
 ```sql
