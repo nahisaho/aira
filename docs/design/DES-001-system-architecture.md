@@ -175,7 +175,7 @@ Skills は `skills/` ディレクトリにローカルキャッシュされ、`s
   - キーが含まれ値が `"***"` → **拒否 (400 Bad Request)**: マスク値をそのまま保存することは禁止
   - キーが含まれ値が通常文字列 → 新しい値で上書き
   - UI は未変更のシークレットフィールドをリクエストから除外し、変更時のみ新しい値を送信する
-- ログ出力: env / headers 値は一切ログに出力しない。CLI の stdout/stderr にシークレットが含まれる可能性があるため、ストリーミング前にベストエフォートで redact を行う: `config_json.env` および `config_json.headers` の各値**ならびに解決済み `GITHUB_TOKEN`** を redact 対象リストに含め、正規表現マッチし `***` に置換。子プロセスの出力は redact 処理を通過するまで UI (WebSocket) にもログにも転送しない。完全な防止は保証しない (部分一致・エンコード変換等) が、平文漏洩リスクを低減する
+- ログ出力: env / headers 値は一切ログに出力しない。CLI の stdout/stderr にシークレットが含まれる可能性があるため、ストリーミング前にベストエフォートで redact を行う: `config_json.env` および `config_json.headers` の各値**ならびに解決済み `GITHUB_TOKEN`** を redact 対象リストに含め、**リテラル文字列置換** (正規表現メタ文字をエスケープした上で `RegExp` 構築、または `String.replaceAll`) で `***` に置換する。対象リストは値の長さ降順でソートし、部分文字列の重複マッチを防止する。子プロセスの出力は redact 処理を通過するまで UI (WebSocket) にもログにも転送しない。完全な防止は保証しない (部分一致・エンコード変換等) が、平文漏洩リスクを低減する
 - 一時設定ファイル: `data/.tmp/` (事前に ACL/パーミッション設定済み) 配下にランダム名で作成。POSIX は親ディレクトリが 0700 であることを保証。Windows は Token ファイルと同じ NTFS ACL 戦略を適用。プロセス終了 (正常・異常とも) の finally ブロックで即時削除 (`fs.unlink`)。削除失敗はログ警告のみ (次回起動時のプリフライトでも残存一時ファイルをクリーンアップ)
 
 **MCP プロバイダ障害時の動作**:
@@ -519,8 +519,9 @@ CREATE UNIQUE INDEX idx_agent_runs_one_queued ON agent_runs(project_id) WHERE st
 **キュー昇格 (Queued → Running)**:
 `running` Run が終端状態 (`completed` / `failed` / `cancelled` / `timeout`) に遷移した際:
 1. 同一トランザクション内で:
-   a. 同一プロジェクトの `queued` Run を昇格 (プロジェクトキュー優先)
-   b. グローバル上限に空きがあれば、他プロジェクトの最古 `queued` Run も昇格対象
+   a. グローバル上限の空きスロット数を計算: `availableSlots = maxConcurrent - COUNT(status='running')`
+   b. `availableSlots > 0` かつ同一プロジェクトに `queued` Run があれば昇格 (プロジェクトキュー優先)。`availableSlots` を 1 減算
+   c. `availableSlots > 0` であれば、他プロジェクトの最古 `queued` Run を昇格 (容量がある限り繰り返さない — 1回の終端で最大1件のみ追加昇格)
 2. `UPDATE agent_runs SET status='running', started_at=CURRENT_TIMESTAMP WHERE id=?` で昇格
 3. 昇格された Run が存在すれば、即座にプロセス起動 (`AgentService.spawn()`)
 4. WS イベント `{ type: 'status', status: 'running' }` をクライアントに送信

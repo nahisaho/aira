@@ -344,7 +344,7 @@ THE SYSTEM SHALL allow users to configure MCP servers per project with server na
 **タイプ別入力モデル**:
 | タイプ | 必須項目 | オプション |
 |---|---|---|
-| stdio | `command`, `args` (配列) | `env` (キー・値ペア) |
+| stdio | `command` | `args` (配列, デフォルト `[]`), `env` (キー・値ペア) |
 | sse | `url` | `headers` (キー・値ペア) |
 
 **受入基準**:
