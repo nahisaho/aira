@@ -40,6 +40,24 @@ async function request<T>(
 
   if (res.status === 204) return undefined as T;
 
+  // Retry once on CSRF token invalidation (e.g. server restart)
+  if (res.status === 403 && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const body = await res.json().catch(() => ({}));
+    if (body.error?.includes('CSRF')) {
+      csrfToken = null;
+      const newToken = await fetchCsrfToken();
+      headers['X-AIRA-Token'] = newToken;
+      const retry = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      if (retry.status === 204) return undefined as T;
+      if (!retry.ok) {
+        const err = await retry.json().catch(() => ({ error: retry.statusText }));
+        throw new ApiError(retry.status, err.error ?? 'Unknown error', err);
+      }
+      return retry.json() as Promise<T>;
+    }
+    throw new ApiError(403, body.error ?? 'Forbidden', body);
+  }
+
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: res.statusText }));
     throw new ApiError(res.status, error.error ?? 'Unknown error', error);
