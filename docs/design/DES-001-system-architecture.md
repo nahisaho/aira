@@ -330,8 +330,12 @@ projects/
 - Run 継続: ウォッチャー障害は Run の実行を中断しない。ファイル一覧は Run 完了時のスキャンで正確になる
 - ランタイム障害: 監視中に OS エラー (`EMFILE`, `ENOSPC` 等) が発生した場合も同様にフォールバック移行
 
-**クリーンアップ**: プロジェクト削除時に `fs.rm(projects/{project_id}/, { recursive: true, force: true })` を実行。  
-パストラバーサル防止のため、削除対象パスが `projects/` 配下であることを検証する。
+**クリーンアップ (プロジェクト削除コントラクト)**:
+削除は「ファイルシステム先、DB 後」の順序で実行する:
+1. `fs.rm(projects/{project_id}/, { recursive: true, force: true })` を実行。パストラバーサル防止のため、削除対象パスが `projects/` 配下であることを検証する
+2. ファイルシステム削除が成功した場合のみ、DB から `projects` / `agent_runs` / `messages` / `project_files` / `project_mcp_servers` / `project_skills` をカスケード削除
+3. **ファイルシステム削除失敗時** (EPERM / EBUSY / EACCES): API は `423 Locked` を返し、「ワークスペース内のファイルが使用中です。該当アプリケーションを閉じてから再試行してください」とユーザーに通知。DB は変更しない (アトミック性保持)
+4. DB 削除失敗時 (FS 成功後): ログに CRITICAL を出力。次回起動時のプリフライトで孤立プロジェクトディレクトリ (DB に対応レコードなし) を検出・クリーンアップ
 
 ### DES-SEC-001: セキュリティ設計
 
@@ -376,7 +380,7 @@ projects/
 - Mermaid: `securityLevel: 'strict'` でレンダリング
 - SVG: `<img src="blob:...">` または `<img src="data:image/svg+xml,...">` としてのみ表示 (画像コンテキスト)。インライン DOM 挿入・`<object>`・`<iframe>` での SVG 表示は禁止
 - CSP ヘッダー: `script-src 'self' 'wasm-unsafe-eval'` (unsafe-inline 禁止)
-- 画像: `'self'` (ワークスペースファイル) + `data:image/*` のみ。外部画像は v1.0 では非表示
+- 画像: `'self'` (ワークスペースファイル) + `data:image/*` のみインライン表示。外部画像 URL はインラインレンダリングを禁止し、クリック可能なテキストリンクとして表示する (REQ-CHAT-005 準拠)
 
 ### API サーバー コンポーネント
 
