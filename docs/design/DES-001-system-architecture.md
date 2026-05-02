@@ -153,7 +153,7 @@ Skills は `skills/` ディレクトリにローカルキャッシュされ、`s
 - カタログソース: `skills-catalog.json` をアプリにバンドル (静的リスト)。v1.1+ で外部カタログ API に移行可能
 - カタログエントリ: `{ id, name, description, author, category, repo_url }`
 - API: `GET /api/skills/catalog` — バンドルされたカタログ一覧を返す (インストール済みは `installed: true` マーク付き)
-- インストールフロー: カタログの `repo_url` を使用してインポート (上記ライフサイクル 1〜3 と同一)。ワンクリック = `POST /api/skills` に `repo_url` を送信
+- インストールフロー: カタログの `repo_url` を使用してインポート (上記ライフサイクル 1〜3 と同一)。ワンクリック = `POST /api/skills/import` に `repo_url` を送信
 - 状態遷移: catalog item → importing → available / error
 
 ### DES-MCP-001: MCP 設定設計
@@ -164,6 +164,12 @@ Skills は `skills/` ディレクトリにローカルキャッシュされ、`s
 `--additional-mcp-config` オプションとして一時ファイル経由で渡される。  
 プリセット MCP (GitHub MCP Tools, ToolUniverse, Deep Research) は  
 `mcp-presets.json` に定義される。
+
+**MCP 環境変数のシークレット保護**:
+- DB 保存: `config_json.env` にキー・値ペアとして格納 (v1.0 は平文、settings.json と同レベル)
+- API レスポンス: `GET /api/projects/:id/mcp` は env 値を `"***"` にマスクして返す。設定画面で再編集時は空欄表示 (再入力を要求)
+- ログ出力: env 値は一切ログに出力しない。CLI の stdout/stderr に含まれる場合も AIRA 側では追加マスクしない (CLI 責任)
+- 一時設定ファイル: `os.tmpdir()` 配下にランダム名で作成、パーミッション 0600 (Windows: icacls でカレントユーザーのみ)。プロセス終了 (正常・異常とも) の finally ブロックで即時削除 (`fs.unlink`)。削除失敗はログ警告のみ (次回起動時のプリフライトでも残存一時ファイルをクリーンアップ)
 
 **MCP プロバイダ障害時の動作**:
 - AIRA は MCP 設定の構文検証のみ行い、接続確認は Copilot CLI に委ねる
@@ -526,7 +532,7 @@ CREATE TABLE project_files (
   id          TEXT PRIMARY KEY,   -- UUID
   project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   filename    TEXT NOT NULL,
-  file_path   TEXT NOT NULL,      -- サーバー上のパス
+  file_path   TEXT NOT NULL,      -- ワークスペースルートからの相対パス (例: "src/main.rs")。絶対パスへの変換は FileService 内でのみ行う
   mime_type   TEXT,
   size_bytes  INTEGER,
   mtime_ms    INTEGER,            -- ファイルの mtime (ミリ秒 epoch)。変更検出に使用
@@ -564,6 +570,7 @@ CREATE TABLE project_files (
 | メソッド | パス | 説明 |
 |---|---|---|
 | GET | /api/skills | 利用可能 Skills 一覧 |
+| GET | /api/skills/catalog | マーケットプレイスカタログ一覧 (インストール済みマーク付き) |
 | POST | /api/skills/import | GitHub リポジトリから Skills インポート |
 | GET | /api/projects/:id/skills | プロジェクト Skills 取得 |
 | PUT | /api/projects/:id/skills | プロジェクト Skills 更新 |
