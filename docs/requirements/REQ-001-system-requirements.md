@@ -641,14 +641,14 @@ THE SYSTEM SHALL validate the Origin header on all WebSocket upgrade requests an
 **説明**: localhost アプリであっても、悪意あるWebサイトからの CSRF / Cross-Origin リクエストを防止する必要がある。ブラウザから送信される `Origin` ヘッダーを検証し、AIRA が配信する SPA 以外からのリクエストを拒否する。
 
 **防御レイヤー**:
-1. **Origin 検証**: すべての状態変更リクエスト (POST/PUT/PATCH/DELETE) および WS upgrade で `Origin` ヘッダーが `http://localhost:<port>` または `http://127.0.0.1:<port>` と一致することを確認
+1. **Origin 検証**: すべての状態変更リクエスト (POST/PUT/PATCH/DELETE) および WS upgrade で `Origin` ヘッダーが許可リストと一致することを確認。許可 Origin: `http://localhost:<port>`, `http://127.0.0.1:<port>`, `http://[::1]:<port>`
 2. **Anti-CSRF トークン**: SPA 初回ロード時にサーバーが生成するランダムトークンを `X-AIRA-Token` ヘッダーとして状態変更リクエストに付与
-3. **CORS ポリシー**: `Access-Control-Allow-Origin` を明示的に `http://localhost:<port>` に設定 (ワイルドカード不可)
+3. **CORS ポリシー**: `Access-Control-Allow-Origin` をリクエストの Origin に対してエコー (許可リスト内の場合のみ)。ワイルドカード不可
 
 **受入基準**:
 - [ ] 状態変更 HTTP リクエスト (POST/PUT/PATCH/DELETE) に `Origin` ヘッダー検証ミドルウェアが適用される
 - [ ] WebSocket upgrade リクエストに `Origin` ヘッダー検証が適用される
-- [ ] `Origin` が許可リスト (`localhost`, `127.0.0.1`, `::1`) に含まれない場合、403 Forbidden を返す
+- [ ] `Origin` が許可リスト (`http://localhost:<port>`, `http://127.0.0.1:<port>`, `http://[::1]:<port>`) に含まれない場合、403 Forbidden を返す
 - [ ] SPA 初回ロード時に `GET /api/csrf-token` でトークンが発行される
 - [ ] 状態変更リクエストに `X-AIRA-Token` ヘッダーが必須 (未付与/不一致は 403)
 - [ ] CORS `Access-Control-Allow-Origin` がワイルドカード (`*`) でない
@@ -851,15 +851,15 @@ THE SYSTEM SHALL sanitize all rendered content (Markdown, Mermaid, code blocks) 
 2. **URI スキーム**: `javascript:`, `vbscript:`, `data:text/html` を含むリンク/画像 URL をブロック。許可スキーム: `http:`, `https:`, `mailto:`, `data:image/*`
 3. **Mermaid**: サンドボックスモード (`securityLevel: 'strict'`) でレンダリング。クリックイベントハンドラ無効化
 4. **コードブロック**: テキストとしてレンダリング。HTML として解釈しない
-5. **画像**: 外部 URL (`http://`, `https://`) および `data:image/*` のみ許可
+5. **画像**: ワークスペース内ファイル (`'self'`)、`data:image/*` のみ許可。外部 URL (`http(s)://`) の画像は表示しない (v1.0 セキュリティ優先。外部画像プロキシは v1.1+ スコープ)
 
 **CSP ポリシー** (v1.0):
 ```
 default-src 'self';
 script-src 'self' 'wasm-unsafe-eval';
 style-src 'self' 'unsafe-inline';
-img-src 'self' data: http://localhost:* http://127.0.0.1:*;
-connect-src 'self' ws://localhost:* ws://127.0.0.1:*;
+img-src 'self' data:;
+connect-src 'self' ws://localhost:* ws://127.0.0.1:* ws://[::1]:*;
 object-src 'none';
 base-uri 'self';
 ```

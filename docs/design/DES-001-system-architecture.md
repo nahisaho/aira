@@ -110,7 +110,7 @@
 6. ワークスペーススキャン → 新規ファイルをインデックス
 
 **再接続**: WebSocket 切断時、クライアントは指数バックオフで再接続を試みる。  
-**キャンセル**: ユーザーが停止を要求した場合、`AgentService.stop()` で子プロセスを SIGTERM → SIGKILL する。
+**キャンセル**: ユーザーが停止を要求した場合、`AgentService.stop()` で子プロセスを停止する (OS 別戦略は DES-SEC-001 参照)。
 
 ### DES-PROJECT-001: プロジェクト管理設計
 
@@ -187,9 +187,9 @@ GitHub Token はサーバーサイドの環境変数 (`GITHUB_TOKEN`) または
 
 **ブラウザ Origin 防御**:
 - 全状態変更リクエスト (POST/PUT/PATCH/DELETE) および WS upgrade で `Origin` ヘッダーを検証
-- 許可 Origin: `http://localhost:<port>`, `http://127.0.0.1:<port>`
+- 許可 Origin: `http://localhost:<port>`, `http://127.0.0.1:<port>`, `http://[::1]:<port>`
 - Anti-CSRF トークン: サーバーメモリに保持、`GET /api/csrf-token` で発行、`X-AIRA-Token` ヘッダーで検証
-- CORS: `Access-Control-Allow-Origin` を明示的に設定 (ワイルドカード不可)
+- CORS: `Access-Control-Allow-Origin` をリクエスト Origin に対してエコー (許可リスト内のみ。ワイルドカード不可)
 
 ### DES-WORKSPACE-001: ワークスペースライフサイクル設計
 
@@ -207,8 +207,16 @@ projects/
 ```
 
 **ファイルインデックス**: エージェント実行完了後、`FileService` がワークスペースを走査し、  
-前回スキャンとの差分を検出して `project_files` テーブルを更新する。  
-検出対象: 新規ファイル追加、既存ファイル変更 (mtime/size)、ファイル削除。
+前回スキャンとの差分を検出して `project_files` テーブルを更新する。
+
+**スキャンルール**:
+- ファイルシステム走査: `fs.readdir` + `fs.lstat` (NOT `fs.stat`) を使用
+- シンボリックリンク/ジャンクション: `lstat.isSymbolicLink()` が true の場合スキップ (追跡しない)
+- chokidar 設定: `followSymlinks: false`, `ignorePermissionErrors: true`
+- 変更検出 (高速パス): `mtime_ms` + `size_bytes` の比較。いずれかが変化 → `file_modified` イベント
+- 変更検出 (精密パス): `mtime_ms` が変化かつ `size_bytes` が同一の場合のみ `content_hash` (SHA-256) を再計算して比較
+- 新規ファイル: `project_files` に未登録のパス → INSERT + `file_added` イベント
+- 削除検出: DB に存在するがファイルシステムに存在しない → DELETE + `file_deleted` イベント
 
 **クリーンアップ**: プロジェクト削除時に `fs.rm(projects/{project_id}/, { recursive: true, force: true })` を実行。  
 パストラバーサル防止のため、削除対象パスが `projects/` 配下であることを検証する。
@@ -237,7 +245,7 @@ projects/
 - URI スキーム: `javascript:`, `vbscript:`, `data:text/html` をブロック
 - Mermaid: `securityLevel: 'strict'` でレンダリング
 - CSP ヘッダー: `script-src 'self' 'wasm-unsafe-eval'` (unsafe-inline 禁止)
-- 画像: `data:image/*`, `http(s)://localhost:*` のみ許可
+- 画像: `'self'` (ワークスペースファイル) + `data:image/*` のみ。外部画像は v1.0 では非表示
 
 ### API サーバー コンポーネント
 
@@ -351,7 +359,18 @@ CREATE TABLE agent_runs (
 );
 -- 1プロジェクトにつき同時実行は1件のみ (queued含め最大2件)
 CREATE INDEX idx_agent_runs_project_status ON agent_runs(project_id, status);
+-- DB レベルで 1 プロジェクト 1 running を強制 (partial unique index)
+CREATE UNIQUE INDEX idx_agent_runs_one_running ON agent_runs(project_id) WHERE status = 'running';
+CREATE UNIQUE INDEX idx_agent_runs_one_queued ON agent_runs(project_id) WHERE status = 'queued';
 ```
+
+**キュー制御トランザクション**:
+新メッセージ受信時、以下を単一トランザクション (`BEGIN IMMEDIATE`) で実行:
+1. `SELECT COUNT(*) FROM agent_runs WHERE project_id = ? AND status IN ('running', 'queued')` で現在のアクティブ数を確認
+2. 0件 → `INSERT ... status='running'` で即時実行開始
+3. 1件 (running のみ) → `INSERT ... status='queued'` でキュー投入
+4. 2件 (running + queued) → 拒否 (HTTP 429 Too Many Requests)
+- `BEGIN IMMEDIATE` により書き込みロックを取得し、race condition を防止
 
 ### 会話メッセージ (messages)
 
@@ -487,9 +506,17 @@ CREATE TABLE project_files (
 | メソッド | パス | 説明 |
 |---|---|---|
 | GET | /api/settings | 設定取得 (Token 有無 boolean のみ) |
+| PUT | /api/settings/token | Token 登録・更新 (環境変数未設定時のみ有効) |
+| DELETE | /api/settings/token | Token 削除 |
 | POST | /api/settings/validate-token | Token 有効性検証 |
 | GET | /api/health | プリフライト結果 JSON (`{ cli, workspace, os, token }`) |
 | GET | /api/csrf-token | Anti-CSRF トークン取得 |
+
+**PUT /api/settings/token 仕様**:
+- リクエスト: `{ "token": "ghp_..." }`
+- 環境変数 `GITHUB_TOKEN` が設定済みの場合: 409 Conflict (環境変数優先)
+- 成功時: `data/settings.json` に保存 → 201 Created (新規) / 204 No Content (更新)
+- CSRF トークン必須 (`X-AIRA-Token` ヘッダー)
 
 ---
 
