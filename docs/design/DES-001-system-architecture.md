@@ -329,7 +329,7 @@ projects/
 
 **プロセスセキュリティ**:
 - エージェントは `child_process.spawn()` で起動。**POSIX (macOS) では `detached: true` を指定し、子プロセスを独立したプロセスグループ/セッションで起動する**。これにより `process.kill(-pid, signal)` でプロセスツリー全体にシグナル送信が可能
-- **CLI コマンド解決**: プリフライトおよびランタイム spawn で同一の解決済みコマンドパスを使用する。macOS: `copilot` (PATH 検索)。Windows: `copilot.cmd` (npm グローバルインストール時) を `spawn` に `shell: true` なしで渡す。プリフライトで `--version` を実行して存在確認し、解決済みパスをキャッシュする
+- **CLI コマンド解決**: プリフライトおよびランタイム spawn で同一の起動戦略を使用する。macOS: `spawn('copilot', args)` (PATH 検索)。Windows: `.cmd` ファイルは直接 spawn 不可のため `spawn('cmd.exe', ['/d', '/s', '/c', 'copilot.cmd', ...args])` で起動する。プリフライトで `--version` を実行して存在確認し、解決済み起動戦略 (command + prefix args) をキャッシュする
 - cwd を `projects/{project_id}/workspace/` に制限
 - Token 注入: `AgentService` が解決済み Token を `spawn(..., { env: { GITHUB_TOKEN } })` で渡す
   - 解決優先順位: `process.env.GITHUB_TOKEN` > `data/settings.json` > 未設定 (エラー)
