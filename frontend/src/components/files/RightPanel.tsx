@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useFilesStore } from '../../stores/files';
 import { useProjectStore } from '../../stores/project';
 import { usePreferencesStore } from '../../stores/preferences';
+import { usePipelineStore } from '../../stores/pipeline';
 import { useT } from '../../useT';
 import { filesApi, runsApi } from '../../api/client';
 
@@ -11,6 +12,7 @@ export function RightPanel() {
   const t = useT();
   const { files, currentRun, runHistory, fetchFiles, fetchCurrentRun, fetchRunHistory } =
     useFilesStore();
+  const pipelineSteps = usePipelineStore((s) => s.steps);
   const light = theme === 'light';
 
   useEffect(() => {
@@ -66,6 +68,31 @@ export function RightPanel() {
           <div className={`text-sm ${light ? 'text-gray-400' : 'text-gray-500'}`}>{t('panel.idle')}</div>
         )}
       </section>
+
+      {/* Pipeline Progress */}
+      {pipelineSteps.length > 0 && (
+        <section className="mb-4">
+          <h3 className={`text-xs font-semibold uppercase mb-2 ${light ? 'text-gray-500' : 'text-gray-400'}`}>
+            Pipeline
+          </h3>
+          <div className="space-y-0.5">
+            {pipelineSteps.map((step, i) => (
+              <div key={i} className={`flex items-start gap-2 text-xs py-1 ${
+                step.status === 'running' ? (light ? 'text-blue-700' : 'text-blue-400') :
+                step.status === 'done' ? (light ? 'text-green-700' : 'text-green-400') :
+                (light ? 'text-gray-400' : 'text-gray-500')
+              }`}>
+                <span className="flex-shrink-0 w-4 text-center">
+                  {step.status === 'done' ? '✓' : step.status === 'running' ? '►' : '○'}
+                </span>
+                <span className={`truncate ${step.status === 'running' ? 'font-medium' : ''}`}>
+                  {step.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Run History */}
       <section className="mb-4">
