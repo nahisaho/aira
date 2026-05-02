@@ -59,6 +59,7 @@ export function ChatPane() {
         {messages.map((msg) => (
           <MessageItem key={msg.id} role={msg.role} content={msg.content} />
         ))}
+        {sending && <ThinkingIndicator light={light} />}
         <div ref={messagesEndRef} />
       </div>
 
@@ -111,6 +112,20 @@ export function ChatPane() {
           >
             {sending ? t('chat.sending') : t('chat.send')}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ThinkingIndicator({ light }: { light: boolean }) {
+  return (
+    <div className="flex justify-start">
+      <div className={`px-4 py-3 rounded-lg ${light ? 'bg-gray-100' : 'bg-gray-800'}`}>
+        <div className="flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full animate-bounce ${light ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '0ms' }} />
+          <span className={`w-2 h-2 rounded-full animate-bounce ${light ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '150ms' }} />
+          <span className={`w-2 h-2 rounded-full animate-bounce ${light ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '300ms' }} />
         </div>
       </div>
     </div>
