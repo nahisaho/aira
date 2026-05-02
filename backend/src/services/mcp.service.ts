@@ -1,0 +1,215 @@
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { getDatabase } from '../db/index.js';
+
+export interface McpConfig {
+  id: string;
+  project_id: string;
+  name: string;
+  type: 'stdio' | 'sse';
+  config_json: string;
+  enabled: number;
+  preset_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface McpConfigParsed extends Omit<McpConfig, 'config_json'> {
+  config: Record<string, unknown>;
+}
+
+const SECRET_MASK = '***';
+
+export class McpService {
+  list(projectId: string): McpConfigParsed[] {
+    const db = getDatabase();
+    const rows = db.prepare(
+      'SELECT * FROM project_mcp_configs WHERE project_id = ? ORDER BY name ASC',
+    ).all(projectId) as McpConfig[];
+
+    return rows.map(r => this.maskSecrets(r));
+  }
+
+  getById(id: string): McpConfigParsed | undefined {
+    const db = getDatabase();
+    const row = db.prepare('SELECT * FROM project_mcp_configs WHERE id = ?').get(id) as McpConfig | undefined;
+    return row ? this.maskSecrets(row) : undefined;
+  }
+
+  create(projectId: string, name: string, type: 'stdio' | 'sse', config: Record<string, unknown>, presetId?: string): McpConfigParsed {
+    const db = getDatabase();
+    const id = crypto.randomUUID();
+
+    db.prepare(
+      `INSERT INTO project_mcp_configs (id, project_id, name, type, config_json, enabled, preset_id)
+       VALUES (?, ?, ?, ?, ?, 1, ?)`,
+    ).run(id, projectId, name, type, JSON.stringify(config), presetId ?? null);
+
+    return this.getById(id)!;
+  }
+
+  /**
+   * PATCH update with secret-aware merge semantics.
+   * - Key omitted → keep existing
+   * - Key = null → delete
+   * - Key = "***" → reject (400)
+   * - Key = string → overwrite
+   */
+  update(id: string, patch: Record<string, unknown>): McpConfigParsed {
+    const db = getDatabase();
+    const existing = db.prepare('SELECT * FROM project_mcp_configs WHERE id = ?').get(id) as McpConfig | undefined;
+    if (!existing) throw new McpNotFoundError(id);
+
+    const existingConfig = JSON.parse(existing.config_json) as Record<string, unknown>;
+
+    // Merge with secret semantics for env and headers
+    for (const secretKey of ['env', 'headers']) {
+      if (secretKey in patch) {
+        const patchVal = patch[secretKey] as Record<string, string | null> | null | undefined;
+
+        if (patchVal === null) {
+          delete existingConfig[secretKey];
+          continue;
+        }
+
+        if (patchVal && typeof patchVal === 'object') {
+          const existing_secrets = (existingConfig[secretKey] ?? {}) as Record<string, string>;
+
+          for (const [k, v] of Object.entries(patchVal)) {
+            if (v === SECRET_MASK) {
+              throw new MaskedValueError(secretKey, k);
+            }
+            if (v === null) {
+              delete existing_secrets[k];
+            } else {
+              existing_secrets[k] = v;
+            }
+          }
+
+          existingConfig[secretKey] = existing_secrets;
+        }
+
+        delete patch[secretKey];
+      }
+    }
+
+    // Merge non-secret fields
+    const merged = { ...existingConfig, ...patch };
+
+    db.prepare(
+      'UPDATE project_mcp_configs SET config_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    ).run(JSON.stringify(merged), id);
+
+    if ('name' in patch && typeof patch.name === 'string') {
+      db.prepare('UPDATE project_mcp_configs SET name = ? WHERE id = ?').run(patch.name, id);
+    }
+    if ('enabled' in patch && typeof patch.enabled === 'number') {
+      db.prepare('UPDATE project_mcp_configs SET enabled = ? WHERE id = ?').run(patch.enabled, id);
+    }
+
+    return this.getById(id)!;
+  }
+
+  toggle(id: string, enabled: boolean): void {
+    const db = getDatabase();
+    db.prepare('UPDATE project_mcp_configs SET enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
+      enabled ? 1 : 0,
+      id,
+    );
+  }
+
+  delete(id: string): void {
+    const db = getDatabase();
+    db.prepare('DELETE FROM project_mcp_configs WHERE id = ?').run(id);
+  }
+
+  /**
+   * Get secrets for redaction (all env/headers values across project configs).
+   */
+  getSecretsForRedaction(projectId: string): string[] {
+    const db = getDatabase();
+    const rows = db.prepare(
+      "SELECT config_json FROM project_mcp_configs WHERE project_id = ? AND enabled = 1",
+    ).all(projectId) as Array<{ config_json: string }>;
+
+    const secrets: string[] = [];
+    for (const row of rows) {
+      const config = JSON.parse(row.config_json) as Record<string, unknown>;
+      for (const key of ['env', 'headers']) {
+        const vals = config[key] as Record<string, string> | undefined;
+        if (vals && typeof vals === 'object') {
+          secrets.push(...Object.values(vals).filter(v => typeof v === 'string' && v.length > 0));
+        }
+      }
+    }
+    return secrets;
+  }
+
+  /**
+   * Generate a temporary MCP config file for agent execution.
+   */
+  generateTempConfig(projectId: string): string | null {
+    const db = getDatabase();
+    const rows = db.prepare(
+      "SELECT * FROM project_mcp_configs WHERE project_id = ? AND enabled = 1",
+    ).all(projectId) as McpConfig[];
+
+    if (rows.length === 0) return null;
+
+    const mcpConfig: Record<string, unknown> = {};
+    for (const row of rows) {
+      const config = JSON.parse(row.config_json);
+      mcpConfig[row.name] = { type: row.type, ...config };
+    }
+
+    const tmpDir = path.resolve('data', '.tmp');
+    fs.mkdirSync(tmpDir, { recursive: true, mode: 0o700 });
+
+    const tmpFile = path.join(tmpDir, `mcp-${crypto.randomUUID()}.json`);
+
+    if (process.platform !== 'win32') {
+      const fd = fs.openSync(tmpFile, 'w', 0o600);
+      fs.writeSync(fd, JSON.stringify(mcpConfig, null, 2));
+      fs.closeSync(fd);
+    } else {
+      fs.writeFileSync(tmpFile, JSON.stringify(mcpConfig, null, 2));
+    }
+
+    return tmpFile;
+  }
+
+  private maskSecrets(row: McpConfig): McpConfigParsed {
+    const config = JSON.parse(row.config_json) as Record<string, unknown>;
+
+    for (const key of ['env', 'headers']) {
+      const vals = config[key] as Record<string, string> | undefined;
+      if (vals && typeof vals === 'object') {
+        for (const k of Object.keys(vals)) {
+          vals[k] = SECRET_MASK;
+        }
+      }
+    }
+
+    const { config_json: _, ...rest } = row;
+    return { ...rest, config };
+  }
+}
+
+export class McpNotFoundError extends Error {
+  constructor(id: string) {
+    super(`MCP config not found: ${id}`);
+    this.name = 'McpNotFoundError';
+  }
+}
+
+export class MaskedValueError extends Error {
+  field: string;
+  key: string;
+  constructor(field: string, key: string) {
+    super(`Cannot save masked value "***" for ${field}.${key}. Please provide the actual value or omit the field.`);
+    this.name = 'MaskedValueError';
+    this.field = field;
+    this.key = key;
+  }
+}

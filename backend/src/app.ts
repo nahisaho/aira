@@ -12,6 +12,8 @@ import { projectRoutes } from './routes/projects.js';
 import { messageRoutes } from './routes/messages.js';
 import { runRoutes } from './routes/runs.js';
 import { fileRoutes } from './routes/files.js';
+import { skillsRoutes } from './routes/skills.js';
+import { mcpRoutes } from './routes/mcp.js';
 
 const app = new Hono();
 
@@ -34,5 +36,7 @@ app.route('/', projectRoutes);
 app.route('/', messageRoutes);
 app.route('/', runRoutes);
 app.route('/', fileRoutes);
+app.route('/', skillsRoutes);
+app.route('/', mcpRoutes);
 
 export { app };
