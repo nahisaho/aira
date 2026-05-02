@@ -661,6 +661,8 @@ THE SYSTEM SHALL require a valid GitHub Token to be configured before invoking t
 - [ ] 環境変数未設定時は、設定 API で Token を登録できる
 - [ ] `data/settings.json` のファイル権限が 0600 (owner read/write only) でアトミックに作成される (デフォルトパーミッションで一瞬でも存在しない)
 - [ ] Windows では `data/settings.json` が NTFS ACL でカレントユーザーのみ読み書き可能に設定される (セキュリティ設定済みディレクトリ内で作成後にリネーム)
+- [ ] `data/` ディレクトリ自体が所有者のみアクセス可能 (POSIX: 0700, Windows: NTFS ACL) で作成される。`data/aira.db` も MCP シークレットを含むため同等の保護が必要
+- [ ] 起動時プリフライトで `data/` ディレクトリおよび `data/aira.db` のパーミッションを検証し、不適切な場合は警告 + 自動修復を試行。修復不可なら起動中止
 - [ ] Token が未設定の場合、チャット送信時に「Token 未設定」エラーが表示される
 - [ ] GET /api/settings は Token の設定有無 (boolean) のみ返す (Token 値は返さない)
 - [ ] Token の有効性を検証するエンドポイント (POST /api/settings/validate-token) がある。サーバー保存済み Token を GitHub API に対して検証する (リクエストボディに Token を含まない)
@@ -757,6 +759,7 @@ THE SYSTEM SHALL pass the GitHub Token to agent child processes via environment 
 - [ ] ワークスペースディレクトリに Token が書き込まれない
 - [ ] アプリケーションログに Token が出力されない (マスク処理)
 - [ ] WebSocket メッセージに Token が含まれない
+- [ ] CLI stdout/stderr のストリーミング出力は、GITHUB_TOKEN および MCP シークレットの redact 処理を通過してから UI/ログに転送される
 
 **トレーサビリティ**: DES-AUTH-001
 
