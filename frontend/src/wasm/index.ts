@@ -4,33 +4,29 @@
  * Falls back to TS renderer on init failure (security parity required).
  */
 
-let wasmReady = false;
-let wasmModule: typeof import('./fallback') | null = null;
-
 export interface RenderResult {
   html: string;
   source: 'wasm' | 'ts-fallback';
 }
+
+let activeRenderer: { renderMarkdown: (s: string) => string } | null = null;
+let activeSource: 'wasm' | 'ts-fallback' = 'ts-fallback';
 
 /**
  * Initialize WASM module. Falls back to TS on failure.
  */
 export async function initRenderer(): Promise<'wasm' | 'ts-fallback'> {
   try {
-    // Phase 14-2: Replace with actual wasm-pack module import
-    // const wasm = await import('../../../wasm/pkg/aira_wasm');
-    // await wasm.default();
-    // wasmModule = wasm;
-    // wasmReady = true;
-    // return 'wasm';
-
-    // Currently: WASM module not yet built, fall through to TS fallback
-    throw new Error('WASM module not yet available');
-  } catch {
-    // Fallback to TypeScript renderer (security parity per ADR-001)
+    const wasm = await import('./pkg/aira_wasm.js');
+    await wasm.default();
+    activeRenderer = { renderMarkdown: wasm.render_markdown };
+    activeSource = 'wasm';
+    return 'wasm';
+  } catch (err) {
+    console.warn('[aira] WASM init failed, using TS fallback:', (err as Error).message);
     const fallback = await import('./fallback');
-    wasmModule = fallback;
-    wasmReady = true;
+    activeRenderer = fallback;
+    activeSource = 'ts-fallback';
     return 'ts-fallback';
   }
 }
@@ -39,15 +35,15 @@ export async function initRenderer(): Promise<'wasm' | 'ts-fallback'> {
  * Render markdown to sanitized HTML.
  */
 export function render(markdown: string): RenderResult {
-  if (!wasmReady || !wasmModule) {
-    // Lazy init not called yet — use fallback synchronously
+  if (!activeRenderer) {
+    // Synchronous fallback if init not called yet
     const { renderMarkdown } = require('./fallback') as typeof import('./fallback');
     return { html: renderMarkdown(markdown), source: 'ts-fallback' };
   }
 
   return {
-    html: wasmModule.renderMarkdown(markdown),
-    source: wasmReady ? 'wasm' : 'ts-fallback',
+    html: activeRenderer.renderMarkdown(markdown),
+    source: activeSource,
   };
 }
 
@@ -55,5 +51,5 @@ export function render(markdown: string): RenderResult {
  * Check if WASM is the active renderer.
  */
 export function isWasmActive(): boolean {
-  return wasmReady && wasmModule !== null;
+  return activeSource === 'wasm';
 }
