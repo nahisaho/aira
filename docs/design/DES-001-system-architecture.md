@@ -276,18 +276,22 @@ projects/
 **パス正規化・検証アルゴリズム** (REQ-NFR-009 対応):
 ファイル API (create/open/delete/view/download) およびワークスペーススキャンで共通使用:
 1. `path.resolve(workspaceDir, inputPath)` で絶対パスに解決
-2. `realpath` (存在する場合) または `resolve` 結果が `workspaceDir` プレフィックスを持つことを検証 (トラバーサル防止)
-3. Windows (`process.platform === 'win32'`) の場合:
-   - パス比較: `.toLowerCase()` で case-insensitive 比較
+2. **境界安全検証**: `path.relative(workspaceDir, candidate)` を計算し、以下の場合は拒否 (403):
+   - 結果が絶対パス (例: `/etc/passwd`)
+   - 結果が `..` で始まる (例: `../sibling-project/secret`)
+   - Windows: 比較前に両方を `.toLowerCase()` で case-fold
+3. 存在するファイルに対しては `fs.realpath()` で解決後に再度ステップ 2 を適用 (シンボリックリンク経由の escape 防止)
+4. Windows (`process.platform === 'win32'`) の場合:
    - 予約名チェック: ファイル名 (拡張子除去後) が `/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i` にマッチ → 拒否 (400)
    - 末尾ドット/スペース: ファイル名が `.` または ` ` で終わる → 拒否 (400)
-4. シンボリックリンク/ジャンクション: `lstat` で判定、リンクの場合は拒否 (403)
-5. 適用箇所: `FileService.resolve()` メソッドに集約し、全ファイル操作 API で呼び出す
+5. シンボリックリンク/ジャンクション: `lstat` で判定、リンクの場合は拒否 (403)
+6. 適用箇所: `FileService.resolve()` メソッドに集約し、全ファイル操作 API で呼び出す
 
 **レンダリングセキュリティ (XSS 防御)**:
 - Markdown: DOMPurify でサニタイズ。生 HTML は除去、許可タグのホワイトリスト方式
 - URI スキーム: `javascript:`, `vbscript:`, `data:text/html` をブロック
 - Mermaid: `securityLevel: 'strict'` でレンダリング
+- SVG: `<img src="blob:...">` または `<img src="data:image/svg+xml,...">` としてのみ表示 (画像コンテキスト)。インライン DOM 挿入・`<object>`・`<iframe>` での SVG 表示は禁止
 - CSP ヘッダー: `script-src 'self' 'wasm-unsafe-eval'` (unsafe-inline 禁止)
 - 画像: `'self'` (ワークスペースファイル) + `data:image/*` のみ。外部画像は v1.0 では非表示
 
@@ -415,6 +419,13 @@ CREATE UNIQUE INDEX idx_agent_runs_one_queued ON agent_runs(project_id) WHERE st
 3. 1件 (running のみ) → `INSERT ... status='queued'` でキュー投入
 4. 2件 (running + queued) → 拒否 (HTTP 429 Too Many Requests)
 - `BEGIN IMMEDIATE` により書き込みロックを取得し、race condition を防止
+
+**キュー昇格 (Queued → Running)**:
+`running` Run が終端状態 (`completed` / `failed` / `cancelled` / `timeout`) に遷移した際:
+1. 同一トランザクション内で `UPDATE agent_runs SET status='running', started_at=NOW() WHERE project_id=? AND status='queued'` を実行
+2. 昇格された Run が存在すれば、即座にプロセス起動 (`AgentService.spawn()`)
+3. WS イベント `{ type: 'status', status: 'running' }` をクライアントに送信
+4. 昇格対象がなければ何もしない (プロジェクトは idle 状態に戻る)
 
 ### 会話メッセージ (messages)
 
@@ -555,7 +566,7 @@ CREATE TABLE project_files (
 | GET | /api/settings | 設定取得 (Token 有無 boolean のみ) |
 | PUT | /api/settings/token | Token 登録・更新 (環境変数未設定時のみ有効) |
 | DELETE | /api/settings/token | Token 削除 |
-| POST | /api/settings/validate-token | Token 有効性検証 |
+| POST | /api/settings/validate-token | サーバー保存済み Token を GitHub API で検証 (ボディなし) |
 | GET | /api/health | プリフライト結果 JSON (`{ cli, workspace, os, token }`) |
 | GET | /api/csrf-token | Anti-CSRF トークン取得 |
 

@@ -638,7 +638,7 @@ THE SYSTEM SHALL require a valid GitHub Token to be configured before invoking t
 - [ ] Windows では `data/settings.json` が NTFS ACL でカレントユーザーのみ読み書き可能に設定される
 - [ ] Token が未設定の場合、チャット送信時に「Token 未設定」エラーが表示される
 - [ ] GET /api/settings は Token の設定有無 (boolean) のみ返す (Token 値は返さない)
-- [ ] Token の有効性を検証するエンドポイント (POST /api/settings/validate-token) がある
+- [ ] Token の有効性を検証するエンドポイント (POST /api/settings/validate-token) がある。サーバー保存済み Token を GitHub API に対して検証する (リクエストボディに Token を含まない)
 
 **トレーサビリティ**: DES-AUTH-001
 
@@ -867,6 +867,7 @@ THE SYSTEM SHALL sanitize all rendered content (Markdown, Mermaid, code blocks) 
 3. **Mermaid**: サンドボックスモード (`securityLevel: 'strict'`) でレンダリング。クリックイベントハンドラ無効化
 4. **コードブロック**: テキストとしてレンダリング。HTML として解釈しない
 5. **画像**: ワークスペース内ファイル (`'self'`)、`data:image/*` のみ許可。外部 URL (`http(s)://`) の画像は表示しない (v1.0 セキュリティ優先。外部画像プロキシは v1.1+ スコープ)
+6. **SVG**: `<img src="blob:...">` または `<img src="data:image/svg+xml,...">` として画像コンテキストでのみ表示。インライン DOM 挿入 (`innerHTML`)、`<object>`、`<iframe>` での SVG レンダリングは禁止 (SVG 内スクリプト実行を防止)
 
 **CSP ポリシー** (v1.0):
 ```
@@ -884,6 +885,7 @@ base-uri 'self';
 - [ ] `javascript:` スキームのリンクがレンダリングされない
 - [ ] `data:text/html` を含む URL がブロックされる
 - [ ] Mermaid が `securityLevel: 'strict'` でレンダリングされる
+- [ ] SVG ファイルが `<img>` タグ (画像コンテキスト) でのみ表示され、インライン DOM 挿入されない
 - [ ] CSP ヘッダーが全 HTML レスポンスに付与される
 - [ ] `script-src` に `unsafe-inline` が含まれない
 - [ ] エージェント出力に `<script>` タグが含まれていても実行されない
