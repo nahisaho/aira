@@ -72,13 +72,29 @@ export function RightPanel() {
         <h3 className={`text-xs font-semibold uppercase mb-2 ${light ? 'text-gray-500' : 'text-gray-400'}`}>
           {t('panel.runHistory')} ({runHistory.length})
         </h3>
-        <div className="space-y-1 max-h-40 overflow-y-auto">
-          {runHistory.map((run) => (
-            <div key={run.id} className={`flex items-center gap-2 text-xs ${light ? 'text-gray-500' : 'text-gray-400'}`}>
-              <RunStatusBadge status={run.status} />
-              <span>{new Date(run.created_at.endsWith('Z') ? run.created_at : run.created_at + 'Z').toLocaleTimeString()}</span>
-            </div>
-          ))}
+        <div className="space-y-1 max-h-48 overflow-y-auto">
+          {runHistory.map((run) => {
+            const start = run.created_at ? new Date(run.created_at.endsWith('Z') ? run.created_at : run.created_at + 'Z') : null;
+            const end = run.finished_at ? new Date(run.finished_at.endsWith('Z') ? run.finished_at : run.finished_at + 'Z') : null;
+            const elapsed = start && end ? Math.round((end.getTime() - start.getTime()) / 1000) : null;
+            const formatTime = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const formatElapsed = (s: number) => s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
+
+            return (
+              <div key={run.id} className={`rounded p-2 text-xs ${light ? 'bg-gray-50' : 'bg-gray-800/50'}`}>
+                <div className="flex items-center gap-2">
+                  <RunStatusBadge status={run.status} />
+                  {elapsed !== null && (
+                    <span className={light ? 'text-gray-600' : 'text-gray-300'}>{formatElapsed(elapsed)}</span>
+                  )}
+                </div>
+                <div className={`mt-1 flex gap-3 ${light ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {start && <span>▶ {formatTime(start)}</span>}
+                  {end && <span>■ {formatTime(end)}</span>}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 

@@ -1,0 +1,53 @@
+[
+  {
+    "id": "H1",
+    "title": "高エントロピーオキシハライド Li2.5(Ti,Zr,Hf)0.5O0.5(Cl,Br)2.5",
+    "PICO": {
+      "Population": "固体電解質材料（Li系、室温動作）",
+      "Intervention": "高エントロピー効果（4元素以上の多成分混合）+ オキシハライドフレームワーク + 混合ハロゲンアニオン(Cl/Br)",
+      "Comparison": "N2116 (Li-Na NASICON, σ≈5×10⁻⁴ S/cm)、Li3InCl6 (σ≈2×10⁻³ S/cm)",
+      "Outcome": "イオン伝導度 σ > 5×10⁻³ S/cm @ 25°C、電気化学窓 > 4V vs Li/Li+"
+    },
+    "rationale": "高エントロピー効果によるフラストレーション増大 + オキシハライド骨格の低活性化エネルギー + 混合アニオンによるLi+拡散パス拡大",
+    "predicted_conductivity_Scm": 0.005,
+    "activation_energy_eV": 0.22,
+    "composition_formula": "Li2.5Ti0.125Zr0.125Hf0.125Sn0.125O0.5Cl1.5Br1.0",
+    "structure_type": "High-entropy oxyhalide (distorted rock-salt)",
+    "phase_stability": "metastable (Ehull < 30 meV/atom predicted)",
+    "gap_addressed": "High-entropy × Concerted-migration × Mixed-anion(O/Cl/Br)"
+  },
+  {
+    "id": "H2",
+    "title": "アルジロダイト型 Li6.5P0.5Si0.5S5(Cl0.5F0.5) フッ素置換系",
+    "PICO": {
+      "Population": "固体電解質材料（アルジロダイト構造系）",
+      "Intervention": "Si⁴⁺/P⁵⁺混合による過剰Li導入 + F⁻/Cl⁻混合アニオンによる格子ソフト化とパドルホイール運動促進",
+      "Comparison": "Li6PS5Cl (σ≈1.3×10⁻³ S/cm)、Li6PS5Cl0.5Br0.5 (σ≈6.8×10⁻³ S/cm)",
+      "Outcome": "イオン伝導度 σ > 1×10⁻² S/cm @ 25°C、空気安定性向上（F導入効果）"
+    },
+    "rationale": "アルジロダイトは既に高伝導度を示すが、F⁻導入による電気陰性度勾配がLi+パスを活性化。Si⁴⁺混合でLi過剰化を実現し、キャリア密度増大",
+    "predicted_conductivity_Scm": 0.012,
+    "activation_energy_eV": 0.18,
+    "composition_formula": "Li6.5P0.5Si0.5S5Cl0.5F0.5",
+    "structure_type": "Argyrodite (F43m, modified)",
+    "phase_stability": "likely stable (isostructural to known argyrodites)",
+    "gap_addressed": "Argyrodite × Paddle-wheel × F⁻incorporation"
+  },
+  {
+    "id": "H3",
+    "title": "混合アルカリ・アンチペロブスカイト Li2.5Na0.5O(Cl0.7Br0.3)",
+    "PICO": {
+      "Population": "固体電解質材料（アンチペロブスカイト構造、Li-Na混合系）",
+      "Intervention": "N2116のLi-Na混合概念をアンチペロブスカイトに導入 + Cl/Br混合による回転フラストレーション + Li過剰組成",
+      "Comparison": "N2116 (σ≈5×10⁻⁴ S/cm)、Li3OCl (σ≈8.5×10⁻⁴ S/cm)、Li2OHCl (σ≈1×10⁻³ S/cm)",
+      "Outcome": "イオン伝導度 σ > 3×10⁻³ S/cm @ 25°C、Li使用量50%削減（Na置換）"
+    },
+    "rationale": "N2116の成功要因（混合アルカリによるフラストレーション）をアンチペロブスカイトの協同回転メカニズムと組み合わせ。サイズ不整合によるdisorder増大が低活性化エネルギーをもたらす",
+    "predicted_conductivity_Scm": 0.0035,
+    "activation_energy_eV": 0.25,
+    "composition_formula": "Li2.5Na0.5OCl0.7Br0.3",
+    "structure_type": "Antiperovskite (Pm-3m, disordered)",
+    "phase_stability": "metastable (mixed-alkali stabilization expected)",
+    "gap_addressed": "Antiperovskite × Frustration-enhanced × Li+Na+ mixed × Mixed halide"
+  }
+]
