@@ -114,30 +114,51 @@
 
 ### DES-PROJECT-001: プロジェクト管理設計
 
-**対応要件**: REQ-PROJECT-001〜004
+**対応要件**: REQ-PROJECT-001〜004, REQ-ERR-005
 
 プロジェクトは UUID で識別される。作成時にワークスペースディレクトリ  
 (`projects/{id}/workspace/`) が自動生成される。削除時はカスケードで  
 関連データ (messages, project_skills, project_mcp_configs, project_files) と  
 ワークスペースディレクトリを削除する。
 
+**アクティブ Run ガード**:
+- `PATCH /api/projects/:id` (名前変更) および `DELETE /api/projects/:id` は、  
+  当該プロジェクトに `status IN ('running', 'queued')` の Run が存在する場合 **409 Conflict** を返す
+- レスポンス: `{ "error": "project_busy", "message": "Cannot modify project while a run is active" }`
+- UI: ボタンを disabled 化 + ツールチップで理由を表示
+
 ### DES-SKILLS-001: Skills 管理設計
 
-**対応要件**: REQ-SKILLS-001〜004
+**対応要件**: REQ-SKILLS-001〜004, REQ-ERR-006
 
-Skills は `skills/` ディレクトリにインストールされ、`skills` テーブルで管理される。  
+Skills は `skills/` ディレクトリにローカルキャッシュされ、`skills` テーブルで管理される。  
 プロジェクトへの割り当ては `project_skills` 中間テーブルで管理する。  
 エージェント実行時、割り当て済み Skills の `SKILL.md` パスが Copilot CLI の  
 `--skills` オプションとして渡される。
 
+**Skills ライフサイクル**:
+1. **インポート**: GitHub URL からローカル (`skills/{id}/`) にクローン/ダウンロード
+2. **保存**: ローカルコピーを永続保存。ランタイム fetch は行わない (ローカルのみ参照)
+3. **エラー**: インポート失敗 → `skills.status = 'error'`、`skills.last_error` に詳細記録
+4. **実行時**: 割り当て済み Skills のうち `status = 'available'` のもののみ `--skills` に渡す
+5. **リフレッシュ**: 手動更新 (再インポート) で最新化。自動更新は v1.0 スコープ外
+6. **利用不可 Skills**: `status = 'error'` の Skill が割り当てられている場合、UI に警告表示し当該 Skill をスキップして実行を続行
+
 ### DES-MCP-001: MCP 設定設計
 
-**対応要件**: REQ-MCP-001〜003
+**対応要件**: REQ-MCP-001〜003, REQ-ERR-004
 
 プロジェクトごとの MCP 設定は JSON 形式で保存され、エージェント実行時に  
 `--additional-mcp-config` オプションとして一時ファイル経由で渡される。  
 プリセット MCP (GitHub MCP Tools, ToolUniverse, Deep Research) は  
 `mcp-presets.json` に定義される。
+
+**MCP プロバイダ障害時の動作**:
+- AIRA は MCP 設定の構文検証のみ行い、接続確認は Copilot CLI に委ねる
+- 個別プロバイダの接続失敗は CLI 側で処理される (AIRA は CLI の出力から検知)
+- `enabled = 0` のプロバイダは設定ファイルに含めない (無効化によるユーザー制御の粒度化)
+- CLI がプロバイダ接続失敗を報告した場合: 右パネルに警告表示、Run 自体は続行
+- 全プロバイダ接続不可でも Run は `completed` / `failed` は CLI の exit code で判定
 
 ### DES-FILE-001: ファイル管理設計
 
@@ -231,7 +252,8 @@ projects/
 **プロセスセキュリティ**:
 - エージェントは `child_process.spawn()` で起動
 - cwd を `projects/{project_id}/workspace/` に制限
-- 環境変数で `GITHUB_TOKEN` を渡す (ホストの環境変数から取得)
+- Token 注入: `AgentService` が解決済み Token を `spawn(..., { env: { GITHUB_TOKEN } })` で渡す
+  - 解決優先順位: `process.env.GITHUB_TOKEN` > `data/settings.json` > 未設定 (エラー)
 - タイムアウト: 10 分。macOS: SIGTERM → 5秒後 SIGKILL (プロセスグループ)、Windows: `taskkill /T /F /PID`
 - 最大同時実行数: デフォルト 5 プロセス (REQ-NFR-002 で設定可能)
 
@@ -239,6 +261,17 @@ projects/
 - API 入力値にスキーマバリデーション (zod) を適用
 - ファイルパスの `../` トラバーサルを防止
 - SQLite プリペアドステートメントで SQL インジェクション防止
+
+**パス正規化・検証アルゴリズム** (REQ-NFR-009 対応):
+ファイル API (create/open/delete/view/download) およびワークスペーススキャンで共通使用:
+1. `path.resolve(workspaceDir, inputPath)` で絶対パスに解決
+2. `realpath` (存在する場合) または `resolve` 結果が `workspaceDir` プレフィックスを持つことを検証 (トラバーサル防止)
+3. Windows (`process.platform === 'win32'`) の場合:
+   - パス比較: `.toLowerCase()` で case-insensitive 比較
+   - 予約名チェック: ファイル名 (拡張子除去後) が `/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i` にマッチ → 拒否 (400)
+   - 末尾ドット/スペース: ファイル名が `.` または ` ` で終わる → 拒否 (400)
+4. シンボリックリンク/ジャンクション: `lstat` で判定、リンクの場合は拒否 (403)
+5. 適用箇所: `FileService.resolve()` メソッドに集約し、全ファイル操作 API で呼び出す
 
 **レンダリングセキュリティ (XSS 防御)**:
 - Markdown: DOMPurify でサニタイズ。生 HTML は除去、許可タグのホワイトリスト方式
@@ -405,7 +438,10 @@ CREATE TABLE skills (
   source_type TEXT NOT NULL CHECK(source_type IN ('local', 'github', 'marketplace')),
   source_url  TEXT,
   skill_path  TEXT NOT NULL,      -- ローカルパス
-  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  status      TEXT NOT NULL DEFAULT 'available' CHECK(status IN ('available', 'importing', 'error')),
+  last_error  TEXT,               -- インポート/更新失敗時のエラー詳細
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
