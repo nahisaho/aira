@@ -245,7 +245,7 @@ THE SYSTEM SHALL display a list of all projects in the sidebar with their names,
 **受入基準**:
 - [ ] サイドバーにプロジェクト一覧が表示される
 - [ ] 最終アクティビティ日時が表示される
-- [ ] ステータスが視覚的に表示される (`idle` / `running` は agent_runs から派生。`active` は直近アクティビティで判定)
+- [ ] ステータスが視覚的に表示される (`idle` / `running` は agent_runs から派生。`active` は直近 5 分以内にアクティビティがあったプロジェクトに表示)
 - [ ] プロジェクトをクリックして選択できる
 
 **トレーサビリティ**: DES-PROJECT-001
@@ -678,14 +678,14 @@ THE SYSTEM SHALL validate the Origin header on all WebSocket upgrade requests an
 **説明**: localhost アプリであっても、悪意あるWebサイトからの CSRF / Cross-Origin リクエストを防止する必要がある。ブラウザから送信される `Origin` ヘッダーを検証し、AIRA が配信する SPA 以外からのリクエストを拒否する。
 
 **防御レイヤー**:
-1. **Origin 検証**: すべての状態変更リクエスト (POST/PUT/PATCH/DELETE) および WS upgrade で `Origin` ヘッダーが許可リストと一致することを確認。許可 Origin: `http://localhost:<port>`, `http://127.0.0.1:<port>`, `http://[::1]:<port>`
+1. **Origin 検証**: すべての状態変更リクエスト (POST/PUT/PATCH/DELETE) および WS upgrade で `Origin` ヘッダーが**サーバーの実際のリッスンポート**と一致することを確認。許可 Origin: `http://localhost:<SERVER_PORT>`, `http://127.0.0.1:<SERVER_PORT>`, `http://[::1]:<SERVER_PORT>` (開発モードでは追加で Vite devサーバーポートも許可)
 2. **Anti-CSRF トークン**: SPA 初回ロード時にサーバーが生成するランダムトークンを `X-AIRA-Token` ヘッダーとして状態変更リクエストに付与
 3. **CORS ポリシー**: `Access-Control-Allow-Origin` をリクエストの Origin に対してエコー (許可リスト内の場合のみ)。ワイルドカード不可
 
 **受入基準**:
 - [ ] 状態変更 HTTP リクエスト (POST/PUT/PATCH/DELETE) に `Origin` ヘッダー検証ミドルウェアが適用される
 - [ ] WebSocket upgrade リクエストに `Origin` ヘッダー検証が適用される
-- [ ] `Origin` が許可リスト (`http://localhost:<port>`, `http://127.0.0.1:<port>`, `http://[::1]:<port>`) に含まれない場合、403 Forbidden を返す
+- [ ] `Origin` がサーバーの実際のリッスンポートと一致しない場合、403 Forbidden を返す (任意のローカルポートからのリクエストは拒否)
 - [ ] SPA 初回ロード時に `GET /api/csrf-token` でトークンが発行される
 - [ ] 状態変更リクエストに `X-AIRA-Token` ヘッダーが必須 (未付与/不一致は 403)
 - [ ] CORS `Access-Control-Allow-Origin` がワイルドカード (`*`) でない

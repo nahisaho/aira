@@ -263,7 +263,7 @@ GitHub Token はサーバーサイドの環境変数 (`GITHUB_TOKEN`) または
 
 **ブラウザ Origin 防御**:
 - 全状態変更リクエスト (POST/PUT/PATCH/DELETE) および WS upgrade で `Origin` ヘッダーを検証
-- 許可 Origin: `http://localhost:<port>`, `http://127.0.0.1:<port>`, `http://[::1]:<port>`
+- 許可 Origin: サーバーの実リッスンポートのみ — `http://localhost:<SERVER_PORT>`, `http://127.0.0.1:<SERVER_PORT>`, `http://[::1]:<SERVER_PORT>`。開発モード (`NODE_ENV=development`) では Vite dev サーバーポート (デフォルト 5173) も追加許可。任意のローカルポートは拒否
 - Anti-CSRF トークン: サーバーメモリに保持、`GET /api/csrf-token` で発行、`X-AIRA-Token` ヘッダーで検証
 - CORS: `Access-Control-Allow-Origin` をリクエスト Origin に対してエコー (許可リスト内のみ。ワイルドカード不可)
 
@@ -438,7 +438,7 @@ CREATE TABLE projects (
 -- ステータスは DB カラムではなく、agent_runs テーブルから派生:
 --   running: 当該プロジェクトに status='running' の Run が存在
 --   idle: running/queued の Run が存在しない
--- UI 表示用の "active" は last_activity が直近 N 分以内かで判定
+-- UI 表示用の "active" は last_activity が直近 5 分以内かで判定 (フロントエンド側でタイマー更新)
 ```
 
 ### エージェント実行履歴 (agent_runs)
@@ -639,7 +639,7 @@ CREATE TABLE project_files (
 | PUT | /api/settings/token | Token 登録・更新 (環境変数未設定時のみ有効) |
 | DELETE | /api/settings/token | Token 削除 |
 | POST | /api/settings/validate-token | サーバー保存済み Token を GitHub API で検証 (ボディなし) |
-| GET | /api/health | プリフライト結果 JSON (`{ cli, workspace, os, token }`) |
+| GET | /api/health | プリフライト結果 JSON (各チェック: `{ ok: boolean, code?: string, message?: string }`) |
 | GET | /api/csrf-token | Anti-CSRF トークン取得 |
 
 **PUT /api/settings/token 仕様**:
