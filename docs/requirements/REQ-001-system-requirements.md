@@ -103,7 +103,7 @@ WHEN a user sends a message in a project, THE SYSTEM SHALL create a new Run, inv
 | started_at | DATETIME (nullable) | 実行開始時刻 |
 | finished_at | DATETIME (nullable) | 終了時刻 |
 | exit_code | INTEGER (nullable) | プロセス終了コード |
-| error_type | TEXT (nullable) | エラー種別 (`cli_missing` / `auth_failure` / `timeout` / `spawn_failure` / `unknown`) |
+| error_type | TEXT (nullable) | エラー種別 (`cli_missing` / `auth_failure` / `timeout` / `spawn_failure` / `server_crash` / `unknown`) |
 | cancel_reason | TEXT (nullable) | キャンセル理由 (`user` / `system`) |
 
 **受入基準**:
@@ -1260,7 +1260,7 @@ THE SYSTEM SHALL perform a preflight health check on startup, verifying OS compa
 - [ ] `process.platform` が `darwin` / `win32` 以外の場合、警告ログが出力される
 - [ ] ワークスペースのベースディレクトリ (`data/` および `projects/`) が書き込み可能か確認する
 - [ ] 確認失敗時に具体的なエラーメッセージと解決手順を表示する
-- [ ] プリフライト結果が API (`GET /api/health`) で JSON として取得可能 (`{ cli: bool, workspace: bool, os: string, token: bool }`)
+- [ ] プリフライト結果が API (`GET /api/health`) で JSON として取得可能 (各チェック: `{ ok: boolean, code?: string, message?: string }` 形式。キー: `cli`, `workspace`, `os`, `token`)
 - [ ] Token 未設定は警告のみ (エージェント実行時にエラー)
 
 **トレーサビリティ**: DES-SEC-001, DES-CHAT-001

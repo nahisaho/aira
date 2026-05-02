@@ -239,6 +239,7 @@ type WSEvent =
   | { type: 'file_added'; file: FileInfo }
   | { type: 'file_modified'; file: FileInfo }
   | { type: 'file_deleted'; fileId: string }
+  | { type: 'warning'; code: string; message: string }  // watcher_unavailable 等
 ```
 
 ### DES-AUTH-001: 認証設計
@@ -447,7 +448,7 @@ CREATE TABLE projects (
 CREATE TABLE agent_runs (
   id          TEXT PRIMARY KEY,   -- UUID
   project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  message_id  TEXT REFERENCES messages(id),  -- トリガーとなったユーザーメッセージ
+  message_id  TEXT REFERENCES messages(id) ON DELETE SET NULL,  -- トリガーとなったユーザーメッセージ (会話クリア時は NULL になる)
   status      TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued', 'running', 'completed', 'failed', 'timeout', 'cancelled')),
   error_type  TEXT CHECK(error_type IN ('cli_missing', 'auth_failure', 'timeout', 'spawn_failure', 'server_crash', 'unknown')),
   cancel_reason TEXT CHECK(cancel_reason IN ('user', 'system')),
@@ -589,7 +590,7 @@ CREATE TABLE project_files (
 |---|---|---|
 | GET | /api/projects/:id/messages | 会話履歴取得 |
 | POST | /api/projects/:id/messages | メッセージ送信 |
-| DELETE | /api/projects/:id/messages | 会話履歴クリア |
+| DELETE | /api/projects/:id/messages | 会話履歴クリア (Run 実行中は 409。agent_runs.message_id は SET NULL で Run 履歴は保持) |
 | WS | /ws/projects/:id/chat | リアルタイムストリーミング |
 
 ### Skills API
