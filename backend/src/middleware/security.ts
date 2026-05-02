@@ -2,18 +2,23 @@ import { createMiddleware } from 'hono/factory';
 import crypto from 'node:crypto';
 
 const PORT = parseInt(process.env.AIRA_PORT ?? '3000', 10);
-const VITE_DEV_PORT = 5173;
+const VITE_DEV_PORT = parseInt(process.env.VITE_DEV_PORT ?? '5173', 10);
 
 function getAllowedOrigins(): string[] {
+  const vitePort = parseInt(process.env.VITE_DEV_PORT ?? '5173', 10);
   const origins = [
     `http://localhost:${PORT}`,
     `http://127.0.0.1:${PORT}`,
     `http://[::1]:${PORT}`,
-    // Vite dev server (always allowed in dev)
-    `http://localhost:${VITE_DEV_PORT}`,
-    `http://127.0.0.1:${VITE_DEV_PORT}`,
-    `http://[::1]:${VITE_DEV_PORT}`,
+    // Vite dev server (port may vary if default is busy)
+    `http://localhost:${vitePort}`,
+    `http://127.0.0.1:${vitePort}`,
+    `http://[::1]:${vitePort}`,
   ];
+  // Also allow adjacent port (Vite increments if port is occupied)
+  if (vitePort === 5173) {
+    origins.push(`http://localhost:5174`, `http://127.0.0.1:5174`, `http://[::1]:5174`);
+  }
   return origins;
 }
 
@@ -90,12 +95,12 @@ export const corsMiddleware = createMiddleware(async (c, next) => {
  * CSP headers middleware with port-pinned connect-src.
  */
 export const cspMiddleware = createMiddleware(async (c, next) => {
-  const connectSrc = [
-    `http://localhost:${PORT}`, `ws://localhost:${PORT}`,
-    `http://127.0.0.1:${PORT}`, `ws://127.0.0.1:${PORT}`,
-    `http://localhost:${VITE_DEV_PORT}`, `ws://localhost:${VITE_DEV_PORT}`,
-    `http://127.0.0.1:${VITE_DEV_PORT}`, `ws://127.0.0.1:${VITE_DEV_PORT}`,
-  ].join(' ');
+  const ports = [PORT, VITE_DEV_PORT];
+  if (VITE_DEV_PORT === 5173) ports.push(5174);
+  const connectSrc = ports.flatMap(p => [
+    `http://localhost:${p}`, `ws://localhost:${p}`,
+    `http://127.0.0.1:${p}`, `ws://127.0.0.1:${p}`,
+  ]).join(' ');
 
   c.header(
     'Content-Security-Policy',
