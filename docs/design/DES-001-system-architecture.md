@@ -263,10 +263,12 @@ v1.0 は localhost シングルユーザーモデル。API サーバーはルー
 
 **2 ソケット実装**: Node.js の単一 `http.Server` は 1 アドレスにしか bind できないため、**2 つの `http.Server` インスタンス**を同じ Hono アプリ (リクエストハンドラー) を共有して起動する。WebSocket upgrade も両サーバーに同じハンドラーを登録する:
 ```
+import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
 const app = new Hono();
-const server4 = createServer(app.fetch); server4.listen(port, '127.0.0.1');
-const server6 = createServer(app.fetch); server6.listen(port, '::1');
-// WS upgrade: 両方に登録
+const server4 = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' });
+const server6 = serve({ fetch: app.fetch, port, hostname: '::1' });
+// WS upgrade: @hono/node-server の injectWebSocket または各 server に対して登録
 ```
 いずれか一方のバインドが失敗した場合 (例: IPv6 無効環境)、もう一方のみで起動しログに警告を出力する。  
 GitHub Token はサーバーサイドの環境変数 (`GITHUB_TOKEN`) または  
@@ -333,9 +335,9 @@ projects/
 **クリーンアップ (プロジェクト削除コントラクト)**:
 削除は「ファイルシステム先、DB 後」の順序で実行する:
 1. `fs.rm(projects/{project_id}/, { recursive: true, force: true })` を実行。パストラバーサル防止のため、削除対象パスが `projects/` 配下であることを検証する
-2. ファイルシステム削除が成功した場合のみ、DB から `projects` / `agent_runs` / `messages` / `project_files` / `project_mcp_servers` / `project_skills` をカスケード削除
+2. ファイルシステム削除が成功した場合のみ、DB から `projects` / `agent_runs` / `messages` / `project_files` / `project_mcp_configs` / `project_skills` をカスケード削除
 3. **ファイルシステム削除失敗時** (EPERM / EBUSY / EACCES): API は `423 Locked` を返し、「ワークスペース内のファイルが使用中です。該当アプリケーションを閉じてから再試行してください」とユーザーに通知。DB は変更しない (アトミック性保持)
-4. DB 削除失敗時 (FS 成功後): ログに CRITICAL を出力。次回起動時のプリフライトで孤立プロジェクトディレクトリ (DB に対応レコードなし) を検出・クリーンアップ
+4. DB 削除失敗時 (FS 成功後): ログに CRITICAL を出力。次回起動時のプリフライトで孤立 DB レコード (ワークスペースディレクトリが存在しない `projects` レコード) を検出・削除する
 
 ### DES-SEC-001: セキュリティ設計
 
