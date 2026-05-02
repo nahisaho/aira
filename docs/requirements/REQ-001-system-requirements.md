@@ -244,7 +244,7 @@ THE SYSTEM SHALL display a list of all projects in the sidebar with their names,
 **受入基準**:
 - [ ] サイドバーにプロジェクト一覧が表示される
 - [ ] 最終アクティビティ日時が表示される
-- [ ] アクティブ/アイドル/実行中のステータスが視覚的に表示される
+- [ ] ステータスが視覚的に表示される (`idle` / `running` は agent_runs から派生。`active` は直近アクティビティで判定)
 - [ ] プロジェクトをクリックして選択できる
 
 **トレーサビリティ**: DES-PROJECT-001
@@ -631,6 +631,34 @@ THE SYSTEM SHALL require a valid GitHub Token to be configured before invoking t
 
 ---
 
+#### REQ-AUTH-005
+**種別**: UBIQUITOUS  
+**優先度**: P0
+
+**要件**:  
+THE SYSTEM SHALL validate the Origin header on all WebSocket upgrade requests and state-changing HTTP requests, and reject requests not originating from the served SPA.
+
+**説明**: localhost アプリであっても、悪意あるWebサイトからの CSRF / Cross-Origin リクエストを防止する必要がある。ブラウザから送信される `Origin` ヘッダーを検証し、AIRA が配信する SPA 以外からのリクエストを拒否する。
+
+**防御レイヤー**:
+1. **Origin 検証**: すべての状態変更リクエスト (POST/PUT/PATCH/DELETE) および WS upgrade で `Origin` ヘッダーが `http://localhost:<port>` または `http://127.0.0.1:<port>` と一致することを確認
+2. **Anti-CSRF トークン**: SPA 初回ロード時にサーバーが生成するランダムトークンを `X-AIRA-Token` ヘッダーとして状態変更リクエストに付与
+3. **CORS ポリシー**: `Access-Control-Allow-Origin` を明示的に `http://localhost:<port>` に設定 (ワイルドカード不可)
+
+**受入基準**:
+- [ ] 状態変更 HTTP リクエスト (POST/PUT/PATCH/DELETE) に `Origin` ヘッダー検証ミドルウェアが適用される
+- [ ] WebSocket upgrade リクエストに `Origin` ヘッダー検証が適用される
+- [ ] `Origin` が許可リスト (`localhost`, `127.0.0.1`, `::1`) に含まれない場合、403 Forbidden を返す
+- [ ] SPA 初回ロード時に `GET /api/csrf-token` でトークンが発行される
+- [ ] 状態変更リクエストに `X-AIRA-Token` ヘッダーが必須 (未付与/不一致は 403)
+- [ ] CORS `Access-Control-Allow-Origin` がワイルドカード (`*`) でない
+- [ ] トークンは暗号学的に安全な乱数 (crypto.randomUUID() 以上) で生成される
+- [ ] トークンはサーバーメモリに保持 (再起動時再発行、DB 保存不要)
+
+**トレーサビリティ**: DES-AUTH-001
+
+---
+
 #### REQ-AUTH-002
 **種別**: UNWANTED  
 **優先度**: P0
@@ -663,6 +691,13 @@ THE SYSTEM SHALL operate as a single-user localhost application in v1.0, requiri
 - [ ] 外部ネットワークからのアクセスが拒否される
 - [ ] `localhost` での接続が Windows / macOS 両方で動作する (IPv4/IPv6 両対応)
 - [ ] アプリケーションレベルのログイン画面が不要
+
+**バインド戦略**:  
+Node.js の `server.listen(port, '::')` は OS の dual-stack 設定に依存するため、**2 ソケット方式**を採用する:
+1. `server.listen(port, '127.0.0.1')` — IPv4 ループバック
+2. `server.listen(port, '::1')` — IPv6 ループバック  
+
+いずれか一方のバインドが失敗した場合 (例: IPv6 無効環境)、もう一方のみで起動しログに警告を出力する。
 
 **トレーサビリティ**: DES-AUTH-001
 
@@ -799,6 +834,47 @@ THE SYSTEM SHALL enforce a maximum execution time of 10 minutes per agent invoca
 - [ ] Run ステータスが `timeout` に更新される
 
 **トレーサビリティ**: DES-SEC-001
+
+---
+
+#### REQ-SEC-003
+**種別**: UBIQUITOUS  
+**優先度**: P0
+
+**要件**:  
+THE SYSTEM SHALL sanitize all rendered content (Markdown, Mermaid, code blocks) to prevent XSS, and apply a Content Security Policy (CSP) to the SPA.
+
+**説明**: localhost アプリでも XSS は深刻な脅威である。注入されたスクリプトが特権ローカル API を呼び出し、ファイル削除やプロセス停止を実行できるため、レンダリング時のサニタイズと CSP が必須。
+
+**サニタイズルール**:
+1. **Raw HTML**: Markdown 内の生 HTML タグは除去またはエスケープ (`allowedTags` ホワイトリスト方式)
+2. **URI スキーム**: `javascript:`, `vbscript:`, `data:text/html` を含むリンク/画像 URL をブロック。許可スキーム: `http:`, `https:`, `mailto:`, `data:image/*`
+3. **Mermaid**: サンドボックスモード (`securityLevel: 'strict'`) でレンダリング。クリックイベントハンドラ無効化
+4. **コードブロック**: テキストとしてレンダリング。HTML として解釈しない
+5. **画像**: 外部 URL (`http://`, `https://`) および `data:image/*` のみ許可
+
+**CSP ポリシー** (v1.0):
+```
+default-src 'self';
+script-src 'self' 'wasm-unsafe-eval';
+style-src 'self' 'unsafe-inline';
+img-src 'self' data: http://localhost:* http://127.0.0.1:*;
+connect-src 'self' ws://localhost:* ws://127.0.0.1:*;
+object-src 'none';
+base-uri 'self';
+```
+
+**受入基準**:
+- [ ] Markdown レンダリング時に生 HTML タグがエスケープまたは除去される
+- [ ] `javascript:` スキームのリンクがレンダリングされない
+- [ ] `data:text/html` を含む URL がブロックされる
+- [ ] Mermaid が `securityLevel: 'strict'` でレンダリングされる
+- [ ] CSP ヘッダーが全 HTML レスポンスに付与される
+- [ ] `script-src` に `unsafe-inline` が含まれない
+- [ ] エージェント出力に `<script>` タグが含まれていても実行されない
+- [ ] サニタイズライブラリ (DOMPurify 等) が使用される
+
+**トレーサビリティ**: DES-SEC-001, DES-CHAT-001, DES-FILE-001
 
 ---
 
@@ -1101,13 +1177,13 @@ THE SYSTEM SHALL perform a preflight health check on startup, verifying OS compa
 **プリフライトチェック項目**:
 1. **OS 判定**: `process.platform` が `darwin` (macOS) または `win32` (Windows) であることを確認。それ以外 (Linux/WSL 含む) は警告表示
 2. **CLI 検出**: ランタイム spawn パスと同じコマンドで `copilot --version` (または相当) を実行し、バージョン文字列を取得
-3. **ワークスペース**: `data/` ディレクトリが書き込み可能か `fs.access(W_OK)` で確認
+3. **ランタイムデータディレクトリ**: `data/` および `projects/` ディレクトリが書き込み可能か `fs.access(W_OK)` で確認。存在しない場合は自動作成を試行
 4. **Token**: 環境変数または settings.json の存在確認 (未設定は警告のみ)
 
 **受入基準**:
 - [ ] 起動時に `copilot --version` (または同等コマンド) を実行して CLI の存在と応答を確認する
 - [ ] `process.platform` が `darwin` / `win32` 以外の場合、警告ログが出力される
-- [ ] ワークスペースのベースディレクトリが書き込み可能か確認する
+- [ ] ワークスペースのベースディレクトリ (`data/` および `projects/`) が書き込み可能か確認する
 - [ ] 確認失敗時に具体的なエラーメッセージと解決手順を表示する
 - [ ] プリフライト結果が API (`GET /api/health`) で JSON として取得可能 (`{ cli: bool, workspace: bool, os: string, token: bool }`)
 - [ ] Token 未設定は警告のみ (エージェント実行時にエラー)
@@ -1195,11 +1271,13 @@ THE SYSTEM SHALL handle cross-platform path edge cases: case-insensitive path co
 | REQ-AUTH-002 | P0 | 認証 | DES-AUTH-001 |
 | REQ-AUTH-003 | P0 | 認証 | DES-AUTH-001 |
 | REQ-AUTH-004 | P0 | 認証 | DES-AUTH-001 |
+| REQ-AUTH-005 | P0 | 認証 | DES-AUTH-001 |
 | REQ-WORKSPACE-001 | P0 | ワークスペース | DES-WORKSPACE-001 |
 | REQ-WORKSPACE-002 | P0 | ワークスペース | DES-WORKSPACE-001 |
 | REQ-WORKSPACE-003 | P0 | ワークスペース | DES-WORKSPACE-001 |
 | REQ-SEC-001 | P0 | セキュリティ | DES-SEC-001 |
 | REQ-SEC-002 | P0 | セキュリティ | DES-SEC-001 |
+| REQ-SEC-003 | P0 | セキュリティ | DES-SEC-001, DES-CHAT-001, DES-FILE-001 |
 | REQ-ERR-001 | P0 | エラー処理 | DES-CHAT-001, DES-SEC-001 |
 | REQ-ERR-002 | P0 | エラー処理 | DES-AUTH-001 |
 | REQ-ERR-003 | P0 | エラー処理 | DES-PROGRESS-001 |
