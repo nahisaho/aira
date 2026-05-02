@@ -1100,7 +1100,7 @@ IF the agent child process fails to spawn (ENOENT, EACCES, or other OS error), T
 
 ---
 
-#### REQ-ERR-009
+#### REQ-ERR-010
 **種別**: UNWANTED  
 **優先度**: P1
 
@@ -1362,7 +1362,7 @@ THE SYSTEM SHALL handle cross-platform path edge cases: case-insensitive path co
 | REQ-ERR-007 | P0 | エラー処理 | DES-FILE-001 |
 | REQ-ERR-008 | P0 | エラー処理 | DES-CHAT-001, DES-SEC-001 |
 | REQ-ERR-009 | P0 | エラー処理 | DES-CHAT-001 |
-| REQ-ERR-009 | P1 | エラー処理 | DES-WORKSPACE-001, DES-PROGRESS-001 |
+| REQ-ERR-010 | P1 | エラー処理 | DES-WORKSPACE-001, DES-PROGRESS-001 |
 | REQ-NFR-001 | P1 | 性能 | DES-CHAT-001, DES-PROJECT-001 |
 | REQ-NFR-002 | P1 | 性能 | DES-SEC-001, DES-CHAT-001 |
 | REQ-NFR-003 | P0 | セキュリティ | DES-SEC-001 |

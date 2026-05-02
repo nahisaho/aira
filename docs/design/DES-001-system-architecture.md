@@ -294,6 +294,13 @@ projects/
 - 新規ファイル: `project_files` に未登録のパス → INSERT + `file_added` イベント
 - 削除検出: DB に存在するがファイルシステムに存在しない → DELETE + `file_deleted` イベント
 
+**ウォッチャー障害時のフォールバック** (REQ-ERR-010):
+- 起動失敗検出: `chokidar.watch()` の `error` イベントまたは例外をキャッチ
+- フォールバック動作: リアルタイム監視を無効化し、Run 完了後のリコンシリエーションスキャンのみで `project_files` を更新
+- クライアント通知: WS イベント `{ type: 'warning', code: 'watcher_unavailable', message: 'リアルタイムファイル更新が無効です' }` を送信。右パネルに警告バナーを表示
+- Run 継続: ウォッチャー障害は Run の実行を中断しない。ファイル一覧は Run 完了時のスキャンで正確になる
+- ランタイム障害: 監視中に OS エラー (`EMFILE`, `ENOSPC` 等) が発生した場合も同様にフォールバック移行
+
 **クリーンアップ**: プロジェクト削除時に `fs.rm(projects/{project_id}/, { recursive: true, force: true })` を実行。  
 パストラバーサル防止のため、削除対象パスが `projects/` 配下であることを検証する。
 
