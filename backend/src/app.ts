@@ -11,6 +11,7 @@ import { settingsRoutes } from './routes/settings.js';
 import { projectRoutes } from './routes/projects.js';
 import { messageRoutes } from './routes/messages.js';
 import { runRoutes } from './routes/runs.js';
+import { fileRoutes } from './routes/files.js';
 
 const app = new Hono();
 
@@ -32,5 +33,6 @@ app.route('/', settingsRoutes);
 app.route('/', projectRoutes);
 app.route('/', messageRoutes);
 app.route('/', runRoutes);
+app.route('/', fileRoutes);
 
 export { app };
