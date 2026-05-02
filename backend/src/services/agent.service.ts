@@ -294,7 +294,10 @@ export function spawnAgent(opts: {
 }
 
 function buildAgentArgs(prompt: string, model?: string): string[] {
-  const args = ['--prompt', prompt];
+  const args = [
+    '--allow-all',     // Non-interactive: allow tools, file paths, and URLs
+    '--prompt', prompt,
+  ];
   if (model) {
     args.push('--model', model);
   }
