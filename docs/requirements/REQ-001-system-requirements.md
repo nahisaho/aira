@@ -508,7 +508,7 @@ WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS
 | OS | コマンド | 注意事項 |
 |---|---|---|
 | macOS | `open -- <path>` | spawn で直接実行: `spawn('open', ['--', path])`。`--` によりファイル名が `-` で始まる場合もオプションと誤認されない。パスはシェルエスケープ不要 (引数として渡す) |
-| Windows | `powershell.exe -NoProfile -Command "Start-Process -LiteralPath '<path>'"` | `-LiteralPath` でメタ文字 (`&`, `%`, `^` 等) を安全に処理。パスに `'` が含まれる場合は `''` でエスケープ |
+| Windows | `powershell.exe -NoProfile -Command "Invoke-Item -LiteralPath '<path>'"` | `Invoke-Item -LiteralPath` でメタ文字 (`&`, `%`, `^` 等) を安全に処理。パスに `'` が含まれる場合は `''` でエスケープ |
 
 **受入基準**:
 - [ ] 許可リストに含まれる拡張子のファイル行に「開く」ボタンがある
@@ -522,7 +522,7 @@ WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS
   - ファイルロック (Windows EBUSY): 423 Locked
   - 権限エラー (EPERM/EACCES): 403 Forbidden (`{ "error": "permission_denied" }`)
   - OS コマンド実行失敗: 500 Internal Server Error
-- [ ] macOS では `open` コマンド、Windows では `Start-Process -LiteralPath` を使用する
+- [ ] macOS では `open` コマンド、Windows では `Invoke-Item -LiteralPath` を使用する
 - [ ] パスにスペース・日本語文字を含むファイルが正しく開ける
 - [ ] パスにシェルメタ文字 (`&`, `%`, `^`, `(`, `)`) を含むファイルが正しく開ける
 
