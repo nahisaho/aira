@@ -69,6 +69,7 @@ export function executeChat(
   projectId: string,
   userMessage: string,
   callbacks: {
+    existingMessageId?: string;
     onChunk: (content: string) => void;
     onStatus: (runId: string, status: string) => void;
     onComplete: (runId: string, exitCode: number | null) => void;
@@ -79,12 +80,16 @@ export function executeChat(
 
   // Atomic message + run creation
   const result = db.transaction(() => {
-    const msgId = crypto.randomUUID();
+    let msgId = callbacks.existingMessageId;
     const runId = crypto.randomUUID();
 
-    db.prepare(
-      "INSERT INTO messages (id, project_id, role, content) VALUES (?, ?, 'user', ?)",
-    ).run(msgId, projectId, userMessage);
+    if (!msgId) {
+      // Create user message if not already saved via REST
+      msgId = crypto.randomUUID();
+      db.prepare(
+        "INSERT INTO messages (id, project_id, role, content) VALUES (?, ?, 'user', ?)",
+      ).run(msgId, projectId, userMessage);
+    }
 
     db.prepare(
       "INSERT INTO agent_runs (id, project_id, message_id, status) VALUES (?, ?, ?, 'running')",

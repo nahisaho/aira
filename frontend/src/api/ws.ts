@@ -101,6 +101,12 @@ export class WebSocketClient {
     );
   }
 
+  send(data: Record<string, unknown>): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    }
+  }
+
   private notify(event: WSEventType): void {
     for (const handler of this.handlers) {
       handler(event);
