@@ -945,6 +945,28 @@ THE SYSTEM SHALL support Japanese language display including proper rendering of
 
 ---
 
+#### REQ-NFR-007
+**種別**: UBIQUITOUS  
+**優先度**: P0
+
+**要件**:  
+THE SYSTEM SHALL run on both Windows (native, not WSL) and macOS without platform-specific installation steps beyond the documented prerequisites.
+
+**説明**: ユーザーは Windows または macOS のどちらでも同一の手順でインストール・起動できる。パス区切り文字、シェル差異、ファイルシステム差異を吸収する。
+
+**受入基準**:
+- [ ] Windows 10/11 (x64) でネイティブ動作する (WSL 不要)
+- [ ] macOS 13+ (ARM/Intel) で動作する
+- [ ] パス操作に `path.join()` / `path.resolve()` を使用し、ハードコードされた `/` や `\\` がない
+- [ ] child_process.spawn で使用するコマンドが OS に応じて解決される (例: `npx` vs `npx.cmd`)
+- [ ] ファイル監視 (chokidar) が両 OS で正常動作する
+- [ ] npm scripts が両 OS で実行可能 (cross-env 等で環境変数を統一)
+- [ ] CI で Windows + macOS の両方のテストが PASS する
+
+**トレーサビリティ**: DES-SEC-001
+
+---
+
 ## 4. 制約事項
 
 | 制約 | 内容 |
@@ -952,7 +974,7 @@ THE SYSTEM SHALL support Japanese language display including proper rendering of
 | ランタイム | Node.js 22+ が必要 |
 | GitHub Copilot | 有効な GitHub Copilot ライセンスおよび Copilot CLI が必要 |
 | ブラウザ | WASM をサポートするモダンブラウザが必要 |
-| OS | Linux / macOS / Windows (WSL2) |
+| OS | Windows 10/11 (ネイティブ) / macOS 13+ |
 | デプロイ | v1.0 は localhost シングルユーザーのみ |
 
 ---
@@ -1020,3 +1042,4 @@ THE SYSTEM SHALL support Japanese language display including proper rendering of
 | REQ-NFR-004 | P0 | セキュリティ | — |
 | REQ-NFR-005 | P1 | ユーザビリティ | — |
 | REQ-NFR-006 | P1 | ユーザビリティ | — |
+| REQ-NFR-007 | P0 | 互換性 | DES-SEC-001 |

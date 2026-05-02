@@ -32,6 +32,7 @@ WASM ベースのチャットボットアプリケーションです。
 
 ## 前提条件
 
+- **OS**: Windows 10/11 または macOS 13+ (ネイティブ動作、WSL 不要)
 - Node.js 22+
 - GitHub Copilot ライセンス
 - GitHub Token
