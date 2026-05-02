@@ -149,6 +149,13 @@ Skills は `skills/` ディレクトリにローカルキャッシュされ、`s
 5. **リフレッシュ**: 手動更新 (再インポート) で最新化。自動更新は v1.0 スコープ外
 6. **利用不可 Skills**: `status = 'error'` の Skill が割り当てられている場合、UI に警告表示し当該 Skill をスキップして実行を続行
 
+**マーケットプレイス** (REQ-SKILLS-004 / P2):
+- カタログソース: `skills-catalog.json` をアプリにバンドル (静的リスト)。v1.1+ で外部カタログ API に移行可能
+- カタログエントリ: `{ id, name, description, author, category, repo_url }`
+- API: `GET /api/skills/catalog` — バンドルされたカタログ一覧を返す (インストール済みは `installed: true` マーク付き)
+- インストールフロー: カタログの `repo_url` を使用してインポート (上記ライフサイクル 1〜3 と同一)。ワンクリック = `POST /api/skills` に `repo_url` を送信
+- 状態遷移: catalog item → importing → available / error
+
 ### DES-MCP-001: MCP 設定設計
 
 **対応要件**: REQ-MCP-001〜003, REQ-ERR-004
@@ -162,6 +169,12 @@ Skills は `skills/` ディレクトリにローカルキャッシュされ、`s
 - AIRA は MCP 設定の構文検証のみ行い、接続確認は Copilot CLI に委ねる
 - 個別プロバイダの接続失敗は CLI 側で処理される (AIRA は CLI の出力から検知)
 - `enabled = 0` のプロバイダは設定ファイルに含めない (無効化によるユーザー制御の粒度化)
+
+**GitHub MCP Tools カテゴリ選択** (REQ-MCP-003):
+- `project_mcp_configs.config_json` に `categories` フィールドを格納: `{ "categories": ["repos", "issues", "pull_requests"] }`
+- 全カテゴリ選択時は `categories` を省略 (= 全ツール有効)
+- ランタイム変換: `categories` 配列を GitHub MCP Tools の `--tools` フィルタに変換して一時設定ファイルに書き出す。カテゴリ → ツール名のマッピングは `mcp-presets.json` 内の `toolCategories` に定義
+- UI: GitHub MCP Tools プリセット選択時のみカテゴリチェックボックスを表示
 - CLI がプロバイダ接続失敗を報告した場合: 右パネルに警告表示、Run 自体は続行
 - 全プロバイダ接続不可でも Run は `completed` / `failed` は CLI の exit code で判定
 
@@ -226,7 +239,7 @@ GitHub Token はサーバーサイドの環境変数 (`GITHUB_TOKEN`) または
 | OS | 方式 | 実装 |
 |---|---|---|
 | macOS | POSIX パーミッション | `fs.writeFile` 後に `fs.chmod(path, 0o600)` |
-| Windows | NTFS ACL | `child_process.spawnSync('icacls', [path, '/inheritance:r', '/grant:r', `${process.env.USERNAME}:(R,W)`])` でカレントユーザーのみ読み書き許可、継承を無効化 |
+| Windows | NTFS ACL | 1. `os.userInfo().username` でユーザー名取得 2. `child_process.spawnSync('icacls', [path, '/inheritance:r', '/grant:r', `${username}:(R,W)`])` でカレントユーザーのみ読み書き許可、継承を無効化。ドメイン環境では `USERDOMAIN\\USERNAME` 形式を使用 (`process.env.USERDOMAIN ? \`${process.env.USERDOMAIN}\\${username}\` : username`) |
 
 - ACL/パーミッション設定失敗時: Token 保存を失敗として扱う (500 エラー)。エラーメッセージに「ファイル権限を設定できませんでした」と具体的な対処法を表示。設定失敗のまま Token を平文保存しない
 - 起動時のプリフライトチェックで `data/settings.json` のパーミッションを検証し、不適切な場合は警告表示 + Token 利用を一時停止 (再設定を促す)

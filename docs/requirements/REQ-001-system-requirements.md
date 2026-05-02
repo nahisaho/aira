@@ -394,13 +394,14 @@ THE SYSTEM SHALL allow users to enable GitHub MCP Tools per project with granula
 **優先度**: P0
 
 **要件**:  
-THE SYSTEM SHALL display a list of all files generated within a project, showing filename, file type, size, and first-indexed timestamp.
+THE SYSTEM SHALL display a list of all files generated within a project, showing workspace-relative path, file type, size, and first-indexed timestamp.
 
-**説明**: プロジェクト内で生成されたファイルの一覧を表示する。タイムスタンプは AIRA がファイルを最初にインデックスした日時 (`project_files.created_at`) を使用する。
+**説明**: プロジェクト内で生成されたファイルの一覧を表示する。ファイル名はワークスペースルートからの相対パス (`project_files.file_path`) で表示し、ネストされたフォルダ内のファイルも一意に識別可能とする。タイムスタンプは AIRA がファイルを最初にインデックスした日時 (`project_files.created_at`) を使用する。
 
 **受入基準**:
 - [ ] ファイル一覧パネルがある
-- [ ] ファイル名・種別・サイズ・初回インデックス日時が表示される
+- [ ] ワークスペース相対パス・種別・サイズ・初回インデックス日時が表示される
+- [ ] 同名ファイルが異なるフォルダにある場合、パスで区別できる
 - [ ] ファイルをクリックしてビューアを開ける
 
 **トレーサビリティ**: DES-FILE-001
@@ -636,7 +637,7 @@ THE SYSTEM SHALL require a valid GitHub Token to be configured before invoking t
 - [ ] 環境変数 `GITHUB_TOKEN` が設定されていればそちらを使用する
 - [ ] 環境変数未設定時は、設定 API で Token を登録できる
 - [ ] `data/settings.json` のファイル権限が 0600 (owner read/write only) で作成される
-- [ ] Windows では `data/settings.json` が NTFS ACL でカレントユーザーのみ読み書き可能に設定される
+- [ ] Windows では `data/settings.json` が NTFS ACL でカレントユーザーのみ読み書き可能に設定される (ドメイン参加環境では `DOMAIN\USERNAME` 形式で ACL を設定)
 - [ ] Token が未設定の場合、チャット送信時に「Token 未設定」エラーが表示される
 - [ ] GET /api/settings は Token の設定有無 (boolean) のみ返す (Token 値は返さない)
 - [ ] Token の有効性を検証するエンドポイント (POST /api/settings/validate-token) がある。サーバー保存済み Token を GitHub API に対して検証する (リクエストボディに Token を含まない)
