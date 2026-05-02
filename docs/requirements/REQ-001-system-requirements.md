@@ -165,7 +165,8 @@ THE SYSTEM SHALL render tables, embedded image links, and provide a copy button 
 
 **受入基準**:
 - [ ] テーブルが適切にレンダリングされる
-- [ ] 画像リンクがインライン表示される
+- [ ] CSP 許可ソース (`'self'`, `data:image/*`, `blob:`) の画像リンクがインライン表示される
+- [ ] 外部 URL (`http(s)://`) の画像はインライン表示せず、クリック可能なリンクとして表示される (CSP `img-src` 制限)
 - [ ] コードブロックにコピーボタンが付く
 - [ ] Mermaid 記法が図としてレンダリングされる
 

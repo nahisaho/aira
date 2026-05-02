@@ -109,7 +109,7 @@
 5. プロセス終了 → 完了メッセージを `messages` テーブルに保存 (role=assistant)
 6. ワークスペーススキャン → 新規ファイルをインデックス
 
-**再接続**: WebSocket 切断時、クライアントは指数バックオフで再接続を試みる。  
+**再接続**: WebSocket 切断時、クライアントは指数バックオフで再接続を試みる。再接続後、`GET /api/projects/:id/messages` で会話履歴を再取得し、チャットペインを再構築する。実行中 Run のストリーミング途中で切断した場合、再接続後のチャンクは途中から継続される (切断中のチャンクは欠損を許容し、Run 完了後に完全な assistant メッセージが DB に保存される)。  
 **キャンセル**: ユーザーが停止を要求した場合、`AgentService.stop()` で子プロセスを停止する (OS 別戦略は DES-SEC-001 参照)。
 
 ### DES-PROJECT-001: プロジェクト管理設計
@@ -223,8 +223,8 @@ GitHub Token はサーバーサイドの環境変数 (`GITHUB_TOKEN`) または
 | macOS | POSIX パーミッション | `fs.writeFile` 後に `fs.chmod(path, 0o600)` |
 | Windows | NTFS ACL | `child_process.spawnSync('icacls', [path, '/inheritance:r', '/grant:r', `${process.env.USERNAME}:(R,W)`])` でカレントユーザーのみ読み書き許可、継承を無効化 |
 
-- ACL 設定失敗時: 警告ログを出力し処理を続行 (Token 保存自体は成功とする)
-- 起動時のプリフライトチェックで `data/settings.json` のパーミッションを検証し、問題があれば警告表示
+- ACL/パーミッション設定失敗時: Token 保存を失敗として扱う (500 エラー)。エラーメッセージに「ファイル権限を設定できませんでした」と具体的な対処法を表示。設定失敗のまま Token を平文保存しない
+- 起動時のプリフライトチェックで `data/settings.json` のパーミッションを検証し、不適切な場合は警告表示 + Token 利用を一時停止 (再設定を促す)
 
 **ブラウザ Origin 防御**:
 - 全状態変更リクエスト (POST/PUT/PATCH/DELETE) および WS upgrade で `Origin` ヘッダーを検証
