@@ -35,6 +35,25 @@ const BUILTIN_MCP_CONFIGS = [
       url: 'https://github.com/mims-harvard/ToolUniverse',
     },
   },
+  {
+    name: 'microsoft-learn',
+    type: 'sse' as const,
+    config: {
+      url: 'https://learn.microsoft.com/api/mcp',
+      description: 'Microsoft Learn MCP Server — search Microsoft docs, fetch articles, and find code samples. No authentication required.',
+    },
+  },
+  {
+    name: 'azure-mcp',
+    type: 'stdio' as const,
+    config: {
+      command: 'npx',
+      args: ['-y', '@azure/mcp@latest'],
+      env: {},
+      description: 'Azure MCP Server — interact with Azure resources using natural language. Supports Azure CLI, azd, storage, databases, KQL, and more. Requires Azure login (az login).',
+      url: 'https://github.com/microsoft/mcp',
+    },
+  },
 ];
 
 /**
