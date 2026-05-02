@@ -995,11 +995,11 @@ IF a WebSocket connection is lost during an active Run, THE SYSTEM SHALL automat
 IF an MCP configuration is invalid or a provider is unreachable at runtime, THE SYSTEM SHALL report the error and allow the Run to proceed without the failed MCP provider.
 
 **障害の発生タイミング**:
-1. **保存時バリデーション** (ユーザー操作): JSON 構文エラー、最低限の構造検証 (type/name フィールドの存在) → 保存拒否 (400 Bad Request)、UI にエラー表示。接続先の到達性は検証しない (構文のみ)
+1. **保存時バリデーション** (ユーザー操作): リクエスト全体の必須項目 (`name`, `type`) を検証し、`type` に応じた `config_json` の必須項目を検証 (stdio: `command`必須、sse: `url`必須)。JSON 構文エラーも拒否 (400 Bad Request)、UI にエラー表示。接続先の到達性は検証しない (構文/構造のみ)
 2. **Run 実行時** (自動): MCP サーバー接続失敗/タイムアウト → Copilot CLI の出力から検知、右パネルに警告表示、当該プロバイダなしで Run 続行
 
 **受入基準**:
-- [ ] MCP 設定保存時に JSON 構文エラー・必須フィールド (type, name) 欠落が即時表示される
+- [ ] MCP 設定保存時にリクエストレベルの必須項目 (`name`, `type`) 欠落、および `config_json` 内のタイプ別必須項目 (stdio: `command`, sse: `url`) 欠落が即時エラー表示される
 - [ ] 保存時に接続確認は行わない (構文/構造バリデーションのみ)
 - [ ] 実行時に CLI 出力から MCP 接続失敗を検知した場合、右パネルのログに警告が表示される
 - [ ] MCP 接続失敗があっても Run 自体は続行される (CLI の判断に委ねる)
