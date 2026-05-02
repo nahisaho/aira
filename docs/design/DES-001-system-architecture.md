@@ -342,7 +342,7 @@ projects/
 
 **プロセスセキュリティ**:
 - エージェントは `child_process.spawn()` で起動。**POSIX (macOS) では `detached: true` を指定し、子プロセスを独立したプロセスグループ/セッションで起動する**。これにより `process.kill(-pid, signal)` でプロセスツリー全体にシグナル送信が可能
-- **CLI コマンド解決**: プリフライトおよびランタイム spawn で同一の起動戦略を使用する。macOS: `spawn('copilot', args)` (PATH 検索)。Windows: `.cmd` ファイルは直接 spawn 不可のため `spawn('cmd.exe', ['/d', '/s', '/c', 'copilot.cmd', ...args])` で起動する。プリフライトで `--version` を実行して存在確認し、解決済み起動戦略 (command + prefix args) をキャッシュする
+- **CLI コマンド解決**: プリフライトおよびランタイム spawn で同一の起動戦略を使用する。macOS: `spawn('copilot', args)` (PATH 検索)。Windows: `.cmd` ラッパーの中身を解析して実際の Node.js 実行可能ファイルパスとスクリプトパスを特定し、`spawn(nodeExe, [scriptPath, ...args])` で直接起動する。これにより `cmd.exe` のシェルメタ文字展開 (`%`, `^`, `&` 等) の問題を回避する。解析失敗時のフォールバック: `spawn(process.execPath, [require.resolve('@anthropic/copilot/cli'), ...args])` を試行。プリフライトで `--version` を実行して存在確認し、解決済み起動戦略 (command + args prefix) をキャッシュする
 - cwd を `projects/{project_id}/workspace/` に制限
 - Token 注入: `AgentService` が解決済み Token を `spawn(..., { env: { GITHUB_TOKEN } })` で渡す
   - 解決優先順位: `process.env.GITHUB_TOKEN` > `data/settings.json` > 未設定 (エラー)
@@ -396,6 +396,11 @@ projects/
 │  ┌────────▼────────────────────▼───────────────────────▼─────────┐  │
 │  │                    データアクセス層 (SQLite)                    │  │
 │  └────────────────────────────────────────────────────────────────┘  │
+
+**SQLite 接続初期化ルール**:
+- すべての接続で `PRAGMA foreign_keys=ON` を最初に実行する (better-sqlite3 の `db.pragma('foreign_keys = ON')`)
+- SQLite の `ON DELETE CASCADE` / `ON DELETE SET NULL` は `foreign_keys` が有効でないと機能しないため、これはプロジェクト削除・メッセージ削除等のデータ整合性に必須
+- 起動時に `PRAGMA foreign_keys` の戻り値を検証し、`1` でなければ起動を中止する (fail-fast)
 │                                                                     │
 │  ┌─────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
 │  │  AgentService   │  │  FileService     │  │  AuthService     │  │
