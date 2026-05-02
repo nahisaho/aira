@@ -17,13 +17,10 @@ function getAllowedOrigins(port: number): Set<string> {
   origins.add(`http://localhost:${port}`);
   origins.add(`http://127.0.0.1:${port}`);
   origins.add(`http://[::1]:${port}`);
-
-  if (process.env.NODE_ENV === 'development') {
-    origins.add('http://localhost:5173');
-    origins.add('http://127.0.0.1:5173');
-    origins.add('http://[::1]:5173');
-  }
-
+  // Vite dev server
+  origins.add('http://localhost:5173');
+  origins.add('http://127.0.0.1:5173');
+  origins.add('http://[::1]:5173');
   return origins;
 }
 

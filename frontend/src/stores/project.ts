@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { projectsApi, type Project } from '../api/client';
+import { wsClient } from '../api/ws';
 
 interface ProjectStore {
   projects: Project[];
@@ -53,5 +54,10 @@ export const useProjectStore = create<ProjectStore>((set) => ({
 
   setActiveProject: (id: string | null) => {
     set({ activeProjectId: id });
+    if (id) {
+      wsClient.connect(id);
+    } else {
+      wsClient.disconnect();
+    }
   },
 }));
