@@ -247,31 +247,46 @@ function McpTab({ projectId }: { projectId: string }) {
         <p className={`text-xs ${light ? 'text-gray-400' : 'text-gray-500'}`}>{t('mcp.noConfigs')}</p>
       )}
       <div className="space-y-1">
-        {configs.map((cfg) => (
+        {configs.map((cfg) => {
+          const desc = typeof cfg.config?.description === 'string' ? cfg.config.description : null;
+          return (
           <div key={cfg.id} className={`flex items-center justify-between rounded px-3 py-2 text-sm ${
             light ? 'bg-gray-50' : 'bg-gray-700'
           }`}>
-            <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${cfg.enabled ? 'bg-green-500' : 'bg-gray-500'}`} />
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.enabled ? 'bg-green-500' : 'bg-gray-500'}`} />
               <span className={light ? 'text-gray-900' : 'text-gray-200'}>{cfg.name}</span>
               <span className={`text-xs ${light ? 'text-gray-400' : 'text-gray-500'}`}>({cfg.type})</span>
+              {cfg.builtin === 1 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-400 font-medium shrink-0">
+                  {t('skills.builtin')}
+                </span>
+              )}
+              {desc && (
+                <span className={`text-xs truncate ${light ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {desc}
+                </span>
+              )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 shrink-0 ml-2">
               <button
                 onClick={() => handleToggle(cfg.id, cfg.enabled)}
                 className={`text-xs ${cfg.enabled ? 'text-yellow-400' : 'text-green-400'}`}
               >
                 {cfg.enabled ? t('mcp.disabled') : t('mcp.enabled')}
               </button>
-              <button
-                onClick={() => handleDelete(cfg.id)}
-                className="text-xs text-red-400 hover:text-red-300"
-              >
-                {t('mcp.delete')}
-              </button>
+              {cfg.builtin !== 1 && (
+                <button
+                  onClick={() => handleDelete(cfg.id)}
+                  className="text-xs text-red-400 hover:text-red-300"
+                >
+                  {t('mcp.delete')}
+                </button>
+              )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Add form */}

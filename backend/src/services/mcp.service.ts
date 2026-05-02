@@ -10,6 +10,7 @@ export interface McpConfig {
   type: 'stdio' | 'sse';
   config_json: string;
   enabled: number;
+  builtin: number;
   preset_id: string | null;
   created_at: string;
   updated_at: string;
@@ -20,6 +21,68 @@ export interface McpConfigParsed extends Omit<McpConfig, 'config_json'> {
 }
 
 const SECRET_MASK = '***';
+
+/** Built-in MCP servers seeded into every project */
+const BUILTIN_MCP_CONFIGS = [
+  {
+    name: 'tooluniverse',
+    type: 'stdio' as const,
+    config: {
+      command: 'python',
+      args: ['-m', 'tooluniverse.mcp_server'],
+      env: {},
+      description: 'ToolUniverse MCP server providing access to 100+ scientific database APIs including PubMed, ChEMBL, Ensembl, UniProt, STRING, Reactome, GDC, DepMap, and more.',
+      url: 'https://github.com/mims-harvard/ToolUniverse',
+    },
+  },
+];
+
+/**
+ * Seed built-in MCP configs for a specific project.
+ * Idempotent — skips if already present.
+ */
+export function seedBuiltinMcpForProject(projectId: string): void {
+  const db = getDatabase();
+
+  // Ensure builtin column exists
+  try {
+    db.exec('ALTER TABLE project_mcp_configs ADD COLUMN builtin INTEGER NOT NULL DEFAULT 0');
+  } catch {
+    // Column already exists
+  }
+
+  for (const mcp of BUILTIN_MCP_CONFIGS) {
+    const existing = db.prepare(
+      'SELECT id FROM project_mcp_configs WHERE project_id = ? AND name = ? AND builtin = 1',
+    ).get(projectId, mcp.name);
+    if (existing) continue;
+
+    const id = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO project_mcp_configs (id, project_id, name, type, config_json, enabled, builtin)
+       VALUES (?, ?, ?, ?, ?, 1, 1)`,
+    ).run(id, projectId, mcp.name, mcp.type, JSON.stringify(mcp.config));
+  }
+}
+
+/**
+ * Seed built-in MCP configs for ALL existing projects.
+ */
+export function seedBuiltinMcpAll(): void {
+  const db = getDatabase();
+
+  // Ensure builtin column exists
+  try {
+    db.exec('ALTER TABLE project_mcp_configs ADD COLUMN builtin INTEGER NOT NULL DEFAULT 0');
+  } catch {
+    // Column already exists
+  }
+
+  const projects = db.prepare('SELECT id FROM projects').all() as Array<{ id: string }>;
+  for (const project of projects) {
+    seedBuiltinMcpForProject(project.id);
+  }
+}
 
 export class McpService {
   list(projectId: string): McpConfigParsed[] {

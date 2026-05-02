@@ -5,6 +5,7 @@ import { getDatabase, closeDatabase } from './db/index.js';
 import { runPreflight } from './services/preflight.js';
 import { attachWebSocket } from './services/ws.service.js';
 import { seedBuiltinSkills } from './services/skills.service.js';
+import { seedBuiltinMcpAll } from './services/mcp.service.js';
 import type { Server } from 'node:http';
 
 const PORT = parseInt(process.env.AIRA_PORT ?? '3000', 10);
@@ -34,9 +35,10 @@ async function startup(): Promise<void> {
   // 3. Orphan Run recovery
   recoverOrphanRuns();
 
-  // 3b. Seed built-in skills
+  // 3b. Seed built-in skills and MCP
   seedBuiltinSkills();
-  console.log('[AIRA] Built-in skills seeded');
+  seedBuiltinMcpAll();
+  console.log('[AIRA] Built-in skills and MCP seeded');
 
   // 4. Start dual-socket servers
   try {

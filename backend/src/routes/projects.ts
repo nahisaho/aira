@@ -6,6 +6,7 @@ import {
   ProjectLockedError,
   ProjectActiveRunError,
 } from '../services/project.service.js';
+import { seedBuiltinMcpForProject } from '../services/mcp.service.js';
 
 const projectRoutes = new Hono();
 const projectService = new ProjectService();
@@ -37,6 +38,7 @@ projectRoutes.post('/api/projects', async (c) => {
 
   try {
     const project = projectService.create(parsed.data.name, parsed.data.description);
+    seedBuiltinMcpForProject(project.id);
     return c.json(project, 201);
   } catch (err) {
     if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') {

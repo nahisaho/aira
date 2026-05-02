@@ -215,6 +215,7 @@ export interface McpConfig {
   type: 'stdio' | 'sse';
   config: Record<string, unknown>;
   enabled: boolean;
+  builtin: number;
   preset_id: string | null;
   created_at: string;
 }
