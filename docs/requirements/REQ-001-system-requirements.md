@@ -90,7 +90,7 @@ WHEN a user sends a message in a project, THE SYSTEM SHALL create a new Run, inv
 - `idle` は UI 表示専用であり Run エンティティの状態ではない (Run が存在しない状態)
 - 右パネルは**現在選択中のプロジェクト**の最新 Run を表示する
 - プロジェクト切り替え時、右パネルの表示も切り替わる
-- Run 履歴は永続保存され、過去の Run をプログレスパネルから参照可能
+- Run 履歴は永続保存され、過去の Run をプログレスパネルから参照可能 (ステータス・開始/終了時刻・exit code。リアルタイムログは現在 Run のみ表示、過去 Run のログ再生は v1.1+ スコープ)
 
 **Run エンティティ定義**:
 | フィールド | 型 | 説明 |
@@ -393,13 +393,13 @@ THE SYSTEM SHALL allow users to enable GitHub MCP Tools per project with granula
 **優先度**: P0
 
 **要件**:  
-THE SYSTEM SHALL display a list of all files generated within a project, showing filename, file type, size, and creation timestamp.
+THE SYSTEM SHALL display a list of all files generated within a project, showing filename, file type, size, and first-indexed timestamp.
 
-**説明**: プロジェクト内で生成されたファイルの一覧を表示する。
+**説明**: プロジェクト内で生成されたファイルの一覧を表示する。タイムスタンプは AIRA がファイルを最初にインデックスした日時 (`project_files.created_at`) を使用する。
 
 **受入基準**:
 - [ ] ファイル一覧パネルがある
-- [ ] ファイル名・種別・サイズ・作成日時が表示される
+- [ ] ファイル名・種別・サイズ・初回インデックス日時が表示される
 - [ ] ファイルをクリックしてビューアを開ける
 
 **トレーサビリティ**: DES-FILE-001
@@ -677,14 +677,16 @@ THE SYSTEM SHALL validate the Origin header on all WebSocket upgrade requests an
 **優先度**: P0
 
 **要件**:  
-THE SYSTEM SHALL NOT expose the GitHub Token in any client-side code, API responses, or browser storage.
+THE SYSTEM SHALL NOT persist, re-expose, or cache the GitHub Token in API responses, browser storage, logs, or subsequent UI state after the initial submission.
 
-**説明**: セキュリティ要件: GitHub Token はクライアントサイドに渡さない。
+**説明**: セキュリティ要件: Token はユーザーが明示的に設定 API に送信する瞬間のみネットワーク上を流れる。送信後は一切クライアントサイドに保持・再表示しない。
 
 **受入基準**:
-- [ ] Token が API レスポンスに含まれない
-- [ ] Token が localStorage / sessionStorage に保存されない
-- [ ] Token がブラウザの開発者ツールで確認できない
+- [ ] GET API レスポンスに Token 値が含まれない (有無の boolean のみ)
+- [ ] Token が localStorage / sessionStorage / cookie に保存されない
+- [ ] Token 設定後、設定画面のフォームフィールドが即座にクリアされる
+- [ ] サーバーログに Token 値が出力されない (マスク処理)
+- [ ] PUT /api/settings/token のリクエスト/レスポンスを除き、Token がネットワーク上を流れない
 
 **トレーサビリティ**: DES-AUTH-001
 
@@ -964,11 +966,12 @@ IF a WebSocket connection is lost during an active Run, THE SYSTEM SHALL automat
 IF an MCP configuration is invalid or a provider is unreachable at runtime, THE SYSTEM SHALL report the error and allow the Run to proceed without the failed MCP provider.
 
 **障害の発生タイミング**:
-1. **保存時バリデーション** (ユーザー操作): JSON 構文エラー、必須フィールド欠落、スキーマ不正 → 保存拒否 (400 Bad Request)、UI にエラー表示
+1. **保存時バリデーション** (ユーザー操作): JSON 構文エラー、最低限の構造検証 (type/name フィールドの存在) → 保存拒否 (400 Bad Request)、UI にエラー表示。接続先の到達性は検証しない (構文のみ)
 2. **Run 実行時** (自動): MCP サーバー接続失敗/タイムアウト → Copilot CLI の出力から検知、右パネルに警告表示、当該プロバイダなしで Run 続行
 
 **受入基準**:
-- [ ] MCP 設定保存時に JSON スキーマバリデーションエラーが即時表示される
+- [ ] MCP 設定保存時に JSON 構文エラー・必須フィールド (type, name) 欠落が即時表示される
+- [ ] 保存時に接続確認は行わない (構文/構造バリデーションのみ)
 - [ ] 実行時に CLI 出力から MCP 接続失敗を検知した場合、右パネルのログに警告が表示される
 - [ ] MCP 接続失敗があっても Run 自体は続行される (CLI の判断に委ねる)
 - [ ] `enabled = 0` の MCP プロバイダは設定ファイルに含まれない
