@@ -143,6 +143,7 @@ Skills は `skills/` ディレクトリにローカルキャッシュされ、`s
 
 **Skills ライフサイクル**:
 1. **インポート**: GitHub URL からローカル (`skills/{id}/`) にクローン/ダウンロード
+   - URL バリデーション: `https://github.com/{owner}/{repo}` 形式のみ受け入れ (オプションで `/tree/{branch}/{path}`)。正規表現: `^https://github\.com/[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+(/tree/[^/]+(/.*)?)?$`。不一致は 400 エラー
 2. **保存**: ローカルコピーを永続保存。ランタイム fetch は行わない (ローカルのみ参照)
 3. **エラー**: インポート失敗 → `skills.status = 'error'`、`skills.last_error` に詳細記録
 4. **実行時**: 割り当て済み Skills のうち `status = 'available'` のもののみ `--skills` に渡す
@@ -249,11 +250,13 @@ GitHub Token はサーバーサイドの環境変数 (`GITHUB_TOKEN`) または
 設定 API 経由で `data/settings.json` に保存 (OS ファイル権限 0600 / NTFS ACL で保護)。  
 エージェントプロセスには環境変数として注入する。Token は API レスポンスに含めない。
 
-**Token ファイル保護の OS 別実装**:
+**Token ファイル保護の OS 別実装** (アトミック作成):
 | OS | 方式 | 実装 |
 |---|---|---|
-| macOS | POSIX パーミッション | `fs.writeFile` 後に `fs.chmod(path, 0o600)` |
-| Windows | NTFS ACL | 1. `os.userInfo().username` でユーザー名取得 2. `child_process.spawnSync('icacls', [path, '/inheritance:r', '/grant:r', `${username}:(R,W)`])` でカレントユーザーのみ読み書き許可、継承を無効化。ドメイン環境では `USERDOMAIN\\USERNAME` 形式を使用 (`process.env.USERDOMAIN ? \`${process.env.USERDOMAIN}\\${username}\` : username`) |
+| macOS | POSIX パーミッション | `fs.open(path, O_WRONLY|O_CREAT|O_TRUNC, 0o600)` でファイルを作成 (作成時点で 0600)。fd に書き込み後 close。`writeFile` 後の `chmod` は使わない |
+| Windows | NTFS ACL | 1. ユーザー専用一時ディレクトリ (`data/.tmp/`) に ACL を事前設定 (icacls) 2. 一時ディレクトリ内にファイルを書き込み 3. `fs.rename()` で `data/settings.json` にアトミック移動。ドメイン環境では `USERDOMAIN\\USERNAME` 形式を使用 |
+
+> **原則**: シークレットを含むファイルは、デフォルト/継承パーミッションで一瞬でもディスクに存在してはならない。POSIX はファイル作成時の mode 引数で保証。Windows は事前にセキュリティ設定済みディレクトリ内で作成することで保証する。MCP 一時設定ファイルも同じ戦略を適用する。
 
 - ACL/パーミッション設定失敗時: Token 保存を失敗として扱う (500 エラー)。エラーメッセージに「ファイル権限を設定できませんでした」と具体的な対処法を表示。設定失敗のまま Token を平文保存しない
 - 起動時のプリフライトチェックで `data/settings.json` のパーミッションを検証し、不適切な場合は警告表示 + Token 利用を一時停止 (再設定を促す)

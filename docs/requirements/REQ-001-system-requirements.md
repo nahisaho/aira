@@ -284,6 +284,7 @@ THE SYSTEM SHALL allow importing Skills from GitHub repositories via URL.
 
 **受入基準**:
 - [ ] GitHub リポジトリ URL を入力できる
+- [ ] 受け入れる URL 形式: `https://github.com/{owner}/{repo}` (オプションで `/tree/{branch}/{path}` サブパス付き)。他のホスト/スキームは拒否
 - [ ] `SKILL.md` を含む Skills ディレクトリを自動検出する
 - [ ] インポートした Skills が利用可能 Skills 一覧に追加される
 - [ ] インポートエラー時にわかりやすいエラーメッセージが表示される
@@ -496,6 +497,13 @@ WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS
 
 > **注意**: 許可リストにない拡張子のファイルには「開く」ボタンを非表示とし、「View」「Download」のみ表示。ユーザーが直接実行したい場合は「フォルダで表示」機能または手動でファイルシステムから操作する。
 
+**拡張子マッチングアルゴリズム**:
+1. ファイルの basename を取得し小文字化する
+2. 許可リストを最長サフィックス順にソート (例: `.tar.gz` → `.gz` の順)
+3. basename が許可リストのいずれかのサフィックスで終わる場合、許可 (最長一致優先)
+4. 拡張子なし (basename にドットがない) のファイルは不許可
+5. 例: `archive.tar.gz` → `.tar.gz` に一致 → 許可。`config.env.example` → `.env.example` に一致 → 許可。`script` → 拡張子なし → 不許可
+
 **OS 別実行方法**:
 | OS | コマンド | 注意事項 |
 |---|---|---|
@@ -650,8 +658,8 @@ THE SYSTEM SHALL require a valid GitHub Token to be configured before invoking t
 **受入基準**:
 - [ ] 環境変数 `GITHUB_TOKEN` が設定されていればそちらを使用する
 - [ ] 環境変数未設定時は、設定 API で Token を登録できる
-- [ ] `data/settings.json` のファイル権限が 0600 (owner read/write only) で作成される
-- [ ] Windows では `data/settings.json` が NTFS ACL でカレントユーザーのみ読み書き可能に設定される (ドメイン参加環境では `DOMAIN\USERNAME` 形式で ACL を設定)
+- [ ] `data/settings.json` のファイル権限が 0600 (owner read/write only) でアトミックに作成される (デフォルトパーミッションで一瞬でも存在しない)
+- [ ] Windows では `data/settings.json` が NTFS ACL でカレントユーザーのみ読み書き可能に設定される (セキュリティ設定済みディレクトリ内で作成後にリネーム)
 - [ ] Token が未設定の場合、チャット送信時に「Token 未設定」エラーが表示される
 - [ ] GET /api/settings は Token の設定有無 (boolean) のみ返す (Token 値は返さない)
 - [ ] Token の有効性を検証するエンドポイント (POST /api/settings/validate-token) がある。サーバー保存済み Token を GitHub API に対して検証する (リクエストボディに Token を含まない)
