@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Runtime data (contains DB with plaintext secrets)
+data/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# WASM build artifacts
+frontend/src/wasm/pkg/
+target/
+
+# Test coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.bak
