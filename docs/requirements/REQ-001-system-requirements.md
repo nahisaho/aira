@@ -336,16 +336,23 @@ THE SYSTEM SHALL provide a Skills marketplace that lists available skill package
 **優先度**: P0
 
 **要件**:  
-THE SYSTEM SHALL allow users to configure MCP servers per project with server name, type (stdio/SSE), command, arguments, and environment variables.
+THE SYSTEM SHALL allow users to configure MCP servers per project with server name, type (stdio/SSE), and type-specific connection parameters.
 
 **説明**: プロジェクトごとに MCP サーバーを設定できる。stdio および SSE タイプをサポートする。
 
+**タイプ別入力モデル**:
+| タイプ | 必須項目 | オプション |
+|---|---|---|
+| stdio | `command`, `args` (配列) | `env` (キー・値ペア) |
+| sse | `url` | `headers` (キー・値ペア) |
+
 **受入基準**:
-- [ ] MCP サーバー追加フォームがある (名前・タイプ・コマンド・引数・環境変数)
-- [ ] stdio / SSE タイプを選択できる
+- [ ] MCP サーバー追加フォームがある (名前・タイプ選択)
+- [ ] stdio 選択時: コマンド・引数・環境変数入力欄を表示
+- [ ] SSE 選択時: URL 入力欄・ヘッダー入力欄を表示
 - [ ] 設定がプロジェクトに保存される
 - [ ] 設定した MCP がエージェント実行時に `--additional-mcp-config` で渡される
-- [ ] 環境変数の値は API レスポンス・ログ・UI 上でマスクされる (`***` 表示)
+- [ ] 環境変数/ヘッダーの値は API レスポンス・ログ・UI 上でマスクされる (`***` 表示)
 - [ ] CLI 出力 (チャットストリーム) にシークレット値が含まれる場合、ベストエフォートで redact される
 - [ ] 一時設定ファイルは owner-only パーミッション (0600 / NTFS ACL) で作成され、プロセス終了後に即時削除される
 
@@ -474,17 +481,20 @@ THE SYSTEM SHALL support bulk download of all files in a project as a ZIP archiv
 **優先度**: P1
 
 **要件**:  
-WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS default application associated with the file type, provided the file type is not in the blocked executable list.
+WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS default application, provided the file extension is in the allowed-open list (allowlist approach).
 
-**説明**: ファイルをOSのデフォルトアプリケーション (VS Code, テキストエディタ等) で開く。セキュリティのため、スクリプト・実行可能ファイルの直接起動はブロックする。
+**説明**: ファイルをOSのデフォルトアプリケーション (VS Code, テキストエディタ等) で開く。セキュリティのため、明示的に安全と判断されたファイルタイプのみ `Open` を許可する (allowlist 方式)。未知の拡張子・実行可能ファイルは `View` / `Download` のみ。
 
-**ブロック対象ファイル拡張子** (大文字小文字不問):
-- Windows 実行形式: `.exe`, `.msi`, `.bat`, `.cmd`, `.ps1`, `.vbs`, `.vbe`, `.js` (WSH), `.wsf`, `.wsh`, `.scr`, `.com`, `.pif`
-- ショートカット/プロトコル: `.lnk`, `.url`, `.desktop`
-- macOS 実行形式: `.command`, `.app`, `.action`, `.workflow`
-- スクリプト共通: `.sh`, `.bash`, `.zsh`
+**Open 許可対象ファイル拡張子** (大文字小文字不問):
+- テキスト/コード: `.txt`, `.md`, `.json`, `.yaml`, `.yml`, `.toml`, `.xml`, `.csv`, `.log`, `.env.example`
+- プログラミング: `.ts`, `.tsx`, `.js` (※), `.jsx`, `.py`, `.rs`, `.go`, `.java`, `.c`, `.cpp`, `.h`, `.hpp`, `.cs`, `.rb`, `.php`, `.swift`, `.kt`, `.scala`, `.sql`, `.html`, `.css`, `.scss`, `.less`, `.vue`, `.svelte`
+- 画像: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`, `.ico`, `.bmp`
+- ドキュメント: `.pdf`, `.docx`, `.xlsx`, `.pptx`
+- その他: `.zip`, `.tar.gz`, `.wasm`
 
-> **注意**: ブロック対象ファイルには「開く」ボタンの代わりに「View」のみ表示。ユーザーが内容を確認した上で手動でファイルシステムから実行する必要がある。
+> **※ `.js` の扱い**: Windows WSH (JScript) での実行リスクがあるが、コード編集が主用途のため許可。OS default association が VS Code 等のエディタであることを前提とする。
+
+> **注意**: 許可リストにない拡張子のファイルには「開く」ボタンを非表示とし、「View」「Download」のみ表示。ユーザーが直接実行したい場合は「フォルダで表示」機能または手動でファイルシステムから操作する。
 
 **OS 別実行方法**:
 | OS | コマンド | 注意事項 |
@@ -493,13 +503,14 @@ WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS
 | Windows | `powershell.exe -NoProfile -Command "Start-Process -LiteralPath '<path>'"` | `-LiteralPath` でメタ文字 (`&`, `%`, `^` 等) を安全に処理。パスに `'` が含まれる場合は `''` でエスケープ |
 
 **受入基準**:
-- [ ] ファイル行に「開く」ボタンがある (ブロック対象拡張子のファイルには非表示)
-- [ ] ブロック対象拡張子のファイルは「View」のみ利用可能
+- [ ] 許可リストに含まれる拡張子のファイル行に「開く」ボタンがある
+- [ ] 許可リストにない拡張子のファイルは「View」「Download」のみ利用可能
+- [ ] 拡張子なし・未知の拡張子は Open 不可
 - [ ] クリックで OS のデフォルトアプリケーションが起動する
 - [ ] バックエンド API (`POST /api/projects/:id/files/:fileId/open`) のレスポンス:
   - 成功: 200 OK
   - ファイル未存在: 404 Not Found
-  - ブロック対象拡張子: 403 Forbidden (`{ "error": "blocked_file_type" }`)
+  - 許可リスト外の拡張子: 403 Forbidden (`{ "error": "blocked_file_type" }`)
   - ファイルロック (Windows EBUSY): 423 Locked
   - 権限エラー (EPERM/EACCES): 403 Forbidden (`{ "error": "permission_denied" }`)
   - OS コマンド実行失敗: 500 Internal Server Error
