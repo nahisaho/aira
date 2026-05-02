@@ -469,9 +469,17 @@ THE SYSTEM SHALL support bulk download of all files in a project as a ZIP archiv
 **優先度**: P1
 
 **要件**:  
-WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS default application associated with the file type.
+WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS default application associated with the file type, provided the file type is not in the blocked executable list.
 
-**説明**: ファイルをOSのデフォルトアプリケーション (VS Code, テキストエディタ等) で開く。
+**説明**: ファイルをOSのデフォルトアプリケーション (VS Code, テキストエディタ等) で開く。セキュリティのため、スクリプト・実行可能ファイルの直接起動はブロックする。
+
+**ブロック対象ファイル拡張子** (大文字小文字不問):
+- Windows 実行形式: `.exe`, `.msi`, `.bat`, `.cmd`, `.ps1`, `.vbs`, `.vbe`, `.js` (WSH), `.wsf`, `.wsh`, `.scr`, `.com`, `.pif`
+- ショートカット/プロトコル: `.lnk`, `.url`, `.desktop`
+- macOS 実行形式: `.command`, `.app`, `.action`, `.workflow`
+- スクリプト共通: `.sh`, `.bash`, `.zsh`
+
+> **注意**: ブロック対象ファイルには「開く」ボタンの代わりに「View」のみ表示。ユーザーが内容を確認した上で手動でファイルシステムから実行する必要がある。
 
 **OS 別実行方法**:
 | OS | コマンド | 注意事項 |
@@ -480,14 +488,19 @@ WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS
 | Windows | `powershell.exe -NoProfile -Command "Start-Process -LiteralPath '<path>'"` | `-LiteralPath` でメタ文字 (`&`, `%`, `^` 等) を安全に処理。パスに `'` が含まれる場合は `''` でエスケープ |
 
 **受入基準**:
-- [ ] ファイル行に「開く」ボタンがある
+- [ ] ファイル行に「開く」ボタンがある (ブロック対象拡張子のファイルには非表示)
+- [ ] ブロック対象拡張子のファイルは「View」のみ利用可能
 - [ ] クリックで OS のデフォルトアプリケーションが起動する
-- [ ] バックエンド API (`POST /api/projects/:id/files/:fileId/open`) が成功時 200、失敗時 404/500 を返す
+- [ ] バックエンド API (`POST /api/projects/:id/files/:fileId/open`) のレスポンス:
+  - 成功: 200 OK
+  - ファイル未存在: 404 Not Found
+  - ブロック対象拡張子: 403 Forbidden (`{ "error": "blocked_file_type" }`)
+  - ファイルロック (Windows EBUSY): 423 Locked
+  - 権限エラー (EPERM/EACCES): 403 Forbidden (`{ "error": "permission_denied" }`)
+  - OS コマンド実行失敗: 500 Internal Server Error
 - [ ] macOS では `open` コマンド、Windows では `Start-Process -LiteralPath` を使用する
 - [ ] パスにスペース・日本語文字を含むファイルが正しく開ける
 - [ ] パスにシェルメタ文字 (`&`, `%`, `^`, `(`, `)`) を含むファイルが正しく開ける
-- [ ] ファイルが存在しない場合は 404 エラーを返す
-- [ ] OS コマンド実行失敗時は 500 エラーとエラー詳細を返す
 
 **トレーサビリティ**: DES-FILE-001
 
@@ -948,12 +961,17 @@ IF a WebSocket connection is lost during an active Run, THE SYSTEM SHALL automat
 **優先度**: P1
 
 **要件**:  
-IF an MCP configuration is invalid (unreachable server, malformed JSON, timeout), THE SYSTEM SHALL report the specific configuration error and allow the Run to proceed without the failed MCP provider.
+IF an MCP configuration is invalid or a provider is unreachable at runtime, THE SYSTEM SHALL report the error and allow the Run to proceed without the failed MCP provider.
+
+**障害の発生タイミング**:
+1. **保存時バリデーション** (ユーザー操作): JSON 構文エラー、必須フィールド欠落、スキーマ不正 → 保存拒否 (400 Bad Request)、UI にエラー表示
+2. **Run 実行時** (自動): MCP サーバー接続失敗/タイムアウト → Copilot CLI の出力から検知、右パネルに警告表示、当該プロバイダなしで Run 続行
 
 **受入基準**:
-- [ ] 無効な MCP 設定がバリデーション時にエラー表示される
-- [ ] 実行時に MCP サーバー接続失敗した場合、該当 MCP なしで続行される
-- [ ] MCP エラーがログパネルに記録される
+- [ ] MCP 設定保存時に JSON スキーマバリデーションエラーが即時表示される
+- [ ] 実行時に CLI 出力から MCP 接続失敗を検知した場合、右パネルのログに警告が表示される
+- [ ] MCP 接続失敗があっても Run 自体は続行される (CLI の判断に委ねる)
+- [ ] `enabled = 0` の MCP プロバイダは設定ファイルに含まれない
 
 **トレーサビリティ**: DES-MCP-001
 
@@ -980,12 +998,18 @@ IF a user attempts to delete or rename a project while a Run is active, THE SYST
 **優先度**: P1
 
 **要件**:  
-IF a Skill URL is unreachable or returns an invalid manifest, THE SYSTEM SHALL mark the Skill as unavailable, display the error reason, and allow the Run to proceed without the failed Skill.
+IF a Skill import or refresh fails (unreachable URL, invalid manifest, network error), THE SYSTEM SHALL mark the Skill as unavailable (`status='error'`), record the error reason, and allow agent Runs to proceed without the failed Skill.
+
+**障害の発生タイミング**:
+1. **インポート/リフレッシュ時** (ユーザー操作): URL 到達不能、マニフェスト不正 → `skills.status = 'error'`, `skills.last_error` に詳細記録、UI にエラー表示
+2. **Run 実行時** (自動): 割り当て済み Skill のうち `status != 'available'` のものは自動スキップ。ローカルファイル読み取り失敗 (削除・破損) も同様にスキップし警告表示
 
 **受入基準**:
-- [ ] 無効な Skill URL 登録時にバリデーションエラーが表示される
-- [ ] 実行時に Skill 取得失敗した場合、該当 Skill なしで続行される
-- [ ] 失敗した Skill がスキルリストで「エラー」状態表示される
+- [ ] Skill インポート時に URL 到達不能の場合、`status='error'` に設定される
+- [ ] Skill インポート時にマニフェスト不正の場合、バリデーションエラーが表示される
+- [ ] `status='error'` の Skill がスキルリストで「エラー」状態表示される
+- [ ] Run 実行時に `status='error'` の Skill は自動スキップされ、残りの Skill で実行が続行される
+- [ ] スキップされた Skill の情報が右パネルのログに警告表示される
 
 **トレーサビリティ**: DES-SKILLS-001
 
