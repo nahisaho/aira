@@ -342,9 +342,9 @@ projects/
 
 **プロセスセキュリティ**:
 - エージェントは `child_process.spawn()` で起動。**POSIX (macOS) では `detached: true` を指定し、子プロセスを独立したプロセスグループ/セッションで起動する**。これにより `process.kill(-pid, signal)` でプロセスツリー全体にシグナル送信が可能
-- **CLI コマンド解決**: プリフライトおよびランタイム spawn で同一の起動戦略を使用する。macOS: `spawn('copilot', args)` (PATH 検索)。Windows: `.cmd` ラッパーの中身を解析して実際の Node.js 実行可能ファイルパスとスクリプトパスを特定し、`spawn(nodeExe, [scriptPath, ...args])` で直接起動する。これにより `cmd.exe` のシェルメタ文字展開 (`%`, `^`, `&` 等) の問題を回避する。解析失敗時のフォールバック: `spawn(process.execPath, [require.resolve('@anthropic/copilot/cli'), ...args])` を試行。プリフライトで `--version` を実行して存在確認し、解決済み起動戦略 (command + args prefix) をキャッシュする
+- **CLI コマンド解決**: プリフライトおよびランタイム spawn で同一の起動戦略を使用する。macOS: `spawn('copilot', args)` (PATH 検索)。Windows: `.cmd` ラッパーの中身を解析して実際の Node.js 実行可能ファイルパスとスクリプトパスを特定し、`spawn(nodeExe, [scriptPath, ...args])` で直接起動する。これにより `cmd.exe` のシェルメタ文字展開 (`%`, `^`, `&` 等) の問題を回避する。解析失敗時のフォールバック: `spawn(process.execPath, [require.resolve('@github/copilot/cli'), ...args])` を試行。プリフライトで `--version` を実行して存在確認し、解決済み起動戦略 (command + args prefix) をキャッシュする
 - cwd を `projects/{project_id}/workspace/` に制限
-- Token 注入: `AgentService` が解決済み Token を `spawn(..., { env: { GITHUB_TOKEN } })` で渡す
+- Token 注入: `AgentService` が親プロセスの環境変数をベースにマージして渡す — `spawn(..., { env: { ...process.env, GITHUB_TOKEN: resolvedToken } })`。`process.env` の継承により `PATH` 等の必須変数が維持される
   - 解決優先順位: `process.env.GITHUB_TOKEN` > `data/settings.json` > 未設定 (エラー)
 - タイムアウト: 10 分。macOS: `process.kill(-pid, 'SIGTERM')` → 5秒後 `process.kill(-pid, 'SIGKILL')` (プロセスグループ全体)。Windows: `taskkill /T /F /PID` (プロセスツリー)
 - 最大同時実行数: デフォルト 5 プロセス (REQ-NFR-002 で設定可能)
