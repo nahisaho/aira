@@ -1,0 +1,67 @@
+import { useState } from 'react';
+import { useProjectStore } from '../../stores/project';
+
+export function NewProjectModal({ onClose }: { onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
+  const { createProject, setActiveProject, projects } = useProjectStore();
+
+  const handleCreate = async () => {
+    if (!name.trim()) {
+      setError('Project name is required');
+      return;
+    }
+
+    // Check duplicate
+    if (projects.some((p) => p.name.toLowerCase() === name.trim().toLowerCase())) {
+      setError('A project with this name already exists');
+      return;
+    }
+
+    try {
+      const project = await createProject(name.trim());
+      setActiveProject(project.id);
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-gray-800 rounded-lg p-6 w-96">
+        <h2 className="text-lg font-semibold text-white mb-4">New Project</h2>
+
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            setError('');
+          }}
+          onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+          placeholder="Project name"
+          className="w-full bg-gray-700 text-gray-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          autoFocus
+        />
+
+        {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
+
+        <div className="flex justify-end gap-2 mt-4">
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 text-sm text-gray-400 hover:text-gray-200"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleCreate}
+            className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 rounded text-white"
+          >
+            Create
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

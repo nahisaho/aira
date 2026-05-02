@@ -1,20 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useProjectStore } from '../../stores/project';
+import { NewProjectModal } from './NewProjectModal';
 
 export function Sidebar() {
-  const { projects, activeProjectId, loading, fetchProjects, setActiveProject, createProject } =
+  const { projects, activeProjectId, loading, fetchProjects, setActiveProject } =
     useProjectStore();
+  const [showNewModal, setShowNewModal] = useState(false);
 
   useEffect(() => {
     fetchProjects();
   }, [fetchProjects]);
-
-  const handleCreate = async () => {
-    const name = prompt('Project name:');
-    if (!name) return;
-    const project = await createProject(name);
-    setActiveProject(project.id);
-  };
 
   return (
     <div className="flex flex-col h-full p-3">
@@ -24,7 +19,7 @@ export function Sidebar() {
           <p className="text-xs text-gray-400">AI Runway Application</p>
         </div>
         <button
-          onClick={handleCreate}
+          onClick={() => setShowNewModal(true)}
           className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded text-white"
         >
           + New
@@ -58,6 +53,8 @@ export function Sidebar() {
           ⚙ Settings
         </button>
       </div>
+
+      {showNewModal && <NewProjectModal onClose={() => setShowNewModal(false)} />}
     </div>
   );
 }

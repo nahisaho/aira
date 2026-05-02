@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/project';
+import { useWSStore } from '../../stores/ws';
+import { MessageItem } from './MessageItem';
 
 export function ChatPane() {
   const { messages, loading, sending, fetchMessages, sendMessage } = useChatStore();
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
+  const wsStatus = useWSStore((s) => s.status);
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -46,26 +49,23 @@ export function ChatPane() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {loading && <p className="text-sm text-gray-500">Loading messages...</p>}
         {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[80%] px-4 py-2 rounded-lg text-sm ${
-                msg.role === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-gray-200'
-              }`}
-            >
-              <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
-            </div>
-          </div>
+          <MessageItem key={msg.id} role={msg.role} content={msg.content} />
         ))}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
       <div className="border-t border-gray-700 p-4">
+        {/* Connection status */}
+        {wsStatus !== 'connected' && (
+          <div className={`text-xs mb-2 px-2 py-1 rounded ${
+            wsStatus === 'reconnecting'
+              ? 'bg-yellow-900/30 text-yellow-400'
+              : 'bg-red-900/30 text-red-400'
+          }`}>
+            {wsStatus === 'reconnecting' ? '⟳ Reconnecting...' : '⊘ Disconnected'}
+          </div>
+        )}
         <div className="flex gap-2">
           <textarea
             value={input}
