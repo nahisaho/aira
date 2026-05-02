@@ -874,11 +874,14 @@ THE SYSTEM SHALL sanitize all rendered content (Markdown, Mermaid, code blocks) 
 default-src 'self';
 script-src 'self' 'wasm-unsafe-eval';
 style-src 'self' 'unsafe-inline';
-img-src 'self' data:;
-connect-src 'self' ws://localhost:* ws://127.0.0.1:* ws://[::1]:*;
+img-src 'self' data: blob:;
+connect-src 'self' http://localhost:* http://127.0.0.1:* http://[::1]:* ws://localhost:* ws://127.0.0.1:* ws://[::1]:*;
 object-src 'none';
 base-uri 'self';
 ```
+
+> **注意**: `connect-src` に HTTP loopback を含めるのは、開発時に SPA (Vite dev server) と API サーバーが異なるポートで動作するため。プロダクションビルドでは同一オリジンだが、CSP は開発/本番共通で適用する。  
+> `img-src` に `blob:` を含めるのは、SVG ファイルを安全な画像コンテキスト (`<img src="blob:...">`) で表示するため。
 
 **受入基準**:
 - [ ] Markdown レンダリング時に生 HTML タグがエスケープまたは除去される

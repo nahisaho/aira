@@ -217,6 +217,15 @@ GitHub Token はサーバーサイドの環境変数 (`GITHUB_TOKEN`) または
 設定 API 経由で `data/settings.json` に保存 (OS ファイル権限 0600 / NTFS ACL で保護)。  
 エージェントプロセスには環境変数として注入する。Token は API レスポンスに含めない。
 
+**Token ファイル保護の OS 別実装**:
+| OS | 方式 | 実装 |
+|---|---|---|
+| macOS | POSIX パーミッション | `fs.writeFile` 後に `fs.chmod(path, 0o600)` |
+| Windows | NTFS ACL | `child_process.spawnSync('icacls', [path, '/inheritance:r', '/grant:r', `${process.env.USERNAME}:(R,W)`])` でカレントユーザーのみ読み書き許可、継承を無効化 |
+
+- ACL 設定失敗時: 警告ログを出力し処理を続行 (Token 保存自体は成功とする)
+- 起動時のプリフライトチェックで `data/settings.json` のパーミッションを検証し、問題があれば警告表示
+
 **ブラウザ Origin 防御**:
 - 全状態変更リクエスト (POST/PUT/PATCH/DELETE) および WS upgrade で `Origin` ヘッダーを検証
 - 許可 Origin: `http://localhost:<port>`, `http://127.0.0.1:<port>`, `http://[::1]:<port>`
@@ -414,18 +423,28 @@ CREATE UNIQUE INDEX idx_agent_runs_one_queued ON agent_runs(project_id) WHERE st
 
 **キュー制御トランザクション**:
 新メッセージ受信時、以下を単一トランザクション (`BEGIN IMMEDIATE`) で実行:
-1. `SELECT COUNT(*) FROM agent_runs WHERE project_id = ? AND status IN ('running', 'queued')` で現在のアクティブ数を確認
-2. 0件 → `INSERT ... status='running'` で即時実行開始
+1. `SELECT COUNT(*) FROM agent_runs WHERE project_id = ? AND status IN ('running', 'queued')` でプロジェクト内アクティブ数を確認
+2. 0件 → グローバル上限チェック (下記) → OK なら `INSERT ... status='running'`
 3. 1件 (running のみ) → `INSERT ... status='queued'` でキュー投入
 4. 2件 (running + queued) → 拒否 (HTTP 429 Too Many Requests)
 - `BEGIN IMMEDIATE` により書き込みロックを取得し、race condition を防止
 
+**グローバル同時実行制御** (REQ-NFR-002):
+- `SELECT COUNT(*) FROM agent_runs WHERE status = 'running'` でシステム全体の実行中 Run 数を取得
+- 上限 (デフォルト 5、`AIRA_MAX_CONCURRENT_RUNS` で設定可能) に達している場合:
+  - Run を `queued` 状態で INSERT (プロジェクト内キューとは別にシステムキューとして待機)
+  - UI に「システム同時実行上限に達しています」を表示
+- 昇格時もグローバル上限をチェック: 上限内の場合のみ `running` に昇格
+
 **キュー昇格 (Queued → Running)**:
 `running` Run が終端状態 (`completed` / `failed` / `cancelled` / `timeout`) に遷移した際:
-1. 同一トランザクション内で `UPDATE agent_runs SET status='running', started_at=NOW() WHERE project_id=? AND status='queued'` を実行
-2. 昇格された Run が存在すれば、即座にプロセス起動 (`AgentService.spawn()`)
-3. WS イベント `{ type: 'status', status: 'running' }` をクライアントに送信
-4. 昇格対象がなければ何もしない (プロジェクトは idle 状態に戻る)
+1. 同一トランザクション内で:
+   a. 同一プロジェクトの `queued` Run を昇格 (プロジェクトキュー優先)
+   b. グローバル上限に空きがあれば、他プロジェクトの最古 `queued` Run も昇格対象
+2. `UPDATE agent_runs SET status='running', started_at=NOW() WHERE id=?` で昇格
+3. 昇格された Run が存在すれば、即座にプロセス起動 (`AgentService.spawn()`)
+4. WS イベント `{ type: 'status', status: 'running' }` をクライアントに送信
+5. 昇格対象がなければ何もしない (プロジェクトは idle 状態に戻る)
 
 ### 会話メッセージ (messages)
 
