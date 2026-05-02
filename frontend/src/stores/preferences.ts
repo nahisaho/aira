@@ -3,11 +3,26 @@ import type { Locale } from '../i18n';
 
 export type Theme = 'light' | 'dark';
 
+export const LLM_MODELS = [
+  { id: 'auto', label: 'Auto' },
+  { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
+  { id: 'claude-sonnet-4', label: 'Claude Sonnet 4' },
+  { id: 'claude-opus-4', label: 'Claude Opus 4' },
+  { id: 'gpt-5.2', label: 'GPT-5.2' },
+  { id: 'gpt-5.4-mini', label: 'GPT-5.4 mini' },
+  { id: 'o3', label: 'o3' },
+  { id: 'o4-mini', label: 'o4-mini' },
+] as const;
+
+export type LlmModelId = (typeof LLM_MODELS)[number]['id'];
+
 interface PreferencesStore {
   locale: Locale;
   theme: Theme;
+  model: LlmModelId;
   setLocale: (locale: Locale) => void;
   setTheme: (theme: Theme) => void;
+  setModel: (model: LlmModelId) => void;
 }
 
 function loadLocale(): Locale {
@@ -32,9 +47,16 @@ function applyLocale(locale: Locale): void {
   document.documentElement.lang = locale === 'ja' ? 'ja' : 'en';
 }
 
+function loadModel(): LlmModelId {
+  const stored = localStorage.getItem('aira-model');
+  if (stored && LLM_MODELS.some((m) => m.id === stored)) return stored as LlmModelId;
+  return 'auto';
+}
+
 export const usePreferencesStore = create<PreferencesStore>((set) => {
   const initialLocale = loadLocale();
   const initialTheme = loadTheme();
+  const initialModel = loadModel();
 
   // Apply on load
   applyTheme(initialTheme);
@@ -43,6 +65,7 @@ export const usePreferencesStore = create<PreferencesStore>((set) => {
   return {
     locale: initialLocale,
     theme: initialTheme,
+    model: initialModel,
 
     setLocale: (locale: Locale) => {
       localStorage.setItem('aira-locale', locale);
@@ -54,6 +77,11 @@ export const usePreferencesStore = create<PreferencesStore>((set) => {
       localStorage.setItem('aira-theme', theme);
       applyTheme(theme);
       set({ theme });
+    },
+
+    setModel: (model: LlmModelId) => {
+      localStorage.setItem('aira-model', model);
+      set({ model });
     },
   };
 });

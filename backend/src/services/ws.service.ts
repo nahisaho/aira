@@ -61,7 +61,7 @@ export function attachWebSocket(server: Server, port: number): WebSocketServer {
         try {
           const msg = JSON.parse(data.toString());
           if (msg.type === 'chat' && msg.content) {
-            handleChatMessage(client, msg.content, msg.messageId);
+            handleChatMessage(client, msg.content, msg.messageId, msg.model);
           }
         } catch {
           // Ignore invalid messages
@@ -84,11 +84,12 @@ export function attachWebSocket(server: Server, port: number): WebSocketServer {
 /**
  * Handle incoming chat message from WebSocket.
  */
-function handleChatMessage(client: WSClient, content: string, messageId?: string): void {
+function handleChatMessage(client: WSClient, content: string, messageId?: string, model?: string): void {
   // Import dynamically to avoid circular deps
   import('./exec-context.js').then(({ executeChat }) => {
     executeChat(client.projectId, content, {
       existingMessageId: messageId,
+      model,
       onChunk: (chunk) => {
         broadcastToProject(client.projectId, { type: 'chunk', content: chunk });
       },

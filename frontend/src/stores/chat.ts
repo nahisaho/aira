@@ -40,8 +40,13 @@ export const useChatStore = create<ChatStore>((set) => ({
       const message = await messagesApi.send(projectId, content);
       set((s) => ({ messages: [...s.messages, message], sending: false }));
 
+      // Get selected model
+      const { usePreferencesStore } = await import('./preferences');
+      const selectedModel = usePreferencesStore.getState().model;
+      const model = selectedModel === 'auto' ? undefined : selectedModel;
+
       // Trigger agent execution via WebSocket
-      wsClient.send({ type: 'chat', content, messageId: message.id });
+      wsClient.send({ type: 'chat', content, messageId: message.id, model });
     } catch {
       set({ sending: false });
     }

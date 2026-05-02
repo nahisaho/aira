@@ -70,6 +70,7 @@ export function executeChat(
   userMessage: string,
   callbacks: {
     existingMessageId?: string;
+    model?: string;
     onChunk: (content: string) => void;
     onStatus: (runId: string, status: string) => void;
     onComplete: (runId: string, exitCode: number | null) => void;
@@ -119,6 +120,7 @@ export function executeChat(
     workspaceDir: ctx.workspaceDir,
     prompt: userMessage,
     token: ctx.token,
+    model: callbacks.model,
     extraEnv: ctx.extraEnv,
     onData: (raw: string) => {
       const redacted = redactor.push(raw);

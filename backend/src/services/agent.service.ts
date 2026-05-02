@@ -235,6 +235,7 @@ export function spawnAgent(opts: {
   workspaceDir: string;
   prompt: string;
   token: string;
+  model?: string;
   extraEnv?: Record<string, string>;
   onData?: (data: string) => void;
   onClose?: (code: number | null) => void;
@@ -242,7 +243,7 @@ export function spawnAgent(opts: {
   const cli = resolveCli();
   const isWindows = process.platform === 'win32';
 
-  const args = [...cli.argsPrefix, ...buildAgentArgs(opts.prompt)];
+  const args = [...cli.argsPrefix, ...buildAgentArgs(opts.prompt, opts.model)];
 
   const child = spawn(cli.command, args, {
     cwd: opts.workspaceDir,
@@ -292,9 +293,12 @@ export function spawnAgent(opts: {
   return child;
 }
 
-function buildAgentArgs(prompt: string): string[] {
-  // Base args for copilot CLI chat mode
-  return ['--prompt', prompt];
+function buildAgentArgs(prompt: string, model?: string): string[] {
+  const args = ['--prompt', prompt];
+  if (model) {
+    args.push('--model', model);
+  }
+  return args;
 }
 
 /**
