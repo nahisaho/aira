@@ -16,7 +16,13 @@
   --color-border: #374151;
 }
 
-/* Prose code block styling for dark mode */
+/* Indeterminate progress bar animation */
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); width: 40%; }
+  50% { transform: translateX(60%); width: 60%; }
+  100% { transform: translateX(200%); width: 40%; }
+}
+
 .prose-invert pre {
   background-color: #1e293b !important;
   color: #e2e8f0 !important;

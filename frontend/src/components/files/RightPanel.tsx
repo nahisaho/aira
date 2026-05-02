@@ -56,6 +56,11 @@ export function RightPanel() {
                 </button>
               )}
             </div>
+            {currentRun.status === 'running' && (
+              <div className="mt-2 h-1 rounded-full overflow-hidden bg-gray-700">
+                <div className="h-full bg-blue-500 rounded-full animate-pulse w-2/3" style={{ animation: 'indeterminate 1.5s infinite ease-in-out' }} />
+              </div>
+            )}
           </div>
         ) : (
           <div className={`text-sm ${light ? 'text-gray-400' : 'text-gray-500'}`}>{t('panel.idle')}</div>
@@ -123,10 +128,13 @@ function RunStatusBadge({ status }: { status: string }) {
 
   return (
     <span
-      className={`inline-block px-2 py-0.5 rounded text-xs text-white ${
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs text-white ${
         colors[status] ?? 'bg-gray-600'
       }`}
     >
+      {status === 'running' && (
+        <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+      )}
       {status}
     </span>
   );
