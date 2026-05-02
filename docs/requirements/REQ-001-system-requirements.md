@@ -519,8 +519,9 @@ WHEN a user clicks "Open" on a file, THE SYSTEM SHALL open the file using the OS
   - 成功: 200 OK
   - ファイル未存在: 404 Not Found
   - 許可リスト外の拡張子: 403 Forbidden (`{ "error": "blocked_file_type" }`)
-  - ファイルロック (Windows EBUSY): 423 Locked
-  - 権限エラー (EPERM/EACCES): 403 Forbidden (`{ "error": "permission_denied" }`)
+  - ファイルロック (EBUSY): 423 Locked
+  - Windows EPERM (ロックまたは権限、判別不可): 423 Locked (`{ "error": "resource_busy" }`)
+  - 権限エラー (EACCES): 403 Forbidden (`{ "error": "permission_denied" }`)
   - OS コマンド実行失敗: 500 Internal Server Error
 - [ ] macOS では `open` コマンド、Windows では `Invoke-Item -LiteralPath` を使用する
 - [ ] パスにスペース・日本語文字を含むファイルが正しく開ける
@@ -1075,9 +1076,9 @@ IF a file operation (delete, open, read) fails due to OS-level permission denial
 
 **受入基準**:
 - [ ] ファイル削除時に `EBUSY` / `EPERM` / `EACCES` エラーが発生した場合、具体的なエラーメッセージが表示される
-- [ ] エラーメッセージに「ファイルを使用中のアプリケーションを閉じてください」を含む
-- [ ] Windows でのファイルロック状態が正しく検知される
-- [ ] ファイルオープン/削除失敗時にファイルロックが原因なら 423 (Locked) を返し、権限エラーなら 403 を返す
+- [ ] エラーメッセージに「ファイルが使用中または権限不足です。他のアプリケーションを閉じて再試行してください」を含む
+- [ ] Windows でのファイルロック状態が正しく検知される (Windows 上の既存ファイルに対する EPERM は一律 423 Locked として扱う)
+- [ ] ファイルオープン/削除失敗時に EBUSY または Windows EPERM なら 423 (Locked) を返し、EACCES なら 403 を返す
 
 **トレーサビリティ**: DES-FILE-001
 
