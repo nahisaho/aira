@@ -6,6 +6,12 @@ interface MessageItemProps {
   content: string;
 }
 
+const CLI_METADATA_RE = /\n*(?:Changes\s+\+\d+\s+-\d+\s*\n)?(?:Requests\s+.+\n)?(?:Tokens?\s+[↑↓•\d\s.kKmM()cached,]+\s*)$/;
+
+function stripCliMetadata(text: string): string {
+  return text.replace(CLI_METADATA_RE, '').trimEnd();
+}
+
 export function MessageItem({ role, content }: MessageItemProps) {
   const theme = usePreferencesStore((s) => s.theme);
   const light = theme === 'light';
@@ -21,7 +27,8 @@ export function MessageItem({ role, content }: MessageItemProps) {
   }
 
   // Assistant/System: render as markdown
-  const html = renderMarkdown(content);
+  const cleaned = role === 'assistant' ? stripCliMetadata(content) : content;
+  const html = renderMarkdown(cleaned);
 
   return (
     <div className="flex justify-start">
