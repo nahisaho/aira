@@ -1025,7 +1025,7 @@ IF a user attempts to delete or rename a project while a Run is active, THE SYST
 
 ---
 
-#### REQ-ERR-008
+#### REQ-ERR-009
 **種別**: EVENT-DRIVEN  
 **優先度**: P0
 
@@ -1041,6 +1041,10 @@ WHEN the server starts, THE SYSTEM SHALL detect any orphaned Runs (status = runn
 - [ ] リカバリ処理がサーバー起動ログに記録される
 
 **トレーサビリティ**: DES-CHAT-001
+
+---
+
+#### REQ-ERR-006
 **種別**: UNWANTED  
 **優先度**: P1
 
@@ -1357,6 +1361,7 @@ THE SYSTEM SHALL handle cross-platform path edge cases: case-insensitive path co
 | REQ-ERR-006 | P1 | エラー処理 | DES-SKILLS-001 |
 | REQ-ERR-007 | P0 | エラー処理 | DES-FILE-001 |
 | REQ-ERR-008 | P0 | エラー処理 | DES-CHAT-001, DES-SEC-001 |
+| REQ-ERR-009 | P0 | エラー処理 | DES-CHAT-001 |
 | REQ-ERR-009 | P1 | エラー処理 | DES-WORKSPACE-001, DES-PROGRESS-001 |
 | REQ-NFR-001 | P1 | 性能 | DES-CHAT-001, DES-PROJECT-001 |
 | REQ-NFR-002 | P1 | 性能 | DES-SEC-001, DES-CHAT-001 |

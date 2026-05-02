@@ -442,7 +442,7 @@ CREATE TABLE agent_runs (
   project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   message_id  TEXT REFERENCES messages(id),  -- トリガーとなったユーザーメッセージ
   status      TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued', 'running', 'completed', 'failed', 'timeout', 'cancelled')),
-  error_type  TEXT CHECK(error_type IN ('cli_missing', 'auth_failure', 'timeout', 'spawn_failure', 'unknown')),
+  error_type  TEXT CHECK(error_type IN ('cli_missing', 'auth_failure', 'timeout', 'spawn_failure', 'server_crash', 'unknown')),
   cancel_reason TEXT CHECK(cancel_reason IN ('user', 'system')),
   started_at  DATETIME,
   finished_at DATETIME,
@@ -477,7 +477,7 @@ CREATE UNIQUE INDEX idx_agent_runs_one_queued ON agent_runs(project_id) WHERE st
 1. 同一トランザクション内で:
    a. 同一プロジェクトの `queued` Run を昇格 (プロジェクトキュー優先)
    b. グローバル上限に空きがあれば、他プロジェクトの最古 `queued` Run も昇格対象
-2. `UPDATE agent_runs SET status='running', started_at=NOW() WHERE id=?` で昇格
+2. `UPDATE agent_runs SET status='running', started_at=CURRENT_TIMESTAMP WHERE id=?` で昇格
 3. 昇格された Run が存在すれば、即座にプロセス起動 (`AgentService.spawn()`)
 4. WS イベント `{ type: 'status', status: 'running' }` をクライアントに送信
 5. 昇格対象がなければ何もしない (プロジェクトは idle 状態に戻る)
@@ -485,7 +485,7 @@ CREATE UNIQUE INDEX idx_agent_runs_one_queued ON agent_runs(project_id) WHERE st
 **起動時リカバリ (Orphan Run Reconciliation)**:
 サーバー再起動時、前回クラッシュ等で終了処理されなかった Run を検出・回復する:
 1. `SELECT id, project_id FROM agent_runs WHERE status IN ('running', 'queued')` で孤立 Run を取得
-2. 各 Run を `failed` に更新: `UPDATE agent_runs SET status='failed', finished_at=NOW(), error_type='server_crash' WHERE id=?`
+2. 各 Run を `failed` に更新: `UPDATE agent_runs SET status='failed', finished_at=CURRENT_TIMESTAMP, error_type='server_crash' WHERE id=?`
 3. ログに「サーバー再起動により Run {id} を failed に移行」と記録
 4. 全孤立 Run の処理後、キュー昇格ロジックを実行 (正常時と同じフロー)
 5. プロジェクトのミューテーション (rename/delete) ブロックが解除される
