@@ -7,7 +7,7 @@ import type { ServerType } from '@hono/node-server';
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from './app.js';
-import { getDatabase, closeDatabase } from './db/index.js';
+import { initializeDatabase, getDatabase, closeDatabase } from './db/index.js';
 import { runPreflight } from './services/preflight.js';
 import { attachWebSocket } from './services/ws.service.js';
 import { seedBuiltinSkills } from './services/skills.service.js';
@@ -48,8 +48,8 @@ export async function startServer(portOrOpts: number | StartOptions): Promise<St
     throw new Error('Preflight checks failed. Cannot start server.');
   }
 
-  // 2. Database
-  getDatabase();
+  // 2. Database (async init for sql.js WASM)
+  await initializeDatabase();
   console.log('[AIRA] Database initialized');
 
   // 3. Orphan recovery

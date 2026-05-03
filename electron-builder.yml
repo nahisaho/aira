@@ -12,6 +12,9 @@ files:
   - node_modules/**/*
   - "!node_modules/.cache"
 
+asarUnpack:
+  - "node_modules/sql.js/dist/sql-wasm.wasm"
+
 extraResources:
   - from: frontend/dist
     to: frontend
