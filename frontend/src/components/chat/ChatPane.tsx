@@ -33,22 +33,25 @@ export function ChatPane() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || !activeProjectId || sending) return;
-    const content = input;
-    setInput('');
+    if ((!input.trim() && attachments.length === 0) || !activeProjectId || sending) return;
 
     // Upload attachments if any
     if (attachments.length > 0) {
       try {
         await filesApi.upload(activeProjectId, attachments);
         fetchFiles(activeProjectId);
-      } catch {
-        // continue sending message even if upload fails
+      } catch (err) {
+        console.error('Upload failed:', err);
       }
       setAttachments([]);
     }
 
-    await sendMessage(activeProjectId, content);
+    // Send message if there's text
+    if (input.trim()) {
+      const content = input;
+      setInput('');
+      await sendMessage(activeProjectId, content);
+    }
   };
 
   const handleAttach = () => {
@@ -152,7 +155,7 @@ export function ChatPane() {
           </button>
           <button
             onClick={handleSend}
-            disabled={!input.trim() || sending}
+            disabled={(!input.trim() && attachments.length === 0) || sending}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white"
           >
             {sending ? t('chat.sending') : t('chat.send')}
