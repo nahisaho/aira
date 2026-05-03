@@ -5,6 +5,7 @@ import { usePreferencesStore } from '../../stores/preferences';
 import { usePipelineStore } from '../../stores/pipeline';
 import { useT } from '../../useT';
 import { filesApi, runsApi } from '../../api/client';
+import { FileViewerModal } from './FileViewerModal';
 
 export function RightPanel() {
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
@@ -15,8 +16,7 @@ export function RightPanel() {
   const pipelineSteps = usePipelineStore((s) => s.steps);
   const light = theme === 'light';
 
-  const [viewingFile, setViewingFile] = useState<{ path: string; content: string } | null>(null);
-  const [viewLoading, setViewLoading] = useState(false);
+  const [viewingFile, setViewingFile] = useState<{ id: string; path: string } | null>(null);
 
   useEffect(() => {
     if (activeProjectId) {
@@ -25,20 +25,6 @@ export function RightPanel() {
       fetchRunHistory(activeProjectId);
     }
   }, [activeProjectId, fetchFiles, fetchCurrentRun, fetchRunHistory]);
-
-  const handleView = useCallback(async (fileId: string) => {
-    if (!activeProjectId) return;
-    setViewLoading(true);
-    try {
-      const result = await filesApi.view(activeProjectId, fileId);
-      setViewingFile(result);
-    } catch {
-      // If text view fails (binary), trigger download instead
-      window.open(filesApi.downloadUrl(activeProjectId, fileId), '_blank');
-    } finally {
-      setViewLoading(false);
-    }
-  }, [activeProjectId]);
 
   const handleDelete = useCallback(async (fileId: string) => {
     if (!activeProjectId) return;
@@ -174,8 +160,7 @@ export function RightPanel() {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleView(file.id)}
-                    disabled={viewLoading}
+                    onClick={() => setViewingFile({ id: file.id, path: file.file_path })}
                     className={`text-xs px-2 py-0.5 rounded ${
                       light
                         ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
@@ -219,36 +204,13 @@ export function RightPanel() {
       </section>
 
       {/* File Viewer Modal */}
-      {viewingFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setViewingFile(null)}>
-          <div
-            className={`relative w-[90vw] max-w-4xl max-h-[80vh] rounded-lg shadow-2xl flex flex-col ${
-              light ? 'bg-white' : 'bg-gray-900'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className={`flex items-center justify-between px-4 py-3 border-b ${
-              light ? 'border-gray-200' : 'border-gray-700'
-            }`}>
-              <span className={`text-sm font-medium truncate ${light ? 'text-gray-800' : 'text-gray-200'}`}>
-                {viewingFile.path}
-              </span>
-              <button
-                onClick={() => setViewingFile(null)}
-                className={`text-sm px-3 py-1 rounded ${
-                  light ? 'hover:bg-gray-100 text-gray-600' : 'hover:bg-gray-800 text-gray-400'
-                }`}
-              >
-                ✕ {t('files.close')}
-              </button>
-            </div>
-            <pre className={`flex-1 overflow-auto p-4 text-xs font-mono whitespace-pre-wrap ${
-              light ? 'text-gray-800 bg-gray-50' : 'text-gray-200 bg-gray-950'
-            }`}>
-              {viewingFile.content}
-            </pre>
-          </div>
-        </div>
+      {viewingFile && activeProjectId && (
+        <FileViewerModal
+          projectId={activeProjectId}
+          fileId={viewingFile.id}
+          filePath={viewingFile.path}
+          onClose={() => setViewingFile(null)}
+        />
       )}
     </div>
   );
