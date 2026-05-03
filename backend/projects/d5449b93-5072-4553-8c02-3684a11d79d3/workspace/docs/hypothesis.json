@@ -1,0 +1,44 @@
+[
+  {
+    "id": "H1",
+    "title": "High-entropy multi-cation halide with mixed anion",
+    "population": "NaxLi3-xYCl6 halide framework",
+    "intervention": "Replace single Y3+ with five equimolar cations (Y, In, Sc, Zr, Hf) and partially substitute Cl with Br to widen bottleneck channels",
+    "comparison": "N2116 (NaxLi3-xYCl6) baseline with ionic conductivity < 1e-3 S/cm",
+    "outcome": "Predicted ionic conductivity ≥ 5 mS/cm with enhanced phase stability from configurational entropy (ΔS_config ≈ R·ln5 ≈ 13.4 J/mol·K) and improved air stability",
+    "composition": "Li2Na(Y0.2In0.2Sc0.2Zr0.1Hf0.1)Cl5Br",
+    "predicted_conductivity_S_cm": 5.0e-3,
+    "structure_type": "trigonal_hcp (entropy-stabilized)",
+    "mechanism": "Vacancy hopping enhanced by lattice distortion from size-mismatched cations; Br widens migration bottleneck; high entropy suppresses ordering and maintains fast-ion sublattice disorder",
+    "phase_stability_assessment": "High configurational entropy (5 cation species) thermodynamically stabilizes the disordered hcp phase at synthesis temperatures ≥ 500°C. Analogous to Li2.2In0.2Sc0.2Zr0.2Hf0.2Ta0.2Cl6 which achieved single-phase formation. Zr4+ and Hf4+ aliovalent substitution for Y3+ creates charge-compensating Li vacancies that enhance transport.",
+    "rationale": "Three synergistic strategies converge: (1) High-entropy stabilization, proven in Li2.2In0.2Sc0.2Zr0.2Hf0.2Ta0.2Cl6 at 4.69 mS/cm; (2) Br substitution, demonstrated to enhance conductivity in Li3YCl6-xBrx by enlarging the anion framework; (3) Li/Na mixed cation from N2116 maintains 70% Li reduction. The combination targets the unexplored intersection of entropy-stabilized phases and dual-cation conduction identified in gap analysis."
+  },
+  {
+    "id": "H2",
+    "title": "Sulfide-halide hybrid argyrodite bridge",
+    "population": "NaxLi3-xYCl6 halide framework",
+    "intervention": "Engineer Li6PS5Cl argyrodite with increased halide content (S→Cl partial substitution) to create a sulfide-halide structural bridge combining sulfide ion transport with halide interface stability",
+    "comparison": "N2116 (NaxLi3-xYCl6) baseline with ionic conductivity < 1e-3 S/cm",
+    "outcome": "Predicted ionic conductivity ≥ 8 mS/cm with improved cathode interface compatibility compared to pure sulfides and higher conductivity than pure halides",
+    "composition": "Li5.5PS4.5Cl1.5",
+    "predicted_conductivity_S_cm": 8.0e-3,
+    "structure_type": "argyrodite (Cl-enriched)",
+    "mechanism": "Concerted Li-ion migration through interconnected tetrahedral sites in argyrodite framework; increased Cl occupancy on 4a/4c sites creates additional vacancy disorder; S/Cl site mixing lowers activation energy for inter-cage hopping",
+    "phase_stability_assessment": "Li6PS5Cl argyrodite is a well-established phase; moderate Cl enrichment (Li5.5PS4.5Cl1.5) maintains the cubic F-43m framework. DFT studies predict stable compositions within the Li6-xPS5-xCl1+x range for x ≤ 0.5. Higher Cl content improves air stability relative to sulfide-dominant compositions.",
+    "rationale": "Li6PS5Cl already achieves 2-4 mS/cm; systematic Cl enrichment has been shown to modify vacancy concentration and lower activation energy. Sulfide-halide composites (Li6PS5Cl + Li3InCl6) achieve 5 mS/cm synergistically, suggesting single-phase S/Cl mixing could surpass this. The approach bridges the sulfide-halide gap identified in knowledge graph analysis."
+  },
+  {
+    "id": "H3",
+    "title": "F-doped Na-Li dual-cation vacancy-enhanced N2116 derivative",
+    "population": "NaxLi3-xYCl6 halide framework",
+    "intervention": "Aliovalent Zr4+ substitution for Y3+ to generate charge-compensating cation vacancies, combined with F- partial substitution for Cl- to enhance cathode-electrolyte interface stability",
+    "comparison": "N2116 (NaxLi3-xYCl6) baseline with ionic conductivity < 1e-3 S/cm",
+    "outcome": "Predicted ionic conductivity ≥ 2 mS/cm with significantly improved interface stability against high-voltage cathodes (> 4V) and maintained 70% Li usage reduction",
+    "composition": "Na0.5Li2.5Y0.8Zr0.2Cl5.8F0.2",
+    "predicted_conductivity_S_cm": 2.0e-3,
+    "structure_type": "trigonal (P3m1, N2116-derivative)",
+    "mechanism": "Zr4+ → Y3+ aliovalent substitution creates 0.2 mol Li/Na vacancies per formula unit, directly enhancing vacancy hopping conductivity. F- on Cl- sites locally contracts the lattice near F, creating anisotropic strain that diversifies hopping energy landscapes and reduces correlated back-hopping.",
+    "phase_stability_assessment": "N2116 trigonal phase accommodates Na/Li mixing; Zr4+ (r = 0.72 Å) is slightly smaller than Y3+ (r = 0.90 Å) but within tolerance for partial substitution (≤ 20%). F- (r = 1.33 Å) is smaller than Cl- (r = 1.81 Å), so low-level substitution (≤ 3.4 mol%) should be accommodated without phase transition. XRD monitoring of phase purity is recommended above x(Zr) = 0.3.",
+    "rationale": "This is the most conservative hypothesis, directly modifying N2116 with two proven strategies: (1) Aliovalent doping (Zr4+ for Y3+) shown effective in Na1-xZrxLa1-xCl4 and garnet-type LLZO; (2) F-doping proven to dramatically enhance conductivity in Li3InCl6 (to 0.15 S/cm) while improving interface stability. The composition maintains N2116's key advantage of low Li usage while targeting the practical 1 mS/cm threshold."
+  }
+]

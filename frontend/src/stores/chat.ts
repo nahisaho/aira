@@ -98,6 +98,16 @@ wsClient.onEvent((event) => {
       if (event.runId) {
         if (event.status === 'running') {
           store.setRunStatus('running');
+          // Refresh run history to show running state
+          import('./files').then(({ useFilesStore }) => {
+            import('./project').then(({ useProjectStore }) => {
+              const projectId = useProjectStore.getState().activeProjectId;
+              if (projectId) {
+                useFilesStore.getState().fetchCurrentRun(projectId);
+                useFilesStore.getState().fetchRunHistory(projectId);
+              }
+            });
+          });
         } else if (event.status === 'completed' || event.status === 'failed') {
           store.setRunStatus('idle');
           // Trigger files & runs refresh
