@@ -1,4 +1,5 @@
 import { renderMarkdown } from './markdown';
+import { MarkdownContent } from './MarkdownContent';
 import { usePreferencesStore } from '../../stores/preferences';
 
 interface MessageItemProps {
@@ -48,9 +49,10 @@ export function MessageItem({ role, content }: MessageItemProps) {
           ? 'bg-gray-100 text-gray-900'
           : 'bg-gray-800 text-gray-200'
       }`}>
-        <div
+        <MarkdownContent
+          html={html}
           className={`prose prose-sm max-w-none ${light ? '' : 'prose-invert'}`}
-          dangerouslySetInnerHTML={{ __html: html }}
+          dark={!light}
         />
       </div>
     </div>

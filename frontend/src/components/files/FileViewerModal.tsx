@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { filesApi } from '../../api/client';
 import { renderMarkdown } from '../chat/markdown';
+import { MarkdownContent } from '../chat/MarkdownContent';
 import { usePreferencesStore } from '../../stores/preferences';
 
 interface FileViewerModalProps {
@@ -84,9 +85,10 @@ export function FileViewerModal({ projectId, fileId, filePath, onClose }: FileVi
           )}
 
           {content !== null && !isImage && isMarkdown && (
-            <div
+            <MarkdownContent
+              html={renderMarkdown(content)}
               className={`prose prose-sm max-w-none ${light ? '' : 'prose-invert'}`}
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
+              dark={!light}
             />
           )}
 
