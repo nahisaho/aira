@@ -3,6 +3,7 @@ import { filesApi } from '../../api/client';
 import { renderMarkdown } from '../chat/markdown';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { usePreferencesStore } from '../../stores/preferences';
+import * as XLSX from 'xlsx';
 
 interface FileViewerModalProps {
   projectId: string;
@@ -13,6 +14,8 @@ interface FileViewerModalProps {
 
 export function FileViewerModal({ projectId, fileId, filePath, onClose }: FileViewerModalProps) {
   const [content, setContent] = useState<string | null>(null);
+  const [sheets, setSheets] = useState<{ name: string; html: string }[]>([]);
+  const [activeSheet, setActiveSheet] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const light = usePreferencesStore((s) => s.theme) === 'light';
@@ -20,12 +23,34 @@ export function FileViewerModal({ projectId, fileId, filePath, onClose }: FileVi
   const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
   const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'bmp', 'svg'].includes(ext);
   const isMarkdown = ['md', 'markdown'].includes(ext);
+  const isExcel = ['xlsx', 'xls', 'xlsm', 'xlsb', 'csv'].includes(ext);
 
   useEffect(() => {
     if (isImage) {
       setLoading(false);
       return;
     }
+
+    if (isExcel) {
+      setLoading(true);
+      fetch(filesApi.downloadUrl(projectId, fileId))
+        .then((res) => res.arrayBuffer())
+        .then((buf) => {
+          const wb = XLSX.read(buf, { type: 'array' });
+          const parsed = wb.SheetNames.map((name) => ({
+            name,
+            html: XLSX.utils.sheet_to_html(wb.Sheets[name], { editable: false }),
+          }));
+          setSheets(parsed);
+          setLoading(false);
+        })
+        .catch((err) => {
+          setError((err as Error).message);
+          setLoading(false);
+        });
+      return;
+    }
+
     setLoading(true);
     filesApi
       .view(projectId, fileId)
@@ -37,7 +62,7 @@ export function FileViewerModal({ projectId, fileId, filePath, onClose }: FileVi
         setError((err as Error).message);
         setLoading(false);
       });
-  }, [projectId, fileId, isImage]);
+  }, [projectId, fileId, isImage, isExcel]);
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
@@ -80,6 +105,34 @@ export function FileViewerModal({ projectId, fileId, filePath, onClose }: FileVi
                 src={filesApi.downloadUrl(projectId, fileId)}
                 alt={filePath}
                 className="max-w-full max-h-[60vh] object-contain"
+              />
+            </div>
+          )}
+
+          {isExcel && sheets.length > 0 && (
+            <div>
+              {sheets.length > 1 && (
+                <div className={`flex gap-1 mb-3 border-b pb-2 ${light ? 'border-gray-200' : 'border-gray-700'}`}>
+                  {sheets.map((sheet, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActiveSheet(i)}
+                      className={`text-xs px-3 py-1 rounded ${
+                        i === activeSheet
+                          ? 'bg-blue-600 text-white'
+                          : light
+                            ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      {sheet.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div
+                className={`overflow-auto excel-table ${light ? 'excel-light' : 'excel-dark'}`}
+                dangerouslySetInnerHTML={{ __html: sheets[activeSheet].html }}
               />
             </div>
           )}

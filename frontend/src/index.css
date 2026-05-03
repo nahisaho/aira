@@ -40,3 +40,25 @@
   color: #1e293b !important;
 }
 
+/* Excel table styles */
+.excel-table table {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+}
+.excel-table th,
+.excel-table td {
+  border: 1px solid;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.excel-light table { color: #1e293b; }
+.excel-light th { background: #f1f5f9; border-color: #cbd5e1; font-weight: 600; }
+.excel-light td { border-color: #e2e8f0; }
+.excel-light tr:hover td { background: #f8fafc; }
+
+.excel-dark table { color: #e2e8f0; }
+.excel-dark th { background: #1e293b; border-color: #475569; font-weight: 600; }
+.excel-dark td { border-color: #334155; }
+.excel-dark tr:hover td { background: #1e293b; }
+
