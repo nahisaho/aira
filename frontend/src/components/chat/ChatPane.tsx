@@ -3,8 +3,10 @@ import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/project';
 import { useWSStore } from '../../stores/ws';
 import { usePreferencesStore, LLM_MODELS } from '../../stores/preferences';
+import { useFilesStore } from '../../stores/files';
 import { useT } from '../../useT';
 import { MessageItem } from './MessageItem';
+import { filesApi } from '../../api/client';
 
 export function ChatPane() {
   const { messages, loading, sending, fetchMessages, sendMessage } = useChatStore();
@@ -15,7 +17,10 @@ export function ChatPane() {
   const setModel = usePreferencesStore((s) => s.setModel);
   const t = useT();
   const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fetchFiles = useFilesStore((s) => s.fetchFiles);
 
   useEffect(() => {
     if (activeProjectId) {
@@ -31,7 +36,35 @@ export function ChatPane() {
     if (!input.trim() || !activeProjectId || sending) return;
     const content = input;
     setInput('');
+
+    // Upload attachments if any
+    if (attachments.length > 0) {
+      try {
+        await filesApi.upload(activeProjectId, attachments);
+        fetchFiles(activeProjectId);
+      } catch {
+        // continue sending message even if upload fails
+      }
+      setAttachments([]);
+    }
+
     await sendMessage(activeProjectId, content);
+  };
+
+  const handleAttach = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      setAttachments((prev) => [...prev, ...Array.from(files)]);
+    }
+    e.target.value = '';
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -106,6 +139,18 @@ export function ChatPane() {
             disabled={sending}
           />
           <button
+            onClick={handleAttach}
+            disabled={sending}
+            className={`px-3 py-2 rounded-lg text-sm ${
+              light
+                ? 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+            } disabled:opacity-50`}
+            title={t('chat.attach')}
+          >
+            📎
+          </button>
+          <button
             onClick={handleSend}
             disabled={!input.trim() || sending}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white"
@@ -113,6 +158,34 @@ export function ChatPane() {
             {sending ? t('chat.sending') : t('chat.send')}
           </button>
         </div>
+        {/* Attachment preview */}
+        {attachments.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {attachments.map((file, i) => (
+              <div
+                key={i}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                  light ? 'bg-gray-200 text-gray-700' : 'bg-gray-700 text-gray-300'
+                }`}
+              >
+                <span className="truncate max-w-[150px]">📎 {file.name}</span>
+                <button
+                  onClick={() => removeAttachment(i)}
+                  className="text-red-400 hover:text-red-300 ml-1"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          onChange={handleFileChange}
+          className="hidden"
+        />
       </div>
     </div>
   );

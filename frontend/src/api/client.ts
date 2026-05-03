@@ -174,6 +174,22 @@ export const filesApi = {
     request<void>(`/projects/${projectId}/files/${fileId}`, { method: 'DELETE' }),
   downloadUrl: (projectId: string, fileId: string) =>
     `${API_BASE}/projects/${projectId}/files/${fileId}/download`,
+  downloadAllUrl: (projectId: string) =>
+    `${API_BASE}/projects/${projectId}/files/download-all`,
+  upload: async (projectId: string, files: File[]): Promise<{ uploaded: string[]; count: number }> => {
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append('files', file);
+    }
+    const token = await getCsrfToken();
+    const res = await fetch(`${API_BASE}/projects/${projectId}/files/upload`, {
+      method: 'POST',
+      headers: { 'X-AIRA-Token': token },
+      body: formData,
+    });
+    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+    return res.json();
+  },
 };
 
 // ─── Settings ───

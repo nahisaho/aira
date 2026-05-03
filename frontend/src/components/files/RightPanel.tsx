@@ -142,9 +142,24 @@ export function RightPanel() {
 
       {/* Files */}
       <section>
-        <h3 className={`text-xs font-semibold uppercase mb-2 ${light ? 'text-gray-500' : 'text-gray-400'}`}>
-          {t('files.title')} ({files.length})
-        </h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className={`text-xs font-semibold uppercase ${light ? 'text-gray-500' : 'text-gray-400'}`}>
+            {t('files.title')} ({files.length})
+          </h3>
+          {files.length > 0 && (
+            <a
+              href={filesApi.downloadAllUrl(activeProjectId)}
+              download
+              className={`text-xs px-2 py-0.5 rounded ${
+                light
+                  ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                  : 'bg-purple-900/40 text-purple-400 hover:bg-purple-900/60'
+              }`}
+            >
+              📦 {t('files.downloadAll')}
+            </a>
+          )}
+        </div>
         <div className="space-y-1">
           {files.map((file) => {
             const ext = file.file_path.split('.').pop()?.toLowerCase() ?? '';

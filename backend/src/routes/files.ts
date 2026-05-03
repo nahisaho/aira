@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import archiver from 'archiver';
 import { getDatabase } from '../db/index.js';
 import {
   resolveFilePath,
@@ -183,6 +184,68 @@ fileRoutes.delete('/api/projects/:id/files/:fileId', (c) => {
 
     return c.json({ error: 'Internal server error' }, 500);
   }
+});
+
+// POST /api/projects/:id/files/upload — upload files to workspace
+fileRoutes.post('/api/projects/:id/files/upload', async (c) => {
+  const projectId = c.req.param('id');
+  const workspaceDir = getWorkspaceDir(projectId);
+
+  // Ensure workspace exists
+  fs.mkdirSync(workspaceDir, { recursive: true });
+
+  const body = await c.req.parseBody({ all: true });
+  const rawFiles = body['files'];
+
+  if (!rawFiles) {
+    return c.json({ error: 'No files provided' }, 400);
+  }
+
+  const fileList = Array.isArray(rawFiles) ? rawFiles : [rawFiles];
+  const uploaded: string[] = [];
+
+  for (const file of fileList) {
+    if (!(file instanceof File)) continue;
+    const filename = file.name.replace(/[^a-zA-Z0-9._\-]/g, '_');
+    const dest = path.join(workspaceDir, filename);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    fs.writeFileSync(dest, buffer);
+    uploaded.push(filename);
+  }
+
+  // Reconcile DB
+  const db = getDatabase();
+  reconcileProjectFiles(projectId, db);
+
+  return c.json({ uploaded, count: uploaded.length });
+});
+
+// GET /api/projects/:id/files/download-all — download all files as zip
+fileRoutes.get('/api/projects/:id/files/download-all', (c) => {
+  const projectId = c.req.param('id');
+  const workspaceDir = getWorkspaceDir(projectId);
+
+  if (!fs.existsSync(workspaceDir)) {
+    return c.json({ error: 'Workspace not found' }, 404);
+  }
+
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.directory(workspaceDir, false);
+  archive.finalize();
+
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+
+  archive.on('data', (chunk: Buffer) => writer.write(chunk));
+  archive.on('end', () => writer.close());
+  archive.on('error', () => writer.close());
+
+  return new Response(readable, {
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="project-files.zip"`,
+    },
+  });
 });
 
 // POST /api/projects/:id/files/reconcile — manual scan trigger

@@ -16,6 +16,7 @@ const translations = {
     'chat.placeholder': 'メッセージを入力...',
     'chat.send': '送信',
     'chat.sending': '...',
+    'chat.attach': '添付ファイル',
     'chat.reconnecting': '⟳ 再接続中...',
     'chat.disconnected': '⊘ 切断',
 
@@ -53,6 +54,7 @@ const translations = {
     'files.delete': '削除',
     'files.deleteConfirm': 'このファイルを削除しますか？',
     'files.close': '閉じる',
+    'files.downloadAll': '一括DL',
 
     // Right panel
     'panel.status': 'ステータス',
@@ -99,6 +101,7 @@ const translations = {
     'chat.placeholder': 'Type a message...',
     'chat.send': 'Send',
     'chat.sending': '...',
+    'chat.attach': 'Attach files',
     'chat.reconnecting': '⟳ Reconnecting...',
     'chat.disconnected': '⊘ Disconnected',
 
@@ -136,6 +139,7 @@ const translations = {
     'files.delete': 'Delete',
     'files.deleteConfirm': 'Delete this file?',
     'files.close': 'Close',
+    'files.downloadAll': 'Download All',
 
     // Right panel
     'panel.status': 'Status',
