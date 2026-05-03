@@ -79,10 +79,11 @@ fileRoutes.get('/api/projects/:id/files/:fileId/download', (c) => {
     const content = fs.readFileSync(resolved);
     const filename = path.basename(file.file_path);
 
+    const asciiName = filename.replace(/[^\x20-\x7E]/g, '_');
     return new Response(content, {
       headers: {
         'Content-Type': 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
       },
     });
   } catch (err) {
