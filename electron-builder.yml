@@ -22,24 +22,20 @@ mac:
   target:
     - target: dmg
       arch: [x64, arm64]
-  icon: aira-icons/icon.icns
 
 win:
   target:
     - target: nsis
       arch: [x64]
-  icon: aira-icons/icon.ico
 
 linux:
   target:
     - target: AppImage
       arch: [x64]
-  icon: aira-icons
   category: Development
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  installerIcon: aira-icons/icon.ico
 
 npmRebuild: true
