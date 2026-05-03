@@ -195,7 +195,7 @@ export class McpService {
 
   toggle(id: string, enabled: boolean): void {
     const db = getDatabase();
-    db.prepare('UPDATE project_mcp_configs SET enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
+    db.prepare('UPDATE project_mcp_configs SET enabled = ? WHERE id = ?').run(
       enabled ? 1 : 0,
       id,
     );
