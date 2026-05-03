@@ -3,10 +3,8 @@ import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/project';
 import { useWSStore } from '../../stores/ws';
 import { usePreferencesStore, LLM_MODELS } from '../../stores/preferences';
-import { useFilesStore } from '../../stores/files';
 import { useT } from '../../useT';
 import { MessageItem } from './MessageItem';
-import { filesApi } from '../../api/client';
 
 export function ChatPane() {
   const { messages, loading, sending, fetchMessages, sendMessage } = useChatStore();
@@ -17,10 +15,7 @@ export function ChatPane() {
   const setModel = usePreferencesStore((s) => s.setModel);
   const t = useT();
   const [input, setInput] = useState('');
-  const [attachments, setAttachments] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const fetchFiles = useFilesStore((s) => s.fetchFiles);
 
   useEffect(() => {
     if (activeProjectId) {
@@ -33,41 +28,11 @@ export function ChatPane() {
   }, [messages]);
 
   const handleSend = async () => {
-    if ((!input.trim() && attachments.length === 0) || !activeProjectId || sending) return;
+    if (!input.trim() || !activeProjectId || sending) return;
 
-    // Upload attachments if any
-    if (attachments.length > 0) {
-      try {
-        await filesApi.upload(activeProjectId, attachments);
-        fetchFiles(activeProjectId);
-      } catch (err) {
-        console.error('Upload failed:', err);
-      }
-      setAttachments([]);
-    }
-
-    // Send message if there's text
-    if (input.trim()) {
-      const content = input;
-      setInput('');
-      await sendMessage(activeProjectId, content);
-    }
-  };
-
-  const handleAttach = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      setAttachments((prev) => [...prev, ...Array.from(files)]);
-    }
-    e.target.value = '';
-  };
-
-  const removeAttachment = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
+    const content = input;
+    setInput('');
+    await sendMessage(activeProjectId, content);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -127,45 +92,12 @@ export function ChatPane() {
             ))}
           </select>
         </div>
-        {/* Attachment preview — above input */}
-        {attachments.length > 0 && (
-          <div className={`mb-2 rounded-lg border p-2 ${
-            light ? 'border-blue-300 bg-blue-50' : 'border-blue-700 bg-blue-950/30'
-          }`}>
-            <div className={`text-xs font-medium mb-1.5 ${light ? 'text-blue-700' : 'text-blue-400'}`}>
-              📎 {t('chat.attachedFiles')} ({attachments.length})
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {attachments.map((file, i) => (
-                <div
-                  key={i}
-                  className={`flex items-center gap-1.5 pl-2 pr-1 py-1 rounded text-xs ${
-                    light ? 'bg-white border border-blue-200 text-gray-700' : 'bg-gray-800 border border-blue-800 text-gray-300'
-                  }`}
-                >
-                  <span className="truncate max-w-[180px]">{file.name}</span>
-                  <span className={`text-[10px] ${light ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {formatFileSize(file.size)}
-                  </span>
-                  <button
-                    onClick={() => removeAttachment(i)}
-                    className="text-red-400 hover:text-red-300 ml-0.5 px-0.5"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
         <div className="flex gap-2">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={attachments.length > 0
-              ? t('chat.placeholderWithFiles')
-              : t('chat.placeholder')}
+            placeholder={t('chat.placeholder')}
             className={`flex-1 rounded-lg px-4 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${
               light
                 ? 'bg-white text-gray-900 border border-gray-300'
@@ -175,34 +107,13 @@ export function ChatPane() {
             disabled={sending}
           />
           <button
-            onClick={handleAttach}
-            disabled={sending}
-            className={`px-3 py-2 rounded-lg text-sm ${
-              attachments.length > 0
-                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                : light
-                  ? 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                  : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-            } disabled:opacity-50`}
-            title={t('chat.attach')}
-          >
-            📎{attachments.length > 0 ? ` ${attachments.length}` : ''}
-          </button>
-          <button
             onClick={handleSend}
-            disabled={(!input.trim() && attachments.length === 0) || sending}
+            disabled={!input.trim() || sending}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white"
           >
             {sending ? t('chat.sending') : t('chat.send')}
           </button>
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          onChange={handleFileChange}
-          className="hidden"
-        />
       </div>
     </div>
   );
@@ -222,8 +133,4 @@ function ThinkingIndicator({ light }: { light: boolean }) {
   );
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-}
+

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFilesStore } from '../../stores/files';
 import { useProjectStore } from '../../stores/project';
 import { usePreferencesStore } from '../../stores/preferences';
@@ -18,6 +18,19 @@ export function RightPanel() {
   const light = theme === 'light';
 
   const [viewingFile, setViewingFile] = useState<{ id: string; path: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !activeProjectId) return;
+    try {
+      await filesApi.upload(activeProjectId, Array.from(files));
+      fetchFiles(activeProjectId);
+    } catch (err) {
+      console.error('Upload failed:', err);
+    }
+    e.target.value = '';
+  };
 
   useEffect(() => {
     if (activeProjectId) {
@@ -187,9 +200,21 @@ export function RightPanel() {
           const inputFiles = files.filter(f => f.source === 'upload');
           return (
             <>
-              <h3 className={`text-xs font-semibold uppercase mb-2 ${light ? 'text-gray-500' : 'text-gray-400'}`}>
-                {t('files.inputTitle')} ({inputFiles.length})
-              </h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className={`text-xs font-semibold uppercase ${light ? 'text-gray-500' : 'text-gray-400'}`}>
+                  {t('files.inputTitle')} ({inputFiles.length})
+                </h3>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`text-xs px-2 py-0.5 rounded font-bold ${
+                    light
+                      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                      : 'bg-blue-900/40 text-blue-400 hover:bg-blue-900/60'
+                  }`}
+                >
+                  + {t('files.add')}
+                </button>
+              </div>
               <div className="space-y-1">
                 {inputFiles.map((file) => (
                   <FileEntry key={file.id} file={file} light={light} projectId={activeProjectId} t={t}
@@ -201,6 +226,13 @@ export function RightPanel() {
                   <p className={`text-xs ${light ? 'text-gray-400' : 'text-gray-500'}`}>{t('files.noInputFiles')}</p>
                 )}
               </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={handleUpload}
+                className="hidden"
+              />
             </>
           );
         })()}

@@ -59,6 +59,7 @@ const translations = {
     'files.downloadAll': '一括DL',
     'files.inputTitle': '入力ファイル',
     'files.noInputFiles': '入力ファイルなし',
+    'files.add': '追加',
 
     // Right panel
     'panel.status': 'ステータス',
@@ -148,6 +149,7 @@ const translations = {
     'files.downloadAll': 'Download All',
     'files.inputTitle': 'Input Files',
     'files.noInputFiles': 'No input files',
+    'files.add': 'Add',
 
     // Right panel
     'panel.status': 'Status',
