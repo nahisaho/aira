@@ -159,6 +159,7 @@ export interface FileInfo {
   file_path: string;
   size_bytes: number;
   content_hash: string;
+  source: 'agent' | 'upload';
   created_at: string;
   updated_at: string;
 }

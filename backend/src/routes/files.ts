@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import archiver from 'archiver';
 import { getDatabase } from '../db/index.js';
@@ -203,6 +204,17 @@ fileRoutes.post('/api/projects/:id/files/upload', async (c) => {
 
   const fileList = Array.isArray(rawFiles) ? rawFiles : [rawFiles];
   const uploaded: string[] = [];
+  const db = getDatabase();
+
+  const upsertStmt = db.prepare(`
+    INSERT INTO project_files (id, project_id, filename, file_path, size_bytes, mtime_ms, source)
+    VALUES (?, ?, ?, ?, ?, ?, 'upload')
+    ON CONFLICT(project_id, file_path) DO UPDATE SET
+      size_bytes = excluded.size_bytes,
+      mtime_ms = excluded.mtime_ms,
+      source = 'upload',
+      updated_at = CURRENT_TIMESTAMP
+  `);
 
   for (const file of fileList) {
     if (!(file instanceof File)) continue;
@@ -211,11 +223,11 @@ fileRoutes.post('/api/projects/:id/files/upload', async (c) => {
     const buffer = Buffer.from(await file.arrayBuffer());
     fs.writeFileSync(dest, buffer);
     uploaded.push(filename);
-  }
 
-  // Reconcile DB
-  const db = getDatabase();
-  reconcileProjectFiles(projectId, db);
+    const stat = fs.statSync(dest);
+    const id = crypto.randomUUID();
+    upsertStmt.run(id, projectId, filename, filename, stat.size, Math.round(stat.mtimeMs));
+  }
 
   return c.json({ uploaded, count: uploaded.length });
 });

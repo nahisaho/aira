@@ -4,6 +4,7 @@ import { useProjectStore } from '../../stores/project';
 import { usePreferencesStore } from '../../stores/preferences';
 import { usePipelineStore } from '../../stores/pipeline';
 import { useT } from '../../useT';
+import { type TranslationKey } from '../../i18n';
 import { filesApi, runsApi } from '../../api/client';
 import { FileViewerModal } from './FileViewerModal';
 
@@ -140,82 +141,69 @@ export function RightPanel() {
         </div>
       </section>
 
-      {/* Files */}
-      <section>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className={`text-xs font-semibold uppercase ${light ? 'text-gray-500' : 'text-gray-400'}`}>
-            {t('files.title')} ({files.length})
-          </h3>
-          {files.length > 0 && (
-            <a
-              href={filesApi.downloadAllUrl(activeProjectId)}
-              download
-              className={`text-xs px-2 py-0.5 rounded ${
-                light
-                  ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                  : 'bg-purple-900/40 text-purple-400 hover:bg-purple-900/60'
-              }`}
-            >
-              📦 {t('files.downloadAll')}
-            </a>
-          )}
-        </div>
-        <div className="space-y-1">
-          {files.map((file) => {
-            const ext = file.file_path.split('.').pop()?.toLowerCase() ?? '';
-            const icon = fileIcon(ext);
-            return (
-              <div
-                key={file.id}
-                className={`rounded px-3 py-2 text-sm ${light ? 'bg-gray-100' : 'bg-gray-800'}`}
-              >
-                <div className={`truncate mb-1 ${light ? 'text-gray-700' : 'text-gray-300'}`}>
-                  <span className="mr-1.5">{icon}</span>
-                  {file.file_path}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setViewingFile({ id: file.id, path: file.file_path })}
-                    className={`text-xs px-2 py-0.5 rounded ${
-                      light
-                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                        : 'bg-blue-900/40 text-blue-400 hover:bg-blue-900/60'
-                    }`}
-                    title={t('files.view')}
-                  >
-                    👁 {t('files.view')}
-                  </button>
+      {/* Output Files (agent-generated) */}
+      <section className="mb-4">
+        {(() => {
+          const outputFiles = files.filter(f => f.source !== 'upload');
+          return (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className={`text-xs font-semibold uppercase ${light ? 'text-gray-500' : 'text-gray-400'}`}>
+                  {t('files.title')} ({outputFiles.length})
+                </h3>
+                {outputFiles.length > 0 && (
                   <a
-                    href={filesApi.downloadUrl(activeProjectId, file.id)}
-                    className={`text-xs px-2 py-0.5 rounded inline-block ${
-                      light
-                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                        : 'bg-green-900/40 text-green-400 hover:bg-green-900/60'
-                    }`}
+                    href={filesApi.downloadAllUrl(activeProjectId)}
                     download
-                    title={t('files.download')}
-                  >
-                    ⬇ {t('files.download')}
-                  </a>
-                  <button
-                    onClick={() => handleDelete(file.id)}
                     className={`text-xs px-2 py-0.5 rounded ${
                       light
-                        ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                        : 'bg-red-900/40 text-red-400 hover:bg-red-900/60'
+                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                        : 'bg-purple-900/40 text-purple-400 hover:bg-purple-900/60'
                     }`}
-                    title={t('files.delete')}
                   >
-                    🗑 {t('files.delete')}
-                  </button>
-                </div>
+                    📦 {t('files.downloadAll')}
+                  </a>
+                )}
               </div>
-            );
-          })}
-          {files.length === 0 && (
-            <p className={`text-xs ${light ? 'text-gray-400' : 'text-gray-500'}`}>{t('files.noFiles')}</p>
-          )}
-        </div>
+              <div className="space-y-1">
+                {outputFiles.map((file) => (
+                  <FileEntry key={file.id} file={file} light={light} projectId={activeProjectId} t={t}
+                    onView={() => setViewingFile({ id: file.id, path: file.file_path })}
+                    onDelete={() => handleDelete(file.id)}
+                  />
+                ))}
+                {outputFiles.length === 0 && (
+                  <p className={`text-xs ${light ? 'text-gray-400' : 'text-gray-500'}`}>{t('files.noFiles')}</p>
+                )}
+              </div>
+            </>
+          );
+        })()}
+      </section>
+
+      {/* Input Files (user-uploaded) */}
+      <section>
+        {(() => {
+          const inputFiles = files.filter(f => f.source === 'upload');
+          return (
+            <>
+              <h3 className={`text-xs font-semibold uppercase mb-2 ${light ? 'text-gray-500' : 'text-gray-400'}`}>
+                {t('files.inputTitle')} ({inputFiles.length})
+              </h3>
+              <div className="space-y-1">
+                {inputFiles.map((file) => (
+                  <FileEntry key={file.id} file={file} light={light} projectId={activeProjectId} t={t}
+                    onView={() => setViewingFile({ id: file.id, path: file.file_path })}
+                    onDelete={() => handleDelete(file.id)}
+                  />
+                ))}
+                {inputFiles.length === 0 && (
+                  <p className={`text-xs ${light ? 'text-gray-400' : 'text-gray-500'}`}>{t('files.noInputFiles')}</p>
+                )}
+              </div>
+            </>
+          );
+        })()}
       </section>
 
       {/* File Viewer Modal */}
@@ -227,6 +215,53 @@ export function RightPanel() {
           onClose={() => setViewingFile(null)}
         />
       )}
+    </div>
+  );
+}
+
+function FileEntry({ file, light, projectId, t, onView, onDelete }: {
+  file: { id: string; file_path: string };
+  light: boolean;
+  projectId: string;
+  t: (key: TranslationKey) => string;
+  onView: () => void;
+  onDelete: () => void;
+}) {
+  const ext = file.file_path.split('.').pop()?.toLowerCase() ?? '';
+  const icon = fileIcon(ext);
+  return (
+    <div className={`rounded px-3 py-2 text-sm ${light ? 'bg-gray-100' : 'bg-gray-800'}`}>
+      <div className={`truncate mb-1 ${light ? 'text-gray-700' : 'text-gray-300'}`}>
+        <span className="mr-1.5">{icon}</span>
+        {file.file_path}
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={onView}
+          className={`text-xs px-2 py-0.5 rounded ${
+            light ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-blue-900/40 text-blue-400 hover:bg-blue-900/60'
+          }`}
+        >
+          👁 {t('files.view')}
+        </button>
+        <a
+          href={filesApi.downloadUrl(projectId, file.id)}
+          className={`text-xs px-2 py-0.5 rounded inline-block ${
+            light ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-green-900/40 text-green-400 hover:bg-green-900/60'
+          }`}
+          download
+        >
+          ⬇ {t('files.download')}
+        </a>
+        <button
+          onClick={onDelete}
+          className={`text-xs px-2 py-0.5 rounded ${
+            light ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-red-900/40 text-red-400 hover:bg-red-900/60'
+          }`}
+        >
+          🗑 {t('files.delete')}
+        </button>
+      </div>
     </div>
   );
 }

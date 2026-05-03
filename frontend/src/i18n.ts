@@ -55,6 +55,8 @@ const translations = {
     'files.deleteConfirm': 'このファイルを削除しますか？',
     'files.close': '閉じる',
     'files.downloadAll': '一括DL',
+    'files.inputTitle': '入力ファイル',
+    'files.noInputFiles': '入力ファイルなし',
 
     // Right panel
     'panel.status': 'ステータス',
@@ -140,6 +142,8 @@ const translations = {
     'files.deleteConfirm': 'Delete this file?',
     'files.close': 'Close',
     'files.downloadAll': 'Download All',
+    'files.inputTitle': 'Input Files',
+    'files.noInputFiles': 'No input files',
 
     // Right panel
     'panel.status': 'Status',

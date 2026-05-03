@@ -101,11 +101,18 @@ function createSchema(db: Database.Database): void {
       size_bytes   INTEGER,
       mtime_ms     INTEGER,
       content_hash TEXT,
+      source       TEXT NOT NULL DEFAULT 'agent',
       created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(project_id, file_path)
     );
   `);
+
+  // Migration: add source column if missing
+  const cols = db.prepare("PRAGMA table_info(project_files)").all() as Array<{ name: string }>;
+  if (!cols.some(c => c.name === 'source')) {
+    db.exec("ALTER TABLE project_files ADD COLUMN source TEXT NOT NULL DEFAULT 'agent'");
+  }
 
   // Add foreign key for messages.run_id -> agent_runs.id after both tables exist
   // (SQLite doesn't support ALTER TABLE ADD CONSTRAINT, but FK is declared in CREATE TABLE above)
