@@ -1,7 +1,7 @@
 # AIRA プロジェクト概要
 
 ## プロジェクト名
-**AIRA** — AI Runway Application (WASM-based)
+**AIRA** — AI Research Administrator (WASM-based)
 
 ## ビジョン
 CoreClaw ライクな WASM ベースのチャットボットアプリケーション。  

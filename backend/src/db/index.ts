@@ -114,6 +114,12 @@ function createSchema(db: Database.Database): void {
     db.exec("ALTER TABLE project_files ADD COLUMN source TEXT NOT NULL DEFAULT 'agent'");
   }
 
+  // Migration: add prompt column to agent_runs if missing
+  const runCols = db.prepare("PRAGMA table_info(agent_runs)").all() as Array<{ name: string }>;
+  if (!runCols.some(c => c.name === 'prompt')) {
+    db.exec("ALTER TABLE agent_runs ADD COLUMN prompt TEXT");
+  }
+
   // Add foreign key for messages.run_id -> agent_runs.id after both tables exist
   // (SQLite doesn't support ALTER TABLE ADD CONSTRAINT, but FK is declared in CREATE TABLE above)
 }

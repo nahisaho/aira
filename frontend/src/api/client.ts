@@ -139,6 +139,7 @@ export interface Run {
   started_at: string | null;
   finished_at: string | null;
   exit_code: number | null;
+  prompt: string | null;
   created_at: string;
 }
 
@@ -149,6 +150,8 @@ export const runsApi = {
     request<Run | { status: 'idle' }>(`/projects/${projectId}/runs/current`),
   stop: (projectId: string) =>
     request<{ status: string }>(`/projects/${projectId}/runs/current/stop`, { method: 'POST' }),
+  promptUrl: (projectId: string, runId: string) =>
+    `${API_BASE}/projects/${projectId}/runs/${runId}/prompt`,
 };
 
 // ─── Files ───

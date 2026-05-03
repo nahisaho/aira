@@ -148,6 +148,22 @@ export function RightPanel() {
                   {start && <span>▶ {formatTime(start)}</span>}
                   {end && <span>■ {formatTime(end)}</span>}
                 </div>
+                {run.prompt && (
+                  <div className={`mt-1.5 flex items-start gap-1.5`}>
+                    <p className={`text-[11px] truncate flex-1 ${light ? 'text-gray-500' : 'text-gray-400'}`} title={run.prompt}>
+                      💬 {run.prompt.slice(0, 80)}{run.prompt.length > 80 ? '...' : ''}
+                    </p>
+                    <a
+                      href={runsApi.promptUrl(activeProjectId, run.id)}
+                      download
+                      className={`text-[10px] px-1.5 py-0.5 rounded flex-shrink-0 ${
+                        light ? 'bg-gray-200 text-gray-600 hover:bg-gray-300' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      ⬇
+                    </a>
+                  </div>
+                )}
               </div>
             );
           })}

@@ -1,4 +1,4 @@
-# AIRA — AI Runway Application
+# AIRA — AI Research Administrator
 
 > CoreClaw ライクな WASM ベースのチャットボットシステム  
 > GitHub Copilot CLI をエージェントエンジンとして使用  

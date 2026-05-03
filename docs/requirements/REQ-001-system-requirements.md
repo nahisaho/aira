@@ -9,7 +9,7 @@
 ## 1. システム概要
 
 ### 1.1 目的
-AIRA (AI Runway Application) は、GitHub Copilot CLI をエージェントエンジンとして使用する  
+AIRA (AI Research Administrator) は、GitHub Copilot CLI をエージェントエンジンとして使用する  
 WASM ベースのチャットボットシステムである。ユーザーはプロジェクト単位で  
 Agent Skills および MCP (Model Context Protocol) サーバーを設定でき、  
 プロジェクト内で生成されたファイルの閲覧・ダウンロードが可能である。

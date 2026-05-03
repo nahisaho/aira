@@ -14,6 +14,7 @@ interface RunRow {
   started_at: string | null;
   finished_at: string | null;
   exit_code: number | null;
+  prompt: string | null;
   created_at: string;
 }
 
@@ -69,6 +70,25 @@ runRoutes.post('/api/projects/:id/runs/current/stop', (c) => {
   }
 
   return c.json({ status: 'stopping', runId: run.id });
+});
+
+// GET /api/projects/:id/runs/:runId/prompt — download run prompt as text
+runRoutes.get('/api/projects/:id/runs/:runId/prompt', (c) => {
+  const runId = c.req.param('runId');
+  const db = getDatabase();
+
+  const run = db.prepare('SELECT prompt FROM agent_runs WHERE id = ?').get(runId) as { prompt: string | null } | undefined;
+
+  if (!run || !run.prompt) {
+    return c.json({ error: 'Prompt not found' }, 404);
+  }
+
+  return new Response(run.prompt, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Disposition': `attachment; filename="prompt-${runId.slice(0, 8)}.txt"`,
+    },
+  });
 });
 
 export { runRoutes };

@@ -94,8 +94,8 @@ export function executeChat(
     }
 
     db.prepare(
-      "INSERT INTO agent_runs (id, project_id, message_id, status) VALUES (?, ?, ?, 'running')",
-    ).run(runId, projectId, msgId);
+      "INSERT INTO agent_runs (id, project_id, message_id, status, prompt) VALUES (?, ?, ?, 'running', ?)",
+    ).run(runId, projectId, msgId, userMessage);
 
     db.prepare('UPDATE projects SET last_activity = CURRENT_TIMESTAMP WHERE id = ?').run(projectId);
 
