@@ -22,6 +22,9 @@ RUN npm run build --workspace=backend
 FROM node:22-slim AS production
 WORKDIR /app
 
+# Install GitHub Copilot CLI globally
+RUN npm install -g @github/copilot && npm cache clean --force
+
 # Install only production dependencies
 COPY package.json package-lock.json ./
 COPY frontend/package.json frontend/
