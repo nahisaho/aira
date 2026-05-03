@@ -17,6 +17,8 @@ const translations = {
     'chat.send': '送信',
     'chat.sending': '...',
     'chat.attach': '添付ファイル',
+    'chat.attachedFiles': '添付ファイル',
+    'chat.placeholderWithFiles': 'メッセージを入力（または添付のみで送信）...',
     'chat.reconnecting': '⟳ 再接続中...',
     'chat.disconnected': '⊘ 切断',
 
@@ -104,6 +106,8 @@ const translations = {
     'chat.send': 'Send',
     'chat.sending': '...',
     'chat.attach': 'Attach files',
+    'chat.attachedFiles': 'Attached files',
+    'chat.placeholderWithFiles': 'Type a message (or send attachments only)...',
     'chat.reconnecting': '⟳ Reconnecting...',
     'chat.disconnected': '⊘ Disconnected',
 
