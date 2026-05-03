@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useFilesStore } from '../../stores/files';
 import { useProjectStore } from '../../stores/project';
 import { usePreferencesStore } from '../../stores/preferences';
@@ -10,10 +10,13 @@ export function RightPanel() {
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const theme = usePreferencesStore((s) => s.theme);
   const t = useT();
-  const { files, currentRun, runHistory, fetchFiles, fetchCurrentRun, fetchRunHistory } =
+  const { files, currentRun, runHistory, fetchFiles, fetchCurrentRun, fetchRunHistory, removeFile } =
     useFilesStore();
   const pipelineSteps = usePipelineStore((s) => s.steps);
   const light = theme === 'light';
+
+  const [viewingFile, setViewingFile] = useState<{ path: string; content: string } | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
   useEffect(() => {
     if (activeProjectId) {
@@ -22,6 +25,31 @@ export function RightPanel() {
       fetchRunHistory(activeProjectId);
     }
   }, [activeProjectId, fetchFiles, fetchCurrentRun, fetchRunHistory]);
+
+  const handleView = useCallback(async (fileId: string) => {
+    if (!activeProjectId) return;
+    setViewLoading(true);
+    try {
+      const result = await filesApi.view(activeProjectId, fileId);
+      setViewingFile(result);
+    } catch {
+      // If text view fails (binary), trigger download instead
+      window.open(filesApi.downloadUrl(activeProjectId, fileId), '_blank');
+    } finally {
+      setViewLoading(false);
+    }
+  }, [activeProjectId]);
+
+  const handleDelete = useCallback(async (fileId: string) => {
+    if (!activeProjectId) return;
+    if (!confirm(t('files.deleteConfirm'))) return;
+    try {
+      await filesApi.delete(activeProjectId, fileId);
+      removeFile(fileId);
+    } catch {
+      // ignore
+    }
+  }, [activeProjectId, removeFile, t]);
 
   if (!activeProjectId) {
     return (
@@ -132,32 +160,108 @@ export function RightPanel() {
           {t('files.title')} ({files.length})
         </h3>
         <div className="space-y-1">
-          {files.map((file) => (
-            <div
-              key={file.id}
-              className={`flex items-center justify-between rounded px-3 py-2 text-sm ${
-                light ? 'bg-gray-100' : 'bg-gray-800'
-              }`}
-            >
-              <span className={`truncate ${light ? 'text-gray-700' : 'text-gray-300'}`}>{file.file_path}</span>
-              <div className="flex gap-1 flex-shrink-0 ml-2">
-                <a
-                  href={filesApi.downloadUrl(activeProjectId, file.id)}
-                  className="text-xs text-blue-400 hover:text-blue-300"
-                  download
-                >
-                  ↓
-                </a>
+          {files.map((file) => {
+            const ext = file.file_path.split('.').pop()?.toLowerCase() ?? '';
+            const icon = fileIcon(ext);
+            return (
+              <div
+                key={file.id}
+                className={`rounded px-3 py-2 text-sm ${light ? 'bg-gray-100' : 'bg-gray-800'}`}
+              >
+                <div className={`truncate mb-1 ${light ? 'text-gray-700' : 'text-gray-300'}`}>
+                  <span className="mr-1.5">{icon}</span>
+                  {file.file_path}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleView(file.id)}
+                    disabled={viewLoading}
+                    className={`text-xs px-2 py-0.5 rounded ${
+                      light
+                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                        : 'bg-blue-900/40 text-blue-400 hover:bg-blue-900/60'
+                    }`}
+                    title={t('files.view')}
+                  >
+                    👁 {t('files.view')}
+                  </button>
+                  <a
+                    href={filesApi.downloadUrl(activeProjectId, file.id)}
+                    className={`text-xs px-2 py-0.5 rounded inline-block ${
+                      light
+                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                        : 'bg-green-900/40 text-green-400 hover:bg-green-900/60'
+                    }`}
+                    download
+                    title={t('files.download')}
+                  >
+                    ⬇ {t('files.download')}
+                  </a>
+                  <button
+                    onClick={() => handleDelete(file.id)}
+                    className={`text-xs px-2 py-0.5 rounded ${
+                      light
+                        ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                        : 'bg-red-900/40 text-red-400 hover:bg-red-900/60'
+                    }`}
+                    title={t('files.delete')}
+                  >
+                    🗑 {t('files.delete')}
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {files.length === 0 && (
             <p className={`text-xs ${light ? 'text-gray-400' : 'text-gray-500'}`}>{t('files.noFiles')}</p>
           )}
         </div>
       </section>
+
+      {/* File Viewer Modal */}
+      {viewingFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setViewingFile(null)}>
+          <div
+            className={`relative w-[90vw] max-w-4xl max-h-[80vh] rounded-lg shadow-2xl flex flex-col ${
+              light ? 'bg-white' : 'bg-gray-900'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={`flex items-center justify-between px-4 py-3 border-b ${
+              light ? 'border-gray-200' : 'border-gray-700'
+            }`}>
+              <span className={`text-sm font-medium truncate ${light ? 'text-gray-800' : 'text-gray-200'}`}>
+                {viewingFile.path}
+              </span>
+              <button
+                onClick={() => setViewingFile(null)}
+                className={`text-sm px-3 py-1 rounded ${
+                  light ? 'hover:bg-gray-100 text-gray-600' : 'hover:bg-gray-800 text-gray-400'
+                }`}
+              >
+                ✕ {t('files.close')}
+              </button>
+            </div>
+            <pre className={`flex-1 overflow-auto p-4 text-xs font-mono whitespace-pre-wrap ${
+              light ? 'text-gray-800 bg-gray-50' : 'text-gray-200 bg-gray-950'
+            }`}>
+              {viewingFile.content}
+            </pre>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function fileIcon(ext: string): string {
+  const icons: Record<string, string> = {
+    md: '📝', txt: '📝', csv: '📊', json: '📋',
+    py: '🐍', rs: '🦀', ts: '📘', js: '📒',
+    png: '🖼️', jpg: '🖼️', jpeg: '🖼️', svg: '🖼️', gif: '🖼️',
+    pdf: '📄', html: '🌐',
+  };
+  return icons[ext] ?? '📁';
 }
 
 function RunStatusBadge({ status }: { status: string }) {

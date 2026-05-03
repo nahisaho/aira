@@ -49,6 +49,10 @@ const translations = {
     'files.title': '出力ファイル',
     'files.noFiles': 'ファイルなし',
     'files.download': 'ダウンロード',
+    'files.view': '表示',
+    'files.delete': '削除',
+    'files.deleteConfirm': 'このファイルを削除しますか？',
+    'files.close': '閉じる',
 
     // Right panel
     'panel.status': 'ステータス',
@@ -128,6 +132,10 @@ const translations = {
     'files.title': 'Files',
     'files.noFiles': 'No files yet',
     'files.download': 'Download',
+    'files.view': 'View',
+    'files.delete': 'Delete',
+    'files.deleteConfirm': 'Delete this file?',
+    'files.close': 'Close',
 
     // Right panel
     'panel.status': 'Status',
