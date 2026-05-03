@@ -2,6 +2,7 @@ import { AuthService } from './auth.service.js';
 import { SkillsService } from './skills.service.js';
 import { McpService } from './mcp.service.js';
 import { createRedactorWithFlush, spawnAgent } from './agent.service.js';
+import { reconcileProjectFiles } from './file.service.js';
 import { getDatabase } from '../db/index.js';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -143,6 +144,13 @@ export function executeChat(
       db.prepare(
         'UPDATE agent_runs SET status = ?, exit_code = ?, finished_at = CURRENT_TIMESTAMP WHERE id = ?',
       ).run(status, exitCode, runId);
+
+      // Reconcile workspace files into DB
+      try {
+        reconcileProjectFiles(projectId, db);
+      } catch (err) {
+        console.warn('File reconciliation failed:', (err as Error).message);
+      }
 
       // Clean up MCP temp config
       if (ctx.mcpConfigFile) {

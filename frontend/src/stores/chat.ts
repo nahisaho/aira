@@ -98,10 +98,19 @@ wsClient.onEvent((event) => {
       if (event.runId) {
         if (event.status === 'running') {
           store.setRunStatus('running');
-        } else if (event.status === 'completed') {
+        } else if (event.status === 'completed' || event.status === 'failed') {
           store.setRunStatus('idle');
-        } else if (event.status === 'failed') {
-          store.setRunStatus('idle');
+          // Trigger files & runs refresh
+          import('./files').then(({ useFilesStore }) => {
+            import('./project').then(({ useProjectStore }) => {
+              const projectId = useProjectStore.getState().activeProjectId;
+              if (projectId) {
+                useFilesStore.getState().fetchFiles(projectId);
+                useFilesStore.getState().fetchRunHistory(projectId);
+                useFilesStore.getState().fetchCurrentRun(projectId);
+              }
+            });
+          });
         }
       }
       break;

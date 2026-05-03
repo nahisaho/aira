@@ -174,3 +174,43 @@ export class FilePathError extends Error {
     this.code = code;
   }
 }
+
+/**
+ * Reconcile project files: scan workspace and sync with DB.
+ * Upserts new/changed files, removes deleted files.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function reconcileProjectFiles(projectId: string, db: any): void {
+  const workspaceDir = path.resolve('projects', projectId, 'workspace');
+  if (!fs.existsSync(workspaceDir)) return;
+
+  const scanned = scanWorkspace(workspaceDir);
+
+  const upsertStmt = db.prepare(`
+    INSERT INTO project_files (id, project_id, file_path, size_bytes, mtime_ms, content_hash)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(project_id, file_path) DO UPDATE SET
+      size_bytes = excluded.size_bytes,
+      mtime_ms = excluded.mtime_ms,
+      content_hash = excluded.content_hash,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+
+  db.transaction(() => {
+    for (const file of scanned) {
+      const id = crypto.randomUUID();
+      upsertStmt.run(id, projectId, file.relativePath, file.size, file.mtimeMs, file.hash);
+    }
+
+    const scannedPaths = new Set(scanned.map(f => f.relativePath));
+    const dbFiles = db.prepare(
+      'SELECT id, file_path FROM project_files WHERE project_id = ?',
+    ).all(projectId) as Array<{ id: string; file_path: string }>;
+
+    for (const dbFile of dbFiles) {
+      if (!scannedPaths.has(dbFile.file_path)) {
+        db.prepare('DELETE FROM project_files WHERE id = ?').run(dbFile.id);
+      }
+    }
+  })();
+}

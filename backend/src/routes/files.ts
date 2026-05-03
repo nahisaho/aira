@@ -6,7 +6,7 @@ import { getDatabase } from '../db/index.js';
 import {
   resolveFilePath,
   isOpenAllowed,
-  scanWorkspace,
+  reconcileProjectFiles,
   FilePathError,
 } from '../services/file.service.js';
 
@@ -195,40 +195,13 @@ fileRoutes.post('/api/projects/:id/files/reconcile', (c) => {
   }
 
   const db = getDatabase();
-  const scanned = scanWorkspace(workspaceDir);
+  reconcileProjectFiles(projectId, db);
 
-  const upsertStmt = db.prepare(`
-    INSERT INTO project_files (id, project_id, file_path, size_bytes, mtime_ms, content_hash)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(project_id, file_path) DO UPDATE SET
-      size_bytes = excluded.size_bytes,
-      mtime_ms = excluded.mtime_ms,
-      content_hash = excluded.content_hash,
-      updated_at = CURRENT_TIMESTAMP
-  `);
+  const count = db.prepare(
+    'SELECT COUNT(*) as cnt FROM project_files WHERE project_id = ?',
+  ).get(projectId) as { cnt: number };
 
-  const reconcile = db.transaction(() => {
-    for (const file of scanned) {
-      const id = require('node:crypto').randomUUID();
-      upsertStmt.run(id, projectId, file.relativePath, file.size, file.mtimeMs, file.hash);
-    }
-
-    // Remove files not in scan
-    const scannedPaths = new Set(scanned.map(f => f.relativePath));
-    const dbFiles = db.prepare(
-      'SELECT id, file_path FROM project_files WHERE project_id = ?',
-    ).all(projectId) as Array<{ id: string; file_path: string }>;
-
-    for (const dbFile of dbFiles) {
-      if (!scannedPaths.has(dbFile.file_path)) {
-        db.prepare('DELETE FROM project_files WHERE id = ?').run(dbFile.id);
-      }
-    }
-  });
-
-  reconcile();
-
-  return c.json({ status: 'reconciled', fileCount: scanned.length });
+  return c.json({ status: 'reconciled', fileCount: count.cnt });
 });
 
 function openFileWithOs(filePath: string): void {
