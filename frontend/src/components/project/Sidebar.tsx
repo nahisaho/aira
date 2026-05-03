@@ -41,6 +41,9 @@ export function Sidebar() {
           {t('sidebar.newProject')}
         </button>
       </div>
+      <div className="flex justify-center mb-4">
+        <img src="/AIRA_chibicara.png" alt="AIRA" className="w-24 h-24 object-contain" />
+      </div>
 
       <div className="flex-1 overflow-y-auto space-y-1">
         {loading && <p className="text-xs text-gray-500">{t('sidebar.loading')}</p>}
