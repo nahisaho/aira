@@ -42,7 +42,7 @@ export function Sidebar() {
         </button>
       </div>
       <div className="flex justify-center mb-4">
-        <img src="/AIRA_chibicara.png" alt="AIRA" className="w-24 h-24 object-contain" />
+        <img src="/AIRA_chibicara.png" alt="AIRA" className="w-36 h-36 object-contain" />
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-1">
