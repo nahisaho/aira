@@ -187,8 +187,8 @@ export function reconcileProjectFiles(projectId: string, db: any): void {
   const scanned = scanWorkspace(workspaceDir);
 
   const upsertStmt = db.prepare(`
-    INSERT INTO project_files (id, project_id, file_path, size_bytes, mtime_ms, content_hash)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO project_files (id, project_id, filename, file_path, size_bytes, mtime_ms, content_hash)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(project_id, file_path) DO UPDATE SET
       size_bytes = excluded.size_bytes,
       mtime_ms = excluded.mtime_ms,
@@ -199,7 +199,8 @@ export function reconcileProjectFiles(projectId: string, db: any): void {
   db.transaction(() => {
     for (const file of scanned) {
       const id = crypto.randomUUID();
-      upsertStmt.run(id, projectId, file.relativePath, file.size, file.mtimeMs, file.hash);
+      const filename = path.basename(file.relativePath);
+      upsertStmt.run(id, projectId, filename, file.relativePath, file.size, file.mtimeMs, file.hash);
     }
 
     const scannedPaths = new Set(scanned.map(f => f.relativePath));
