@@ -8,6 +8,10 @@ import { app, BrowserWindow, Menu } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import net from 'node:net';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const isPackaged = app.isPackaged;
 const userDataPath = app.getPath('userData');
@@ -43,7 +47,7 @@ async function createWindow(port: number): Promise<void> {
     minHeight: 600,
     title: 'AIRA - AI Research Administrator',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, '..', 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
