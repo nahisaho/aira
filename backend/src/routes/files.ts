@@ -218,7 +218,7 @@ fileRoutes.post('/api/projects/:id/files/upload', async (c) => {
 
   for (const file of fileList) {
     if (!(file instanceof File)) continue;
-    const filename = file.name.replace(/[^a-zA-Z0-9._\-]/g, '_');
+    const filename = file.name.replace(/[\/\\:<>"|?*\x00-\x1f]/g, '_');
     const dest = path.join(workspaceDir, filename);
     const buffer = Buffer.from(await file.arrayBuffer());
     fs.writeFileSync(dest, buffer);
