@@ -37,11 +37,22 @@ export const originMiddleware = createMiddleware(async (c, next) => {
 
   const origin = c.req.header('origin');
   if (!origin) {
+    // No origin = same-origin request (e.g., from embedded frontend)
+    if (process.env.AIRA_SERVE_FRONTEND === 'true') {
+      return next();
+    }
     return c.json({ error: 'Missing Origin header' }, 403);
   }
 
   const allowed = getAllowedOrigins();
   if (!allowed.includes(origin)) {
+    // In serve-frontend mode, allow any localhost origin (Docker port mapping)
+    if (process.env.AIRA_SERVE_FRONTEND === 'true') {
+      const url = new URL(origin);
+      if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]') {
+        return next();
+      }
+    }
     return c.json({ error: 'Origin not allowed' }, 403);
   }
 

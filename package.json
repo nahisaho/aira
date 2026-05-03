@@ -18,6 +18,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "format": "npm run format --workspaces --if-present",
     "format:check": "npm run format:check --workspaces --if-present",
+    "docker:build": "docker build -t aira:latest .",
+    "docker:run": "docker run -p 3000:3000 -v aira-data:/app/data -v aira-projects:/app/projects aira:latest",
     "electron:compile": "cd electron && npx tsc",
     "electron:dev": "npm run build && npm run electron:compile && npx electron .",
     "electron:build": "npm run build && npm run electron:compile && npx electron-builder --config electron-builder.yml",

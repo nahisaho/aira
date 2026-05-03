@@ -17,6 +17,11 @@ import type { Server } from 'node:http';
 let server4: ServerType | null = null;
 let server6: ServerType | null = null;
 
+export interface StartOptions {
+  port: number;
+  hostname?: string; // default: '127.0.0.1', use '0.0.0.0' for Docker
+}
+
 export interface StartResult {
   port: number;
   servers: { ipv4: boolean; ipv6: boolean };
@@ -26,7 +31,10 @@ export interface StartResult {
  * Start the AIRA backend on the given port.
  * Throws on fatal errors instead of calling process.exit().
  */
-export async function startServer(port: number): Promise<StartResult> {
+export async function startServer(portOrOpts: number | StartOptions): Promise<StartResult> {
+  const opts = typeof portOrOpts === 'number' ? { port: portOrOpts } : portOrOpts;
+  const { port, hostname } = opts;
+  const bindHost = hostname ?? '127.0.0.1';
   // 1. Preflight
   const preflight = runPreflight();
   console.log('[AIRA] Preflight results:');
@@ -57,21 +65,23 @@ export async function startServer(port: number): Promise<StartResult> {
   let hasIpv6 = false;
 
   try {
-    server4 = serve({ fetch: app.fetch, hostname: '127.0.0.1', port });
+    server4 = serve({ fetch: app.fetch, hostname: bindHost, port });
     attachWebSocket(server4 as unknown as Server, port);
     hasIpv4 = true;
-    console.log(`[AIRA] Listening on http://127.0.0.1:${port}`);
+    console.log(`[AIRA] Listening on http://${bindHost}:${port}`);
   } catch (err) {
     console.warn(`[AIRA] Failed to bind IPv4: ${err instanceof Error ? err.message : err}`);
   }
 
-  try {
-    server6 = serve({ fetch: app.fetch, hostname: '::1', port });
-    attachWebSocket(server6 as unknown as Server, port);
-    hasIpv6 = true;
-    console.log(`[AIRA] Listening on http://[::1]:${port}`);
-  } catch (err) {
-    console.warn(`[AIRA] Failed to bind IPv6: ${err instanceof Error ? err.message : err}`);
+  if (bindHost === '127.0.0.1') {
+    try {
+      server6 = serve({ fetch: app.fetch, hostname: '::1', port });
+      attachWebSocket(server6 as unknown as Server, port);
+      hasIpv6 = true;
+      console.log(`[AIRA] Listening on http://[::1]:${port}`);
+    } catch (err) {
+      console.warn(`[AIRA] Failed to bind IPv6: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   if (!hasIpv4 && !hasIpv6) {

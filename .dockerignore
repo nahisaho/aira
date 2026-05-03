@@ -1,0 +1,15 @@
+node_modules
+dist
+dist-electron
+data
+projects
+.git
+.github
+.vscode
+.idea
+test-results
+coverage
+e2e
+*.tmp
+*.bak
+electron/dist

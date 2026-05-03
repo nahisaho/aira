@@ -36,7 +36,11 @@ export function runPreflight(): PreflightResult {
   const tokenCheck = checkToken();
 
   const allPassed =
-    osCheck.ok && cliCheck.ok && dataDirCheck.ok && projectsDirCheck.ok;
+    osCheck.ok && dataDirCheck.ok && projectsDirCheck.ok;
+
+  if (!cliCheck.ok) {
+    console.warn('[AIRA] WARNING: Copilot CLI not found. Agent invocation will fail until installed.');
+  }
 
   return {
     os: osCheck,
