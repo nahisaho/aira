@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import archiver from 'archiver';
 import { getDatabase } from '../db/index.js';
+import * as pathConfig from '../config/paths.js';
 import {
   resolveFilePath,
   isOpenAllowed,
@@ -15,7 +16,7 @@ import {
 const fileRoutes = new Hono();
 
 function getWorkspaceDir(projectId: string): string {
-  return path.resolve('projects', projectId, 'workspace');
+  return pathConfig.getWorkspaceDir(projectId);
 }
 
 // GET /api/projects/:id/files — list files

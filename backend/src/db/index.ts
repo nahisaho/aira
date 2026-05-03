@@ -1,22 +1,24 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getDataDir } from '../config/paths.js';
 
-const DATA_DIR = path.resolve('data');
-const DB_PATH = path.join(DATA_DIR, 'aira.db');
+function DATA_DIR(): string { return getDataDir(); }
+function DB_PATH(): string { return path.join(DATA_DIR(), 'aira.db'); }
 
 let dbInstance: Database.Database | null = null;
 
 function ensureDataDirectory(): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { mode: 0o700, recursive: true });
+  const dataDir = DATA_DIR();
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { mode: 0o700, recursive: true });
   }
 
   if (process.platform !== 'win32') {
-    const stat = fs.statSync(DATA_DIR);
+    const stat = fs.statSync(dataDir);
     const mode = stat.mode & 0o777;
     if (mode !== 0o700) {
-      fs.chmodSync(DATA_DIR, 0o700);
+      fs.chmodSync(dataDir, 0o700);
     }
   }
 }
@@ -138,7 +140,7 @@ export function getDatabase(): Database.Database {
 
   ensureDataDirectory();
 
-  const db = new Database(DB_PATH);
+  const db = new Database(DB_PATH());
 
   // Enable WAL mode for better concurrent read performance
   db.pragma('journal_mode = WAL');
@@ -151,7 +153,7 @@ export function getDatabase(): Database.Database {
 
   // Set restrictive permissions on DB file (POSIX only)
   if (process.platform !== 'win32') {
-    fs.chmodSync(DB_PATH, 0o600);
+    fs.chmodSync(DB_PATH(), 0o600);
   }
 
   dbInstance = db;
@@ -166,3 +168,4 @@ export function closeDatabase(): void {
 }
 
 export { DATA_DIR, DB_PATH };
+export { getDataDir } from '../config/paths.js';

@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { DATA_DIR } from '../db/index.js';
+import { getDataDir } from '../config/paths.js';
 
-const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
+function SETTINGS_PATH(): string { return path.join(getDataDir(), 'settings.json'); }
 
 interface Settings {
   token?: string;
@@ -58,8 +58,9 @@ export class AuthService {
    * Delete stored token from settings.json.
    */
   deleteToken(): void {
-    if (fs.existsSync(SETTINGS_PATH)) {
-      fs.unlinkSync(SETTINGS_PATH);
+    const settingsPath = SETTINGS_PATH();
+    if (fs.existsSync(settingsPath)) {
+      fs.unlinkSync(settingsPath);
     }
   }
 
@@ -97,10 +98,11 @@ export class AuthService {
 
   private readStoredToken(): string | undefined {
     try {
-      if (!fs.existsSync(SETTINGS_PATH)) {
+      const settingsPath = SETTINGS_PATH();
+      if (!fs.existsSync(settingsPath)) {
         return undefined;
       }
-      const content = fs.readFileSync(SETTINGS_PATH, 'utf-8');
+      const content = fs.readFileSync(settingsPath, 'utf-8');
       const settings = JSON.parse(content) as Settings;
       return settings.token;
     } catch {
@@ -113,12 +115,13 @@ export class AuthService {
    * File never exists with default permissions.
    */
   private atomicWritePosix(content: string): void {
-    const tmpPath = `${SETTINGS_PATH}.${crypto.randomUUID()}.tmp`;
+    const settingsPath = SETTINGS_PATH();
+    const tmpPath = `${settingsPath}.${crypto.randomUUID()}.tmp`;
     const fd = fs.openSync(tmpPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
     try {
       fs.writeSync(fd, content);
       fs.closeSync(fd);
-      fs.renameSync(tmpPath, SETTINGS_PATH);
+      fs.renameSync(tmpPath, settingsPath);
     } catch (err) {
       fs.closeSync(fd);
       try { fs.unlinkSync(tmpPath); } catch { /* cleanup best-effort */ }
@@ -130,10 +133,11 @@ export class AuthService {
    * Windows: Write to temp file in data/ (already ACL-protected), then rename.
    */
   private atomicWriteWindows(content: string): void {
-    const tmpPath = path.join(DATA_DIR, `settings.${crypto.randomUUID()}.tmp`);
+    const settingsPath = SETTINGS_PATH();
+    const tmpPath = path.join(getDataDir(), `settings.${crypto.randomUUID()}.tmp`);
     fs.writeFileSync(tmpPath, content, 'utf-8');
     try {
-      fs.renameSync(tmpPath, SETTINGS_PATH);
+      fs.renameSync(tmpPath, settingsPath);
     } catch (err) {
       try { fs.unlinkSync(tmpPath); } catch { /* cleanup best-effort */ }
       throw err;

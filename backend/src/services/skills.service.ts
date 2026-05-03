@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { getDatabase } from '../db/index.js';
+import { getBaseDir } from '../config/paths.js';
 
 export interface Skill {
   id: string;
@@ -32,7 +33,7 @@ const BUILTIN_SKILLS = [
  */
 export function seedBuiltinSkills(): void {
   const db = getDatabase();
-  const projectRoot = path.resolve(import.meta.dirname, '..', '..', '..');
+  const projectRoot = getBaseDir();
 
   // Ensure builtin column exists
   try {

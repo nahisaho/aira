@@ -1,10 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { DATA_DIR } from '../db/index.js';
+import { getDataDir, getProjectsDir } from '../config/paths.js';
 import { AuthService } from './auth.service.js';
-
-const PROJECTS_DIR = path.resolve('projects');
 
 export interface PreflightCheck {
   ok: boolean;
@@ -109,18 +107,18 @@ function detectCliCommand(): CliDetectionResult | null {
 
 function checkDataDir(): PreflightCheck {
   try {
-    // Ensure data/ exists
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { mode: 0o700, recursive: true });
+    const dataDir = getDataDir();
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { mode: 0o700, recursive: true });
     }
 
     // Verify permissions (POSIX only)
     if (process.platform !== 'win32') {
-      const stat = fs.statSync(DATA_DIR);
+      const stat = fs.statSync(dataDir);
       const mode = stat.mode & 0o777;
       if (mode !== 0o700) {
         try {
-          fs.chmodSync(DATA_DIR, 0o700);
+          fs.chmodSync(dataDir, 0o700);
         } catch {
           return {
             ok: false,
@@ -132,12 +130,12 @@ function checkDataDir(): PreflightCheck {
     }
 
     // Verify writable
-    const testFile = path.join(DATA_DIR, `.preflight-${Date.now()}.tmp`);
+    const testFile = path.join(dataDir, `.preflight-${Date.now()}.tmp`);
     fs.writeFileSync(testFile, 'test');
     fs.unlinkSync(testFile);
 
     // Clean stale temp files
-    cleanTempFiles(DATA_DIR);
+    cleanTempFiles(dataDir);
 
     return { ok: true, message: 'data/ directory OK' };
   } catch (err) {
@@ -151,12 +149,13 @@ function checkDataDir(): PreflightCheck {
 
 function checkProjectsDir(): PreflightCheck {
   try {
-    if (!fs.existsSync(PROJECTS_DIR)) {
-      fs.mkdirSync(PROJECTS_DIR, { recursive: true });
+    const projectsDir = getProjectsDir();
+    if (!fs.existsSync(projectsDir)) {
+      fs.mkdirSync(projectsDir, { recursive: true });
     }
 
     // Verify writable
-    const testFile = path.join(PROJECTS_DIR, `.preflight-${Date.now()}.tmp`);
+    const testFile = path.join(projectsDir, `.preflight-${Date.now()}.tmp`);
     fs.writeFileSync(testFile, 'test');
     fs.unlinkSync(testFile);
 
@@ -201,4 +200,4 @@ function cleanTempFiles(dir: string): void {
   }
 }
 
-export { PROJECTS_DIR };
+export { getProjectsDir as PROJECTS_DIR } from '../config/paths.js';

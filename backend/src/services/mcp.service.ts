@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { getDatabase } from '../db/index.js';
+import * as pathConfig from '../config/paths.js';
 
 export interface McpConfig {
   id: string;
@@ -245,7 +246,7 @@ export class McpService {
       mcpConfig[row.name] = { type: row.type, ...config };
     }
 
-    const tmpDir = path.resolve('data', '.tmp');
+    const tmpDir = pathConfig.getTmpDir();
     fs.mkdirSync(tmpDir, { recursive: true, mode: 0o700 });
 
     const tmpFile = path.join(tmpDir, `mcp-${crypto.randomUUID()}.json`);

@@ -1,9 +1,10 @@
 {
   "name": "aira",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "AI Runway Application - WASM-based chatbot system using GitHub Copilot CLI",
+  "main": "electron/dist/main.js",
+  "description": "AIRA - AI Research Administrator",
   "workspaces": [
     "frontend",
     "backend"
@@ -16,7 +17,13 @@
     "test:e2e": "npx playwright test",
     "lint": "npm run lint --workspaces --if-present",
     "format": "npm run format --workspaces --if-present",
-    "format:check": "npm run format:check --workspaces --if-present"
+    "format:check": "npm run format:check --workspaces --if-present",
+    "electron:compile": "cd electron && npx tsc",
+    "electron:dev": "npm run build && npm run electron:compile && npx electron .",
+    "electron:build": "npm run build && npm run electron:compile && npx electron-builder --config electron-builder.yml",
+    "electron:build:win": "npm run build && npm run electron:compile && npx electron-builder --config electron-builder.yml --win",
+    "electron:build:mac": "npm run build && npm run electron:compile && npx electron-builder --config electron-builder.yml --mac",
+    "electron:build:linux": "npm run build && npm run electron:compile && npx electron-builder --config electron-builder.yml --linux"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -25,6 +32,8 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
+    "electron": "^41.5.0",
+    "electron-builder": "^26.8.1",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",

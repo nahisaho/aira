@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import * as pathConfig from '../config/paths.js';
 
 // ─── File Open Allowlist (REQ-FILE-005) ───
 
@@ -181,7 +182,7 @@ export class FilePathError extends Error {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function reconcileProjectFiles(projectId: string, db: any): void {
-  const workspaceDir = path.resolve('projects', projectId, 'workspace');
+  const workspaceDir = pathConfig.getWorkspaceDir(projectId);
   if (!fs.existsSync(workspaceDir)) return;
 
   const scanned = scanWorkspace(workspaceDir);

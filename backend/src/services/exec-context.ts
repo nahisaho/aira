@@ -4,6 +4,7 @@ import { McpService } from './mcp.service.js';
 import { createRedactorWithFlush, spawnAgent } from './agent.service.js';
 import { reconcileProjectFiles } from './file.service.js';
 import { getDatabase } from '../db/index.js';
+import * as pathConfig from '../config/paths.js';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -33,7 +34,7 @@ export function assembleExecContext(projectId: string): ExecContext {
   }
 
   // Workspace
-  const workspaceDir = path.resolve('projects', projectId, 'workspace');
+  const workspaceDir = pathConfig.getWorkspaceDir(projectId);
   fs.mkdirSync(workspaceDir, { recursive: true });
 
   // Skills (available only)

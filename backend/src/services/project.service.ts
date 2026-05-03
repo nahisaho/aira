@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { getDatabase } from '../db/index.js';
-import { PROJECTS_DIR } from './preflight.js';
+import { getProjectsDir } from '../config/paths.js';
 
 export interface Project {
   id: string;
@@ -108,7 +108,7 @@ export class ProjectService {
   }
 
   getWorkspacePath(projectId: string): string {
-    return path.join(PROJECTS_DIR, projectId, 'workspace');
+    return path.join(getProjectsDir(), projectId, 'workspace');
   }
 
   hasActiveRuns(projectId: string): boolean {
