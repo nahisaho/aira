@@ -241,13 +241,17 @@ function loadWorkspaceInstructions(workspaceDir: string): string {
     '# Execution Flow (MANDATORY)\n',
     'You are a skill-based agent. Follow this flow for EVERY user request:\n',
     '1. **Read copilot-instructions.md rules below** — these are your behavioral rules.',
-    '2. **Context Check** — if context is insufficient, ask clarifying questions (see below).',
+    '2. **Pre-Routing: Context Check** — follow the "Pre-Routing: Context Sufficiency Check"',
+    '   in AGENTS.md below. If context is insufficient, route to the context-collector skill.',
+    '   Read its SKILL.md via `read_file` and follow its 1-question-at-a-time protocol.',
+    '   Do NOT ask multiple questions at once. Do NOT create files or use tools until context is sufficient.',
     '3. **Route** — match the user request to a WHEN/DO rule in AGENTS.md routing table.',
     '4. **Load Skill** — execute `read_file .github/skills/{skill-name}/SKILL.md` to load detailed instructions.',
     '5. **Execute** — follow the loaded SKILL.md instructions exactly to produce outputs.',
     '6. **Report** — summarize what files were created/updated.\n',
     'IMPORTANT: You MUST call `read_file` to load the SKILL.md BEFORE executing any skill.',
-    'Do NOT skip step 4. The SKILL.md contains critical execution details.\n',
+    'Do NOT skip step 4. The SKILL.md contains critical execution details.',
+    'For follow-up messages, continue the current workflow (e.g., context collection, skill execution).\n',
   );
 
   // 2. copilot-instructions.md — repo-wide behavioural rules
@@ -321,25 +325,8 @@ function buildContextualPrompt(
   // Embed workspace instructions (copilot-instructions.md, AGENTS.md, skills list)
   const instructions = loadWorkspaceInstructions(workspaceDir);
 
-  const CONTEXT_CHECK_PREAMBLE = [
-    '## IMPORTANT: Context Sufficiency Check',
-    '',
-    'Before starting any work, check if the user\'s request provides enough context.',
-    'If the request is vague or missing critical details (e.g., research topic, scope,',
-    'target, constraints, deliverables), do NOT proceed with execution.',
-    'Instead:',
-    '1. Output a numbered list of specific clarifying questions in the user\'s language',
-    '2. End with: "上記の質問にお答えください。回答をいただければ作業を開始します。"',
-    '3. Do NOT create any files or run any tools until context is sufficient',
-    '',
-    'If context is sufficient, state any assumptions explicitly and proceed.',
-    '',
-    '---',
-    '',
-  ].join('\n');
-
   if (history.length === 0) {
-    return instructions + CONTEXT_CHECK_PREAMBLE + currentMessage;
+    return instructions + currentMessage;
   }
 
   const MAX_CONTENT_LEN = 3000;
