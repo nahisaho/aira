@@ -28,9 +28,9 @@ const BUILTIN_SKILLS = [
   },
   {
     slug: 'spread1000-assistant',
-    name: 'spread1000-builder',
+    name: 'spread1000-assistant',
     description: '文部科学省 AI for Science 萌芽的挑戦研究創出事業（SPReAD）公募支援スイート。研究プラン策定から Azure 構築・申請書作成・応募手続きまで 12 の専門サブスキルで支援。',
-    repo_url: 'https://github.com/nahisaho/spread1000-builder/tree/main/src',
+    repo_url: 'https://github.com/nahisaho/spread1000-assistant/tree/main/src',
   },
 ];
 
