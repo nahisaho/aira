@@ -1,7 +1,7 @@
 /**
  * Skill Loading Validation
  *
- * Verifies that spread1000-builder's copilot-instructions.md and AGENTS.md
+ * Verifies that spread1000-assistant's copilot-instructions.md and AGENTS.md
  * are correctly loaded when the skill is assigned to a project.
  */
 import { test, expect } from '@playwright/test';
@@ -16,14 +16,14 @@ const __dirname = path.dirname(__filename);
 
 const DB_PATH = path.resolve(__dirname, '../backend/data/aira.db');
 
-test.describe('Skill loading — spread1000-builder', () => {
+test.describe('Skill loading — spread1000-assistant', () => {
   test('skill_path points to existing AGENTS.md', () => {
     const db = new Database(DB_PATH, { readonly: true });
     const skill = db.prepare(
-      "SELECT skill_path FROM skills WHERE name = 'spread1000-builder' AND builtin = 1",
+      "SELECT skill_path FROM skills WHERE name = 'spread1000-assistant' AND builtin = 1",
     ).get() as { skill_path: string } | undefined;
 
-    expect(skill, 'spread1000-builder skill not found in DB').toBeDefined();
+    expect(skill, 'spread1000-assistant skill not found in DB').toBeDefined();
     const agentsMd = path.join(skill!.skill_path, 'AGENTS.md');
     expect(fs.existsSync(agentsMd), `AGENTS.md not found: ${agentsMd}`).toBe(true);
     db.close();
@@ -32,10 +32,10 @@ test.describe('Skill loading — spread1000-builder', () => {
   test('skill_path points to existing copilot-instructions.md', () => {
     const db = new Database(DB_PATH, { readonly: true });
     const skill = db.prepare(
-      "SELECT skill_path FROM skills WHERE name = 'spread1000-builder' AND builtin = 1",
+      "SELECT skill_path FROM skills WHERE name = 'spread1000-assistant' AND builtin = 1",
     ).get() as { skill_path: string } | undefined;
 
-    expect(skill, 'spread1000-builder skill not found in DB').toBeDefined();
+    expect(skill, 'spread1000-assistant skill not found in DB').toBeDefined();
     const ciMd = path.join(skill!.skill_path, 'copilot-instructions.md');
     expect(fs.existsSync(ciMd), `copilot-instructions.md not found: ${ciMd}`).toBe(true);
     db.close();
@@ -54,12 +54,12 @@ test.describe('Skill loading — spread1000-builder', () => {
   test('workspace .github/copilot-instructions.md is written for assigned project', () => {
     const db = new Database(DB_PATH, { readonly: true });
 
-    // Find a project assigned to spread1000-builder
+    // Find a project assigned to spread1000-assistant
     const row = db.prepare(`
       SELECT ps.project_id
       FROM project_skills ps
       JOIN skills s ON s.id = ps.skill_id
-      WHERE s.name = 'spread1000-builder' AND s.builtin = 1
+      WHERE s.name = 'spread1000-assistant' AND s.builtin = 1
       LIMIT 1
     `).get() as { project_id: string } | undefined;
 
@@ -70,7 +70,7 @@ test.describe('Skill loading — spread1000-builder', () => {
 
     // Simulate what assembleExecContext does: check if the file would be written
     const skill = db.prepare(
-      "SELECT skill_path FROM skills WHERE name = 'spread1000-builder' AND builtin = 1",
+      "SELECT skill_path FROM skills WHERE name = 'spread1000-assistant' AND builtin = 1",
     ).get() as { skill_path: string };
 
     const ciSrc = path.join(skill.skill_path, 'copilot-instructions.md');
@@ -85,7 +85,7 @@ test.describe('Skill loading — spread1000-builder', () => {
     const db = new Database(DB_PATH, { readonly: true });
 
     const skill = db.prepare(
-      "SELECT skill_path FROM skills WHERE name = 'spread1000-builder' AND builtin = 1",
+      "SELECT skill_path FROM skills WHERE name = 'spread1000-assistant' AND builtin = 1",
     ).get() as { skill_path: string };
 
     // Verify the source AGENTS.md can be read (simulates what assembleExecContext does)
@@ -102,7 +102,7 @@ test.describe('Skill loading — spread1000-builder', () => {
   test('AGENTS.md contains routing rules for context-collector', () => {
     const db = new Database(DB_PATH, { readonly: true });
     const skill = db.prepare(
-      "SELECT skill_path FROM skills WHERE name = 'spread1000-builder' AND builtin = 1",
+      "SELECT skill_path FROM skills WHERE name = 'spread1000-assistant' AND builtin = 1",
     ).get() as { skill_path: string };
 
     const agentsMd = fs.readFileSync(path.join(skill.skill_path, 'AGENTS.md'), 'utf8');

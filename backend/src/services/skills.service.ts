@@ -65,12 +65,26 @@ export function seedBuiltinSkills(): void {
       continue;
     }
 
+    // Check for stale records with a different name but same slug (directory)
+    const stale = db.prepare('SELECT id FROM skills WHERE skill_path LIKE ? AND builtin = 1').get(`%/skills/${skill.slug}`) as { id: string } | undefined;
+    if (stale) {
+      db.prepare('UPDATE skills SET name = ?, description = ?, source_url = ?, skill_path = ? WHERE id = ?')
+        .run(skill.name, skill.description, skill.repo_url, skillPath, stale.id);
+      continue;
+    }
+
+    // Also clean up old renamed entries (e.g. spread1000-builder → spread1000-assistant)
     const id = crypto.randomUUID();
     db.prepare(
       `INSERT INTO skills (id, name, description, source_type, source_url, skill_path, status, builtin)
        VALUES (?, ?, ?, 'local', ?, ?, 'available', 1)`,
     ).run(id, skill.name, skill.description, skill.repo_url, skillPath);
   }
+
+  // Remove orphaned builtin skills that no longer exist in BUILTIN_SKILLS
+  const validNames = BUILTIN_SKILLS.map(s => s.name);
+  const placeholders = validNames.map(() => '?').join(', ');
+  db.prepare(`DELETE FROM skills WHERE builtin = 1 AND name NOT IN (${placeholders})`).run(...validNames);
 }
 
 /**
