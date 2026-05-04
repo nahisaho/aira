@@ -213,13 +213,44 @@ export function assembleExecContext(projectId: string): ExecContext {
  * can resume without losing context.
  */
 /**
+ * Extract name + description from a SKILL.md YAML frontmatter.
+ */
+function parseSkillFrontmatter(content: string): { name: string; description: string } | null {
+  const m = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!m) return null;
+  const yaml = m[1];
+  const nameMatch = yaml.match(/^name:\s*(.+)/m);
+  const descMatch = yaml.match(/^description:\s*\|?\s*\n([\s\S]*?)(?=\n\w|\n---|\n$)/m)
+    ?? yaml.match(/^description:\s*(.+)/m);
+  if (!nameMatch) return null;
+  const desc = descMatch
+    ? (descMatch[1] ?? descMatch[0]).replace(/^description:\s*/, '').trim().split('\n').map(l => l.trim()).join(' ')
+    : '';
+  return { name: nameMatch[1].trim(), description: desc.slice(0, 200) };
+}
+
+/**
  * Read workspace instruction files (.github/copilot-instructions.md, AGENTS.md)
- * and available SKILL.md listings to embed in the prompt.
+ * and build a skill catalogue with descriptions from SKILL.md frontmatter.
  */
 function loadWorkspaceInstructions(workspaceDir: string): string {
   const sections: string[] = [];
 
-  // 1. copilot-instructions.md — repo-wide behavioural rules
+  // 1. Execution flow — always present
+  sections.push(
+    '# Execution Flow (MANDATORY)\n',
+    'You are a skill-based agent. Follow this flow for EVERY user request:\n',
+    '1. **Read copilot-instructions.md rules below** — these are your behavioral rules.',
+    '2. **Context Check** — if context is insufficient, ask clarifying questions (see below).',
+    '3. **Route** — match the user request to a WHEN/DO rule in AGENTS.md routing table.',
+    '4. **Load Skill** — execute `read_file .github/skills/{skill-name}/SKILL.md` to load detailed instructions.',
+    '5. **Execute** — follow the loaded SKILL.md instructions exactly to produce outputs.',
+    '6. **Report** — summarize what files were created/updated.\n',
+    'IMPORTANT: You MUST call `read_file` to load the SKILL.md BEFORE executing any skill.',
+    'Do NOT skip step 4. The SKILL.md contains critical execution details.\n',
+  );
+
+  // 2. copilot-instructions.md — repo-wide behavioural rules
   const ciPath = path.join(workspaceDir, '.github', 'copilot-instructions.md');
   try {
     const ci = fs.readFileSync(ciPath, 'utf8').trim();
@@ -232,7 +263,7 @@ function loadWorkspaceInstructions(workspaceDir: string): string {
     }
   } catch { /* not present */ }
 
-  // 2. AGENTS.md — routing rules & skill catalogue
+  // 3. AGENTS.md — routing rules & skill catalogue
   const agentsPath = path.join(workspaceDir, 'AGENTS.md');
   try {
     const agents = fs.readFileSync(agentsPath, 'utf8').trim();
@@ -244,21 +275,37 @@ function loadWorkspaceInstructions(workspaceDir: string): string {
     }
   } catch { /* not present */ }
 
-  // 3. List available SKILL.md files so the agent knows what subskills exist
+  // 4. Build skill catalogue from SKILL.md frontmatter
   const skillsDir = path.join(workspaceDir, '.github', 'skills');
   try {
     const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
-    const skillNames = entries
-      .filter(e => e.isDirectory())
-      .filter(e => fs.existsSync(path.join(skillsDir, e.name, 'SKILL.md')))
-      .map(e => e.name);
-    if (skillNames.length > 0) {
+    const skillEntries: { name: string; description: string; dir: string }[] = [];
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const skillPath = path.join(skillsDir, entry.name, 'SKILL.md');
+      try {
+        const content = fs.readFileSync(skillPath, 'utf8');
+        const meta = parseSkillFrontmatter(content);
+        if (meta) {
+          skillEntries.push({ ...meta, dir: entry.name });
+        } else {
+          skillEntries.push({ name: entry.name, description: '', dir: entry.name });
+        }
+      } catch { /* skip */ }
+    }
+
+    if (skillEntries.length > 0) {
+      const catalogue = skillEntries
+        .map(s => `- **${s.name}**: ${s.description || '(no description)'}`)
+        .join('\n');
       sections.push(
-        '\n# Available Subskills\n',
-        'When routing to a subskill, read its SKILL.md first:',
-        '  `read_file .github/skills/{name}/SKILL.md`',
-        '',
-        'Available: ' + skillNames.join(', '),
+        '\n# Skill Catalogue\n',
+        `${skillEntries.length} subskills available. To use a skill:\n`,
+        '```',
+        'read_file .github/skills/{skill-name}/SKILL.md',
+        '```\n',
+        catalogue,
       );
     }
   } catch { /* no skills dir */ }
