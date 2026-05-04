@@ -7,13 +7,17 @@ import {
   ProjectActiveRunError,
 } from '../services/project.service.js';
 import { seedBuiltinMcpForProject } from '../services/mcp.service.js';
+import { SkillsService } from '../services/skills.service.js';
+import { syncSkillFiles } from '../services/exec-context.js';
 
 const projectRoutes = new Hono();
 const projectService = new ProjectService();
+const skillsService = new SkillsService();
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
+  skillSetId: z.string().optional(),
 });
 
 const updateSchema = z.object({
@@ -39,6 +43,21 @@ projectRoutes.post('/api/projects', async (c) => {
   try {
     const project = projectService.create(parsed.data.name, parsed.data.description);
     seedBuiltinMcpForProject(project.id);
+
+    // Auto-assign default skill set to new project.
+    // If skillSetId is provided, use it; otherwise assign all available skills.
+    const allSkills = skillsService.listAll();
+    if (parsed.data.skillSetId) {
+      const skill = allSkills.find((s: { id: string; name: string }) => s.id === parsed.data.skillSetId || s.name === parsed.data.skillSetId);
+      if (skill) {
+        skillsService.assignToProject(project.id, skill.id);
+      }
+    } else if (allSkills.length > 0) {
+      // Assign first available skill as default
+      skillsService.assignToProject(project.id, allSkills[0]!.id);
+    }
+    syncSkillFiles(project.id);
+
     return c.json(project, 201);
   } catch (err) {
     if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') {

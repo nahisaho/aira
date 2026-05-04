@@ -2,7 +2,7 @@ import { AuthService } from './auth.service.js';
 import { SkillsService } from './skills.service.js';
 import { McpService } from './mcp.service.js';
 import { createRedactorWithFlush } from './agent.service.js';
-import { startRun, stopRun } from './container-runner.js';
+import { startRun, stopRun, clearSession } from './container-runner.js';
 import { reconcileProjectFiles } from './file.service.js';
 import { getDatabase } from '../db/index.js';
 import * as pathConfig from '../config/paths.js';
@@ -195,6 +195,18 @@ export function assembleExecContext(projectId: string): ExecContext {
   const workspaceDir = pathConfig.getWorkspaceDir(projectId);
   // Ensure workspace is a valid git repo so Copilot CLI discovers instruction files.
   ensureWorkspaceRepo(workspaceDir);
+
+  // Auto-assign default skill if project has no skills assigned.
+  // This handles projects created before auto-assignment was added.
+  const currentSkills = skillsService.getProjectSkills(projectId);
+  if (currentSkills.length === 0) {
+    const allSkills = skillsService.listAll();
+    if (allSkills.length > 0) {
+      skillsService.assignToProject(projectId, allSkills[0]!.id);
+      console.log(`[exec-context] Auto-assigned skill "${allSkills[0]!.name}" to project ${projectId}`);
+    }
+  }
+
   // Sync skill files to workspace before spawning the CLI.
   // This is a safety net; normally done at skill-assignment time via the API.
   syncSkillFiles(projectId);
@@ -277,7 +289,14 @@ export function executeChat(
   // CLI maintains its own history via --resume; just pass the raw user message.
   // DB messages are kept for UI display and cold-start recovery.
   const prompt = userMessage;
-  console.log(`[exec-context] prompt=${prompt.length}chars first=${existingMsgCount === 0}`);
+  const isFirstMessage = existingMsgCount === 0;
+  console.log(`[exec-context] prompt=${prompt.length}chars first=${isFirstMessage}`);
+
+  // On first message, clear any stale CLI session so we start fresh.
+  // This prevents session contamination from a previous container lifecycle.
+  if (isFirstMessage) {
+    clearSession(projectId);
+  }
 
   // Create assistant message for streaming accumulation
   const assistantMsgId = crypto.randomUUID();
