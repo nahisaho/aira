@@ -56,19 +56,38 @@ function ensureWorkspaceRepo(workspaceDir: string): void {
 }
 
 /**
+ * Recursively copy a directory tree.
+ */
+function copyDirRecursive(src: string, dest: string): void {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+/**
  * Sync skill instruction files to the project workspace.
  *
- * Mirrors CoreClaw's skills-sync approach:
- *   - workspace/AGENTS.md                          ← routing rules (CLI Primary instructions)
- *   - workspace/.github/copilot-instructions.md   ← repo-wide instructions
- *   - workspace/.github/skills/{name}/SKILL.md    ← per-subskill instructions
- *   - workspace/.github/agents/{file}.agent.md    ← agent definitions
+ * Layout follows the Agent Skills specification:
+ *   - workspace/.github/copilot-instructions.md   ← custom instructions (auto-loaded by CLI)
+ *   - workspace/.github/skills/{name}/SKILL.md    ← agent skills (auto-discovered by CLI)
+ *   - workspace/.github/skills/{name}/*           ← scripts/resources (available to skill)
+ *   - workspace/.github/agents/{file}.agent.md    ← custom agent definitions
+ *   - workspace/AGENTS.md                         ← additional custom instructions
  *
- * The agent discovers subskill instructions on demand via read_file,
- * which enables genuine 1問1答 routing (ask one question → wait for user → ask next).
- * Inlining everything into --prompt bypasses this protocol.
+ * The CLI natively discovers and loads these files:
+ *   - copilot-instructions.md: loaded at session start as always-on context
+ *   - SKILL.md: selected based on description match, injected when relevant
+ *   - AGENTS.md: loaded as custom instructions
  *
- * Called at skill assignment time and as a safety net before each run.
+ * The --prompt argument contains ONLY conversation history + current message.
+ * Skill discovery and routing is handled entirely by the CLI.
  */
 export function syncSkillFiles(projectId: string): void {
   const workspaceDir = pathConfig.getWorkspaceDir(projectId);
@@ -111,18 +130,15 @@ export function syncSkillFiles(projectId: string): void {
       ciSections.push(fs.readFileSync(path.join(dir, 'copilot-instructions.md'), 'utf8'));
     } catch { /* skip */ }
 
-    // Subskill SKILL.md → .github/skills/{name}/SKILL.md
-    // The agent reads these on demand via read_file when routing to a subskill.
+    // Subskill directories → .github/skills/{name}/
+    // The CLI auto-discovers all files in a skill directory alongside SKILL.md.
     try {
       const subSkills = fs.readdirSync(path.join(dir, 'skills'), { withFileTypes: true });
       for (const entry of subSkills) {
         if (!entry.isDirectory()) continue;
-        const src = path.join(dir, 'skills', entry.name, 'SKILL.md');
-        try {
-          const dest = path.join(skillsOutDir, entry.name, 'SKILL.md');
-          fs.mkdirSync(path.dirname(dest), { recursive: true });
-          fs.copyFileSync(src, dest);
-        } catch { /* skip missing */ }
+        const srcDir = path.join(dir, 'skills', entry.name);
+        const destDir = path.join(skillsOutDir, entry.name);
+        copyDirRecursive(srcDir, destDir);
       }
     } catch { /* no skills/ dir */ }
 
@@ -148,25 +164,21 @@ export function syncSkillFiles(projectId: string): void {
   }
 
   if (agentsSections.length > 0) {
-    // Append a meta-hint so the agent knows where subskill files are located.
-    const subskillHint = [
-      '',
-      '## Subskill File Locations',
-      '',
-      'When routing to a subskill, read its detailed instructions from:',
-      '  `.github/skills/{subskill-name}/SKILL.md`',
-      '',
-      'Example: to activate `spread1000-context-collector`, execute:',
-      '  read_file .github/skills/spread1000-context-collector/SKILL.md',
-      'then follow those instructions exactly.',
-    ].join('\n');
-
     fs.writeFileSync(
       path.join(workspaceDir, 'AGENTS.md'),
-      agentsSections.join('\n\n') + subskillHint,
+      agentsSections.join('\n\n'),
       'utf8',
     );
   }
+
+  // Log final workspace layout for debugging
+  const skillCount = fs.existsSync(skillsOutDir)
+    ? fs.readdirSync(skillsOutDir, { withFileTypes: true }).filter(e => e.isDirectory()).length
+    : 0;
+  console.log(`[syncSkillFiles] workspace: ${workspaceDir}`);
+  console.log(`[syncSkillFiles]   .github/copilot-instructions.md: ${ciSections.length > 0 ? 'yes' : 'no'}`);
+  console.log(`[syncSkillFiles]   AGENTS.md: ${agentsSections.length > 0 ? 'yes' : 'no'}`);
+  console.log(`[syncSkillFiles]   .github/skills/: ${skillCount} skills`);
 }
 
 /**
@@ -213,124 +225,20 @@ export function assembleExecContext(projectId: string): ExecContext {
  * can resume without losing context.
  */
 /**
- * Extract name + description from a SKILL.md YAML frontmatter.
+ * Build a prompt containing conversation history and the current user message.
+ *
+ * Workspace instruction files (copilot-instructions.md, AGENTS.md, SKILL.md)
+ * are NOT embedded here — the Copilot CLI discovers and loads them natively
+ * from the workspace directory (see Agent Skills specification).
  */
-function parseSkillFrontmatter(content: string): { name: string; description: string } | null {
-  const m = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!m) return null;
-  const yaml = m[1];
-  const nameMatch = yaml.match(/^name:\s*(.+)/m);
-  const descMatch = yaml.match(/^description:\s*\|?\s*\n([\s\S]*?)(?=\n\w|\n---|\n$)/m)
-    ?? yaml.match(/^description:\s*(.+)/m);
-  if (!nameMatch) return null;
-  const desc = descMatch
-    ? (descMatch[1] ?? descMatch[0]).replace(/^description:\s*/, '').trim().split('\n').map(l => l.trim()).join(' ')
-    : '';
-  return { name: nameMatch[1].trim(), description: desc.slice(0, 200) };
-}
-
-/**
- * Read workspace instruction files (.github/copilot-instructions.md, AGENTS.md)
- * and build a skill catalogue with descriptions from SKILL.md frontmatter.
- */
-function loadWorkspaceInstructions(workspaceDir: string): string {
-  const sections: string[] = [];
-
-  // 1. Execution flow — always present
-  sections.push(
-    '# Execution Flow (MANDATORY)\n',
-    'You are a skill-based agent. Follow this flow for EVERY user request:\n',
-    '1. **Read copilot-instructions.md rules below** — these are your behavioral rules.',
-    '2. **Pre-Routing: Context Check** — follow the "Pre-Routing: Context Sufficiency Check"',
-    '   in AGENTS.md below. If context is insufficient, route to the context-collector skill.',
-    '   Read its SKILL.md via `read_file` and follow its 1-question-at-a-time protocol.',
-    '   Do NOT ask multiple questions at once. Do NOT create files or use tools until context is sufficient.',
-    '3. **Route** — match the user request to a WHEN/DO rule in AGENTS.md routing table.',
-    '4. **Load Skill** — execute `read_file .github/skills/{skill-name}/SKILL.md` to load detailed instructions.',
-    '5. **Execute** — follow the loaded SKILL.md instructions exactly to produce outputs.',
-    '6. **Report** — summarize what files were created/updated.\n',
-    'IMPORTANT: You MUST call `read_file` to load the SKILL.md BEFORE executing any skill.',
-    'Do NOT skip step 4. The SKILL.md contains critical execution details.',
-    'For follow-up messages, continue the current workflow (e.g., context collection, skill execution).\n',
-  );
-
-  // 2. copilot-instructions.md — repo-wide behavioural rules
-  const ciPath = path.join(workspaceDir, '.github', 'copilot-instructions.md');
-  try {
-    const ci = fs.readFileSync(ciPath, 'utf8').trim();
-    if (ci) {
-      sections.push(
-        '# System Instructions (copilot-instructions.md)\n',
-        'You MUST follow these instructions exactly.\n',
-        ci,
-      );
-    }
-  } catch { /* not present */ }
-
-  // 3. AGENTS.md — routing rules & skill catalogue
-  const agentsPath = path.join(workspaceDir, 'AGENTS.md');
-  try {
-    const agents = fs.readFileSync(agentsPath, 'utf8').trim();
-    if (agents) {
-      sections.push(
-        '\n# Agent Routing Rules (AGENTS.md)\n',
-        agents,
-      );
-    }
-  } catch { /* not present */ }
-
-  // 4. Build skill catalogue from SKILL.md frontmatter
-  const skillsDir = path.join(workspaceDir, '.github', 'skills');
-  try {
-    const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
-    const skillEntries: { name: string; description: string; dir: string }[] = [];
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const skillPath = path.join(skillsDir, entry.name, 'SKILL.md');
-      try {
-        const content = fs.readFileSync(skillPath, 'utf8');
-        const meta = parseSkillFrontmatter(content);
-        if (meta) {
-          skillEntries.push({ ...meta, dir: entry.name });
-        } else {
-          skillEntries.push({ name: entry.name, description: '', dir: entry.name });
-        }
-      } catch { /* skip */ }
-    }
-
-    if (skillEntries.length > 0) {
-      const catalogue = skillEntries
-        .map(s => `- **${s.name}**: ${s.description || '(no description)'}`)
-        .join('\n');
-      sections.push(
-        '\n# Skill Catalogue\n',
-        `${skillEntries.length} subskills available. To use a skill:\n`,
-        '```',
-        'read_file .github/skills/{skill-name}/SKILL.md',
-        '```\n',
-        catalogue,
-      );
-    }
-  } catch { /* no skills dir */ }
-
-  return sections.length > 0 ? sections.join('\n') + '\n\n---\n\n' : '';
-}
-
 function buildContextualPrompt(
   history: { role: string; content: string }[],
   currentMessage: string,
-  workspaceDir: string,
 ): string {
-  // Embed workspace instructions (copilot-instructions.md, AGENTS.md, skills list)
-  const instructions = loadWorkspaceInstructions(workspaceDir);
-
-  if (history.length === 0) {
-    return instructions + currentMessage;
-  }
+  if (history.length === 0) return currentMessage;
 
   const MAX_CONTENT_LEN = 3000;
-  const lines: string[] = [instructions, '# Conversation History\n'];
+  const lines: string[] = ['# Conversation History\n'];
 
   for (const msg of history) {
     const label = msg.role === 'user' ? 'User' : 'Assistant';
@@ -399,7 +307,7 @@ export function executeChat(
 
   // Build prompt: history + current message (cold-start recovery via DB)
   const filteredHistory = historyRows.filter(m => m.id !== msgId);
-  const fullPrompt = buildContextualPrompt(filteredHistory, userMessage, ctx.workspaceDir);
+  const fullPrompt = buildContextualPrompt(filteredHistory, userMessage);
 
   // Create assistant message for streaming accumulation
   const assistantMsgId = crypto.randomUUID();
