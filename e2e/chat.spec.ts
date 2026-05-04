@@ -4,27 +4,30 @@ test.describe('Chat Functionality', () => {
   test('send message shows in chat', async ({ page }) => {
     await page.goto('/');
 
-    // First create a project if needed
-    const newBtn = page.getByRole('button', { name: /new|create|\+/i });
+    // Create a fresh project with a unique name
+    const projectName = `Chat Test ${Date.now()}`;
+    const newBtn = page.getByRole('button', { name: /新規|New/i }).first();
     if (await newBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
       await newBtn.click();
-      const nameInput = page.getByPlaceholder(/name|project/i);
-      if (await nameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await nameInput.fill('Chat Test Project');
-        const createBtn = page.getByRole('button', { name: /create|save/i });
+      const nameInput = page.getByPlaceholder(/入力|Enter project/i);
+      if (await nameInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await nameInput.fill(projectName);
+        // ja: '作成' / en: 'Create'
+        const createBtn = page.getByRole('button', { name: /作成|Create/ });
         await createBtn.click();
-        await page.waitForTimeout(500);
+        // Wait for modal to close
+        await expect(nameInput).not.toBeVisible({ timeout: 5000 });
       }
     }
 
-    // Select the project if not selected
-    const projectItem = page.getByText(/Chat Test|Projects/i).first();
-    if (await projectItem.isVisible()) {
+    // Select the project if not already selected (uses data-testid)
+    const projectItem = page.locator('[data-testid="project-item"]').filter({ hasText: projectName });
+    if (await projectItem.isVisible({ timeout: 3000 }).catch(() => false)) {
       await projectItem.click();
     }
 
     // Type a message
-    const input = page.getByPlaceholder(/message|type|send/i);
+    const input = page.getByPlaceholder(/入力|type/i);
     await expect(input).toBeVisible({ timeout: 5000 });
     await input.fill('Hello AIRA');
     await input.press('Enter');

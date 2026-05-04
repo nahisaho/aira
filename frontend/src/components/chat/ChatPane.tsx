@@ -7,7 +7,7 @@ import { useT } from '../../useT';
 import { MessageItem } from './MessageItem';
 
 export function ChatPane() {
-  const { messages, loading, sending, fetchMessages, sendMessage } = useChatStore();
+  const { messages, loading, sending, runStatus, progressMessage, fetchMessages, sendMessage } = useChatStore();
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const wsStatus = useWSStore((s) => s.status);
   const theme = usePreferencesStore((s) => s.theme);
@@ -28,7 +28,7 @@ export function ChatPane() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || !activeProjectId || sending) return;
+    if (!input.trim() || !activeProjectId || isActive) return;
 
     const content = input;
     setInput('');
@@ -43,6 +43,8 @@ export function ChatPane() {
   };
 
   const light = theme === 'light';
+  // True while any run activity is in progress (REST save phase OR active WS run)
+  const isActive = sending || runStatus === 'running';
 
   if (!activeProjectId) {
     return (
@@ -60,7 +62,7 @@ export function ChatPane() {
         {messages.map((msg) => (
           <MessageItem key={msg.id} role={msg.role} content={msg.content} />
         ))}
-        {sending && <ThinkingIndicator light={light} />}
+        {isActive && <ThinkingIndicator light={light} message={progressMessage ?? undefined} />}
         <div ref={messagesEndRef} />
       </div>
 
@@ -108,10 +110,10 @@ export function ChatPane() {
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() || sending}
+            disabled={!input.trim() || isActive}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm text-white"
           >
-            {sending ? t('chat.sending') : t('chat.send')}
+            {isActive ? t('chat.sending') : t('chat.send')}
           </button>
         </div>
       </div>
@@ -119,7 +121,7 @@ export function ChatPane() {
   );
 }
 
-function ThinkingIndicator({ light }: { light: boolean }) {
+function ThinkingIndicator({ light, message }: { light: boolean; message?: string }) {
   return (
     <div className="flex justify-start">
       <div className={`px-4 py-3 rounded-lg ${light ? 'bg-gray-100' : 'bg-gray-800'}`}>
@@ -128,6 +130,9 @@ function ThinkingIndicator({ light }: { light: boolean }) {
           <span className={`w-2 h-2 rounded-full animate-bounce ${light ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '150ms' }} />
           <span className={`w-2 h-2 rounded-full animate-bounce ${light ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '300ms' }} />
         </div>
+        {message && (
+          <p className={`text-xs mt-1.5 truncate max-w-xs ${light ? 'text-gray-400' : 'text-gray-500'}`}>{message}</p>
+        )}
       </div>
     </div>
   );

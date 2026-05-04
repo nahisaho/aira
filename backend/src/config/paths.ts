@@ -1,7 +1,7 @@
 /**
  * Centralized runtime paths configuration.
  * All storage paths flow through this module so they can be
- * overridden for Electron (app.getPath('userData')) or testing.
+ * overridden for testing.
  */
 import path from 'node:path';
 

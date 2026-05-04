@@ -1,6 +1,5 @@
 /**
  * CLI entrypoint — starts the AIRA backend as a standalone process.
- * For Electron embedding, use lifecycle.ts directly.
  */
 import path from 'node:path';
 import { startServer, stopServer, enableStaticServing } from './lifecycle.js';
@@ -15,8 +14,8 @@ if (isDocker) {
   console.log(`[AIRA] Serving frontend from ${frontendDir}`);
 }
 
-process.on('SIGINT', () => { stopServer(); process.exit(0); });
-process.on('SIGTERM', () => { stopServer(); process.exit(0); });
+process.on('SIGINT',  () => { stopServer().finally(() => process.exit(0)); });
+process.on('SIGTERM', () => { stopServer().finally(() => process.exit(0)); });
 
 startServer({
   port: PORT,

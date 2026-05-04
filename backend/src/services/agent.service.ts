@@ -236,6 +236,7 @@ export function spawnAgent(opts: {
   prompt: string;
   token: string;
   model?: string;
+  mcpConfigFile?: string | null;
   extraEnv?: Record<string, string>;
   onData?: (data: string) => void;
   onClose?: (code: number | null) => void;
@@ -243,7 +244,7 @@ export function spawnAgent(opts: {
   const cli = resolveCli();
   const isWindows = process.platform === 'win32';
 
-  const args = [...cli.argsPrefix, ...buildAgentArgs(opts.prompt, opts.model)];
+  const args = [...cli.argsPrefix, ...buildAgentArgs(opts.prompt, opts.model, opts.mcpConfigFile)];
 
   const child = spawn(cli.command, args, {
     cwd: opts.workspaceDir,
@@ -293,13 +294,20 @@ export function spawnAgent(opts: {
   return child;
 }
 
-function buildAgentArgs(prompt: string, model?: string): string[] {
+function buildAgentArgs(
+  prompt: string,
+  model?: string,
+  mcpConfigFile?: string | null,
+): string[] {
   const args = [
     '--allow-all',     // Non-interactive: allow tools, file paths, and URLs
     '--prompt', prompt,
   ];
   if (model) {
     args.push('--model', model);
+  }
+  if (mcpConfigFile) {
+    args.push('--additional-mcp-config', `@${mcpConfigFile}`);
   }
   return args;
 }

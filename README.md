@@ -6,22 +6,22 @@
 
 ## 概要
 
-AIRA は、[CoreClaw](https://github.com/nahisaho/coreclaw) に着想を得た  
-WASM ベースのチャットボットアプリケーションです。  
-**プロジェクト単位**で Agent Skills と MCP サーバーを管理し、  
+AIRAは、[CoreClaw](https://github.com/nahisaho/coreclaw)に着想を得た
+WASMベースのチャットボットアプリケーションです。
+**プロジェクト単位**でAgent SkillsとMCPサーバーを管理し、
 生成ファイルの閲覧・ダウンロードが可能です。
 
 ## 主な機能
 
-- **チャット UI**: WebSocket ストリーミングによるリアルタイム応答
+- **チャットUI**: WebSocketストリーミングによるリアルタイム応答
 - **プロジェクト管理**: 作成・削除・名前変更
-- **Agent Skills**: プロジェクトごとに Skills を割り当て
-- **MCP 設定**: プロジェクトごとに MCP サーバーを設定（有効/無効切替）
-- **ファイル管理**: 生成ファイルの表示・ダウンロード (ZIP 一括含む)
+- **Agent Skills**: プロジェクトごとにSkillsを割り当て
+- **MCP設定**: プロジェクトごとにMCPサーバーを設定（有効/無効切替）
+- **ファイル管理**: 生成ファイルの表示・ダウンロード（ZIP一括含む）
 - **ファイルアップロード**: 入力ファイルのアップロード
-- **Excel ビューア**: xlsx/xls/csv ファイルのマルチシート表示
+- **Excelビューアー**: xlsx/xls/csvファイルのマルチシート表示
 - **実行履歴**: プロンプト保存・ダウンロード付き
-- **WASM フロントエンド**: React + TypeScript + WASM コンポーネント
+- **WASMフロントエンド**: React + TypeScript + WASMコンポーネント
 
 ## 技術スタック
 
@@ -31,16 +31,15 @@ WASM ベースのチャットボットアプリケーションです。
 | WASM | Rust + wasm-pack (Markdown/Mermaid レンダリング) |
 | バックエンド | Node.js 22+ + TypeScript + Hono |
 | DB | SQLite (better-sqlite3, WAL モード) |
-| エージェント | GitHub Copilot CLI (@github/copilot) |
-| デスクトップ | Electron (オプション) |
-| コンテナ | Docker (マルチステージビルド) |
+| エージェント | GitHub Copilot CLI (@GitHub/copilot) |
+| コンテナー | Docker（マルチステージビルド）|
 
 ## 前提条件
 
 - **OS**: Linux, macOS 13+, Windows 10/11
 - Node.js 22+
-- GitHub Copilot ライセンス
-- GitHub Token (`GITHUB_TOKEN` 環境変数 または Settings 画面で設定)
+- GitHub Copilotライセンス
+- GitHub Token（`GITHUB_TOKEN`環境変数またはSettings画面で設定）
 
 ## クイックスタート (Web 版)
 
@@ -63,7 +62,7 @@ cd frontend && npm run dev
 ```
 
 ブラウザで `http://localhost:5173` にアクセス。
-
+on
 ## ビルド方法
 
 ### Web 版 (開発)
@@ -100,22 +99,8 @@ docker run -p 3000:3000 \
   aira:latest
 ```
 
-Docker イメージには Copilot CLI が内包されています。  
-`http://localhost:3000` でフロントエンドとAPIの両方にアクセスできます。
-
-### Electron (デスクトップアプリ)
-
-```bash
-# 開発モード
-npm run electron:dev
-
-# パッケージング
-npm run electron:build:linux   # Linux AppImage
-npm run electron:build:win     # Windows NSIS installer
-npm run electron:build:mac     # macOS DMG
-```
-
-出力は `dist-electron/` に生成されます。
+DockerイメージにはCopilot CLIが内包されています。
+`http://localhost:3000`でフロントエンドとAPIの両方にアクセスできます。
 
 ### テスト
 
@@ -137,18 +122,16 @@ aira/
 ├── frontend/          # React フロントエンド
 ├── backend/           # Hono バックエンド
 │   └── src/
-│       ├── config/    # パス設定 (Electron/Docker 対応)
+│       ├── config/    # パス設定 (Docker 対応)
 │       ├── routes/    # API ルート
 │       ├── services/  # ビジネスロジック
 │       ├── middleware/ # セキュリティミドルウェア
 │       ├── lifecycle.ts  # 組み込み可能なサーバーAPI
 │       └── server.ts     # CLI エントリポイント
-├── electron/          # Electron メインプロセス
 ├── skills/            # ビルトイン Agent Skills
 ├── wasm/              # Rust WASM モジュール
 ├── docs/              # 設計ドキュメント
-├── Dockerfile         # マルチステージ Docker ビルド
-└── electron-builder.yml
+└── Dockerfile         # マルチステージ Docker ビルド
 ```
 
 ## 環境変数

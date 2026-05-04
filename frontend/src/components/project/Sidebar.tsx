@@ -50,6 +50,7 @@ export function Sidebar() {
         {projects.map((project) => (
           <div
             key={project.id}
+            data-testid="project-row"
             className={`group flex items-center rounded transition-colors ${
               activeProjectId === project.id
                 ? light
@@ -61,6 +62,7 @@ export function Sidebar() {
             }`}
           >
             <button
+              data-testid="project-item"
               onClick={() => setActiveProject(project.id)}
               className="flex-1 text-left px-3 py-2 text-sm min-w-0"
             >
@@ -88,6 +90,7 @@ export function Sidebar() {
               }}
               className="opacity-0 group-hover:opacity-100 px-1 text-xs text-red-400 hover:text-red-300"
               title={t('sidebar.deleteProject')}
+              data-testid="delete-project-btn"
             >
               ✕
             </button>

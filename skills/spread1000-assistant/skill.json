@@ -1,0 +1,6 @@
+{
+  "name": "spread1000-builder",
+  "version": "0.1.0",
+  "description": "文部科学省 AI for Science 萌芽的挑戦研究創出事業（SPReAD）公募支援スイート",
+  "entrypoint": "AGENTS.md"
+}

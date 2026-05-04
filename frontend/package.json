@@ -14,6 +14,7 @@
     "format:check": "prettier --check 'src/**/*.{ts,tsx}'"
   },
   "dependencies": {
+    "@tailwindcss/typography": "^0.5.19",
     "dompurify": "^3.4.2",
     "marked": "^18.0.3",
     "mermaid": "^11.14.0",

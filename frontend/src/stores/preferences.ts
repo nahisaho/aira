@@ -4,14 +4,17 @@ import type { Locale } from '../i18n';
 export type Theme = 'light' | 'dark';
 
 export const LLM_MODELS = [
-  { id: 'auto', label: 'Auto' },
-  { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
-  { id: 'claude-sonnet-4', label: 'Claude Sonnet 4' },
-  { id: 'claude-opus-4', label: 'Claude Opus 4' },
-  { id: 'gpt-5.2', label: 'GPT-5.2' },
-  { id: 'gpt-5.4-mini', label: 'GPT-5.4 mini' },
-  { id: 'o3', label: 'o3' },
-  { id: 'o4-mini', label: 'o4-mini' },
+  { id: 'auto',                  label: 'Auto (Copilot default)' },
+  // Anthropic via Copilot
+  { id: 'claude-sonnet-4-5',     label: 'Claude Sonnet 4.5' },
+  { id: 'claude-sonnet-4',       label: 'Claude Sonnet 4' },
+  { id: 'claude-opus-4',         label: 'Claude Opus 4' },
+  // OpenAI via Copilot
+  { id: 'gpt-4.1',               label: 'GPT-4.1' },
+  { id: 'gpt-4.1-mini',          label: 'GPT-4.1 mini' },
+  { id: 'gpt-4o',                label: 'GPT-4o' },
+  { id: 'o3',                    label: 'o3' },
+  { id: 'o4-mini',               label: 'o4-mini' },
 ] as const;
 
 export type LlmModelId = (typeof LLM_MODELS)[number]['id'];

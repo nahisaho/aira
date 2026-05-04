@@ -27,6 +27,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       git ca-certificates python3 python3-pip python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
+# Install ToolUniverse MCP server
+RUN pip install --break-system-packages tooluniverse
+
 # Install GitHub Copilot CLI globally
 RUN npm install -g @github/copilot && npm cache clean --force
 

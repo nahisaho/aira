@@ -4,35 +4,41 @@ test.describe('Project Management', () => {
   test('create and delete project flow', async ({ page }) => {
     await page.goto('/');
 
-    // Click new project button
-    const newBtn = page.getByRole('button', { name: /new|create|\+/i });
+    // Use a unique name to avoid conflicts across test runs
+    const projectName = `E2E Project ${Date.now()}`;
+
+    // Click new project button (ja: '+ 新規' / en: '+ New')
+    const newBtn = page.getByRole('button', { name: /新規|New/i }).first();
     await expect(newBtn).toBeVisible({ timeout: 10000 });
     await newBtn.click();
 
-    // Fill project name
-    const nameInput = page.getByPlaceholder(/name|project/i);
-    await expect(nameInput).toBeVisible();
-    await nameInput.fill('Test E2E Project');
+    // Fill project name (placeholder: 'プロジェクト名を入力' ja / 'Enter project name' en)
+    const nameInput = page.getByPlaceholder(/入力|Enter project/i);
+    await expect(nameInput).toBeVisible({ timeout: 5000 });
+    await nameInput.fill(projectName);
 
-    // Submit
-    const createBtn = page.getByRole('button', { name: /create|save|submit/i });
+    // Submit (ja: '作成' / en: 'Create')
+    const createBtn = page.getByRole('button', { name: /作成|Create/ });
     await createBtn.click();
 
-    // Verify project appears in sidebar
-    await expect(page.getByText('Test E2E Project')).toBeVisible({ timeout: 5000 });
+    // Modal should close and project appears in sidebar
+    await expect(page.getByText(projectName)).toBeVisible({ timeout: 5000 });
 
-    // Delete project - right click or find delete button
-    await page.getByText('Test E2E Project').click({ button: 'right' });
-    const deleteBtn = page.getByRole('button', { name: /delete|remove/i }).or(
-      page.getByText(/delete|remove/i)
-    );
-    if (await deleteBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await deleteBtn.click();
-      // Confirm deletion
-      const confirmBtn = page.getByRole('button', { name: /confirm|yes|delete/i });
-      if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await confirmBtn.click();
-      }
-    }
+    // Delete: find the specific project row, then click its delete button
+    const projectRow = page.locator('[data-testid="project-row"]').filter({ has: page.getByText(projectName) });
+    await projectRow.hover();
+    const deleteBtn = projectRow.locator('[data-testid="delete-project-btn"]');
+    await expect(deleteBtn).toBeVisible({ timeout: 3000 });
+    await deleteBtn.click();
+
+    // Confirm deletion in the dialog (ja: '削除' / en: 'Delete')
+    const confirmBtn = page.getByRole('button', { name: /^削除$|^Delete$/ });
+    await expect(confirmBtn).toBeVisible({ timeout: 3000 });
+    await confirmBtn.click();
+
+    // Project should disappear from sidebar
+    await expect(
+      page.locator('[data-testid="project-row"]').filter({ hasText: projectName })
+    ).not.toBeVisible({ timeout: 5000 });
   });
 });

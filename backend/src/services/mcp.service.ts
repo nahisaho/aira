@@ -29,8 +29,8 @@ const BUILTIN_MCP_CONFIGS = [
     name: 'tooluniverse',
     type: 'stdio' as const,
     config: {
-      command: 'python',
-      args: ['-m', 'tooluniverse.mcp_server'],
+      command: 'tooluniverse-smcp',
+      args: ['--compact-mode'],
       env: {},
       description: 'ToolUniverse MCP server providing access to 100+ scientific database APIs including PubMed, ChEMBL, Ensembl, UniProt, STRING, Reactome, GDC, DepMap, and more.',
       url: 'https://github.com/mims-harvard/ToolUniverse',
@@ -240,11 +240,14 @@ export class McpService {
 
     if (rows.length === 0) return null;
 
-    const mcpConfig: Record<string, unknown> = {};
+    const mcpServers: Record<string, unknown> = {};
     for (const row of rows) {
       const config = JSON.parse(row.config_json);
-      mcpConfig[row.name] = { type: row.type, ...config };
+      mcpServers[row.name] = { type: row.type, ...config };
     }
+
+    // Copilot CLI expects { "mcpServers": { ... } }
+    const mcpConfig = { mcpServers };
 
     const tmpDir = pathConfig.getTmpDir();
     fs.mkdirSync(tmpDir, { recursive: true, mode: 0o700 });

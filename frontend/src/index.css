@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @custom-variant light (.light &);
 
@@ -38,6 +39,16 @@
 }
 .light .prose code {
   color: #1e293b !important;
+}
+
+/* not-prose code blocks — keep explicit colors regardless of theme */
+pre.not-prose {
+  background-color: #1e293b;
+  color: #e2e8f0;
+}
+.light pre.not-prose {
+  background-color: #f1f5f9;
+  color: #1e293b;
 }
 
 /* Excel table styles */

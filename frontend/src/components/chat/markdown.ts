@@ -55,10 +55,9 @@ renderer.image = ({ href, title, text }) => {
 
 renderer.code = ({ text, lang }) => {
   if (lang === 'mermaid') {
-    // Mermaid: render as pre with class for future Mermaid.js init (strict mode)
-    return `<pre class="mermaid bg-gray-900 rounded p-3 my-2 overflow-x-auto">${escapeHtml(text)}</pre>`;
+    return `<pre class="mermaid not-prose rounded p-3 my-2 overflow-x-auto">${escapeHtml(text)}</pre>`;
   }
-  return `<pre class="bg-gray-900 rounded p-3 my-2 overflow-x-auto"><code class="language-${escapeAttr(lang || '')}">${escapeHtml(text)}</code></pre>`;
+  return `<pre class="not-prose rounded p-3 my-2 overflow-x-auto"><code class="language-${escapeAttr(lang || '')}">${escapeHtml(text)}</code></pre>`;
 };
 
 marked.use({ renderer });

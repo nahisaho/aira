@@ -26,12 +26,14 @@ Collaborative research partner with 202 specialized sub-skills. Route work to th
 
 ### MCP Configuration
 
-MCP server config: `.mcp.json` in this directory.
+MCP server config: `.mcp.json` in this directory.  
+Command: `tooluniverse-smcp --compact-mode` (stdio transport, compact mode loads core discovery tools).
 
 ### Tool Usage Rules
 
 - Use MCP tools when available for database queries (PubMed, ChEMBL, Ensembl, UniProt, etc.).
 - Fall back to Python `requests` + public REST APIs when MCP server is unavailable.
+- Fall back to `web_search` tool (GitHub MCP) as a secondary option.
 - Each sub-skill's `tu_tools` frontmatter lists its available MCP tools.
 - Each sub-skill's "Available Tools (MCP)" section documents tool names and sources.
 - Do not enable more than 10 MCP servers simultaneously (Context Efficiency).

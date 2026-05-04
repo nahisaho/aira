@@ -51,7 +51,11 @@ export function MessageItem({ role, content }: MessageItemProps) {
       }`}>
         <MarkdownContent
           html={html}
-          className={`prose prose-sm max-w-none ${light ? '' : 'prose-invert'}`}
+          className={`prose prose-sm max-w-none ${
+            light
+              ? 'prose-gray'
+              : 'prose-invert prose-pre:bg-gray-900 prose-code:text-blue-300'
+          }`}
           dark={!light}
         />
       </div>

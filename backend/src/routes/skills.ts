@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { SkillsService, InvalidGitHubUrlError } from '../services/skills.service.js';
+import { syncSkillFiles } from '../services/exec-context.js';
 
 const skillsRoutes = new Hono();
 const skillsService = new SkillsService();
@@ -52,6 +53,8 @@ skillsRoutes.get('/api/projects/:id/skills', (c) => {
 skillsRoutes.post('/api/projects/:id/skills/:skillId', (c) => {
   const { id: projectId, skillId } = c.req.param() as { id: string; skillId: string };
   skillsService.assignToProject(projectId, skillId);
+  // Sync skill files to workspace so the agent finds them on next run
+  syncSkillFiles(projectId);
   return c.json({ status: 'assigned' });
 });
 
@@ -59,6 +62,8 @@ skillsRoutes.post('/api/projects/:id/skills/:skillId', (c) => {
 skillsRoutes.delete('/api/projects/:id/skills/:skillId', (c) => {
   const { id: projectId, skillId } = c.req.param() as { id: string; skillId: string };
   skillsService.unassignFromProject(projectId, skillId);
+  // Re-sync: removes stale subskill files from the unassigned skill
+  syncSkillFiles(projectId);
   return c.body(null, 204);
 });
 

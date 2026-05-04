@@ -2,6 +2,7 @@ export type WSEventType =
   | { type: 'status'; runId: string; status: string }
   | { type: 'log'; message: string; timestamp: string }
   | { type: 'chunk'; content: string }
+  | { type: 'progress'; message: string }
   | { type: 'file_added'; file: { id: string; file_path: string; size_bytes: number } }
   | { type: 'file_modified'; file: { id: string; file_path: string; size_bytes: number } }
   | { type: 'file_deleted'; fileId: string }

@@ -28,11 +28,14 @@ export function App() {
   };
 
   return (
-    <div className={`flex h-screen ${
-      theme === 'light'
-        ? 'bg-gray-50 text-gray-900'
-        : 'bg-gray-900 text-gray-100'
-    }`}>
+    <div
+      data-testid="app-root"
+      className={`flex h-screen ${
+        theme === 'light'
+          ? 'bg-gray-50 text-gray-900'
+          : 'bg-gray-900 text-gray-100'
+      }`}
+    >
       {/* Left Sidebar */}
       <ResizablePanel
         side="left"
@@ -75,10 +78,10 @@ export function App() {
             {rightCollapsed ? '▷' : '▷'}
           </button>
         </div>
-        <ChatPane />
+        <div className="flex-1 min-h-0">
+          <ChatPane />
+        </div>
       </div>
-
-      {/* Right Panel */}
       <ResizablePanel
         side="right"
         defaultWidth={320}

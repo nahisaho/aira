@@ -172,8 +172,6 @@ export async function initializeDatabase(): Promise<void> {
   const candidates = [
     path.resolve(thisDir, '..', '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
     path.resolve(thisDir, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
-    // Electron packaged (asar.unpacked)
-    path.resolve(thisDir, '..', '..', '..', 'node_modules.asar.unpacked', 'sql.js', 'dist', 'sql-wasm.wasm'),
   ];
   let wasmBinary: ArrayBuffer | undefined;
   for (const c of candidates) {

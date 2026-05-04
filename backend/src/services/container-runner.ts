@@ -351,6 +351,7 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
     '--prompt', opts.prompt,
     '--output-format', 'json',
     '--stream', 'on',
+    '--add-github-mcp-tool', 'web_search',
   ];
   if (opts.model)        args.push('--model', opts.model);
   if (opts.mcpConfigFile) args.push('--additional-mcp-config', `@${opts.mcpConfigFile}`);
