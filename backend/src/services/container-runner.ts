@@ -163,6 +163,11 @@ function parseLine(
       break;
     }
     default:
+      if (type) {
+        // Log unknown events with their data for debugging
+        const preview = JSON.stringify(data).substring(0, 200);
+        console.log(`[copilot-cli] event: ${type} ${preview}`);
+      }
       break;
   }
 }
@@ -190,85 +195,107 @@ function attachStreamReader(
 
 function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
   const cli = resolveHostCli();
-  const sessionName = getSessionName(opts.projectId);
-  const hasSession = projectSessions.has(opts.projectId);
 
-  const args = [
-    ...cli.argsPrefix,
-    '--allow-all',
-    '--prompt', opts.prompt,
-    '--output-format', 'json',
-    '--stream', 'on',
-    '--add-github-mcp-tool', 'web_search',
-  ];
+  // Always try --resume first (session may exist from a previous container lifecycle).
+  // If --resume fails (no such session), retry with --name using a unique suffix.
+  const baseSessionName = getSessionName(opts.projectId);
+  const knownSession = projectSessions.get(opts.projectId);
 
-  // Session continuity: --name for new sessions, --resume for existing ones
-  if (hasSession) {
-    args.push('--resume', sessionName);
-  } else {
-    args.push('--name', sessionName);
-  }
+  function spawnCli(sessionArg: '--resume' | '--name', sessionName: string): ActiveRun {
+    const args = [
+      ...cli.argsPrefix,
+      '--allow-all',
+      '--prompt', opts.prompt,
+      '--output-format', 'json',
+      '--stream', 'on',
+      '--add-github-mcp-tool', 'web_search',
+      sessionArg, sessionName,
+    ];
 
-  if (opts.model)        args.push('--model', opts.model);
-  if (opts.mcpConfigFile) args.push('--additional-mcp-config', `@${opts.mcpConfigFile}`);
+    if (opts.model)        args.push('--model', opts.model);
+    if (opts.mcpConfigFile) args.push('--additional-mcp-config', `@${opts.mcpConfigFile}`);
 
-  const mode = hasSession ? 'resume' : 'new';
-  console.log(`[copilot-cli] ${mode} session="${sessionName}" prompt=${opts.prompt.length}chars`);
+    const mode = sessionArg === '--resume' ? 'resume' : 'new';
+    console.log(`[copilot-cli] ${mode} session="${sessionName}" prompt=${opts.prompt.length}chars`);
 
-  const state: ParseState = { deltasSeen: false, finalMessage: '' };
+    const state: ParseState = { deltasSeen: false, finalMessage: '' };
 
-  const child = spawn(cli.command, args, {
-    cwd: opts.workspaceDir,
-    env: { ...process.env, GITHUB_TOKEN: opts.token },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+    const child = spawn(cli.command, args, {
+      cwd: opts.workspaceDir,
+      env: { ...process.env, GITHUB_TOKEN: opts.token },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
 
-  attachStreamReader(child, state, cbs);
+    attachStreamReader(child, state, cbs);
 
-  child.stderr?.on('data', (d: Buffer) => {
-    console.debug(`[copilot-cli] ${d.toString('utf8').trimEnd()}`);
-  });
+    let stderrBuf = '';
+    child.stderr?.on('data', (d: Buffer) => {
+      const chunk = d.toString('utf8');
+      stderrBuf += chunk;
+      console.warn(`[copilot-cli] ${chunk.trimEnd()}`);
+    });
 
-  let settled = false;
-  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    let settled = false;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
-  function settle(exitCode: number | null, error?: string): void {
-    if (settled) return;
-    settled = true;
-    if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
+    function settle(exitCode: number | null, error?: string): void {
+      if (settled) return;
+      settled = true;
+      if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
+      console.log(`[copilot-cli] settle: exitCode=${exitCode} deltasSeen=${state.deltasSeen} finalMsg=${state.finalMessage.length}chars stderr=${stderrBuf.length}chars`);
 
-    if (error) {
-      // If resume failed, clear session so next attempt creates a new one
-      if (hasSession && exitCode !== 0) {
-        console.warn(`[copilot-cli] resume failed for "${sessionName}", clearing session`);
+      // If CLI exited with error and produced no output, report stderr as error
+      if (!error && exitCode !== 0 && !state.deltasSeen && !state.finalMessage) {
+        const stderrMsg = stderrBuf.trim();
+        error = stderrMsg || `CLI exited with code ${exitCode}`;
+      }
+
+      // If --resume failed (e.g., no such session or multiple matches), retry with --name
+      if (error && sessionArg === '--resume') {
+        console.warn(`[copilot-cli] resume failed: ${error.split('\n')[0]}, retrying with --name`);
         projectSessions.delete(opts.projectId);
+        const uniqueName = `${baseSessionName}-${Date.now().toString(36)}`;
+        spawnCli('--name', uniqueName);
+        return;
       }
-      cbs.onError(error);
-    } else {
-      // Mark session as active on success
-      projectSessions.set(opts.projectId, sessionName);
 
-      if (!state.deltasSeen && state.finalMessage) {
-        cbs.onChunk(state.finalMessage);
+      if (error) {
+        cbs.onError(error);
+      } else {
+        // Mark session as active on success
+        projectSessions.set(opts.projectId, sessionName);
+
+        if (!state.deltasSeen && state.finalMessage) {
+          cbs.onChunk(state.finalMessage);
+        }
+        cbs.onDone(exitCode);
       }
-      cbs.onDone(exitCode);
     }
+
+    child.on('close', (code) => settle(code));
+    child.on('error', (err) => settle(null, `Spawn error: ${err.message}`));
+
+    timeoutHandle = setTimeout(() => {
+      stopFn();
+      settle(null, 'Run timed out');
+    }, RUN_TIMEOUT_MS);
+
+    function stopFn(): void {
+      child.kill('SIGTERM');
+      setTimeout(() => { if (child.exitCode === null) child.kill('SIGKILL'); }, 5_000);
+    }
+
+    return { stop: stopFn };
   }
 
-  child.on('close', (code) => settle(code));
-  child.on('error', (err) => settle(null, `Spawn error: ${err.message}`));
-
-  timeoutHandle = setTimeout(() => {
-    stopFn();
-    settle(null, 'Run timed out');
-  }, RUN_TIMEOUT_MS);
-
-  function stopFn(): void {
-    child.kill('SIGTERM');
-    setTimeout(() => { if (child.exitCode === null) child.kill('SIGKILL'); }, 5_000);
+  // If we know a session name from a previous successful run, resume it.
+  // Otherwise try --resume with the base name (may exist from previous lifecycle),
+  // falling back to --name on failure.
+  if (knownSession) {
+    return spawnCli('--resume', knownSession);
+  } else {
+    return spawnCli('--resume', baseSessionName);
   }
-
-  return { stop: stopFn };
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────

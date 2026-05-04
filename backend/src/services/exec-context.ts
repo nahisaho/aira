@@ -253,6 +253,11 @@ export function executeChat(
     let msgId = callbacks.existingMessageId;
     const runId = crypto.randomUUID();
 
+    // Cancel any orphaned running/queued runs for this project
+    db.prepare(
+      "UPDATE agent_runs SET status = 'failed', finished_at = CURRENT_TIMESTAMP, error_type = 'server_crash' WHERE project_id = ? AND status IN ('running', 'queued')",
+    ).run(projectId);
+
     if (!msgId) {
       msgId = crypto.randomUUID();
       db.prepare(
@@ -332,6 +337,16 @@ export function executeChat(
         callbacks.onComplete(runId, exitCode);
       },
       onError: (errMsg) => {
+        // Send error message to chat as assistant message
+        const isAuthError = errMsg.includes('authentication') || errMsg.includes('GITHUB_TOKEN')
+          || errMsg.includes('Token not configured');
+        const userFacingMsg = isAuthError
+          ? '⚠️ GitHubトークンが未設定または無効です。設定画面からトークンを設定してください。'
+          : `⚠️ エラーが発生しました: ${errMsg.split('\n')[0]}`;
+
+        db.prepare('UPDATE messages SET content = ? WHERE id = ?').run(userFacingMsg, assistantMsgId);
+        callbacks.onChunk(userFacingMsg);
+
         db.prepare(
           "UPDATE agent_runs SET status = 'failed', finished_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('running', 'queued')",
         ).run(runId);
