@@ -3,12 +3,15 @@ import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/project';
 import { useWSStore } from '../../stores/ws';
 import { usePreferencesStore, LLM_MODELS } from '../../stores/preferences';
+import { useFilesStore } from '../../stores/files';
 import { useT } from '../../useT';
 import { MessageItem } from './MessageItem';
+import { runsApi } from '../../api/client';
 
 export function ChatPane() {
   const { messages, loading, sending, runStatus, progressMessage, fetchMessages, sendMessage } = useChatStore();
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
+  const fetchCurrentRun = useFilesStore((s) => s.fetchCurrentRun);
   const wsStatus = useWSStore((s) => s.status);
   const theme = usePreferencesStore((s) => s.theme);
   const model = usePreferencesStore((s) => s.model);
@@ -46,6 +49,13 @@ export function ChatPane() {
   // True while any run activity is in progress (REST save phase OR active WS run)
   const isActive = sending || runStatus === 'running';
 
+  const handleStop = async () => {
+    if (activeProjectId) {
+      await runsApi.stop(activeProjectId);
+      fetchCurrentRun(activeProjectId);
+    }
+  };
+
   if (!activeProjectId) {
     return (
       <div className={`flex-1 flex items-center justify-center ${light ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -62,7 +72,7 @@ export function ChatPane() {
         {messages.map((msg) => (
           <MessageItem key={msg.id} role={msg.role} content={msg.content} />
         ))}
-        {isActive && <ThinkingIndicator light={light} message={progressMessage ?? undefined} />}
+        {isActive && <ThinkingIndicator light={light} message={progressMessage ?? undefined} onStop={handleStop} />}
         <div ref={messagesEndRef} />
       </div>
 
@@ -121,18 +131,26 @@ export function ChatPane() {
   );
 }
 
-function ThinkingIndicator({ light, message }: { light: boolean; message?: string }) {
+function ThinkingIndicator({ light, message, onStop }: { light: boolean; message?: string; onStop: () => void }) {
   return (
     <div className="flex justify-start">
       <div className={`px-4 py-3 rounded-lg ${light ? 'bg-gray-100' : 'bg-gray-800'}`}>
-        <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full animate-bounce ${light ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '0ms' }} />
-          <span className={`w-2 h-2 rounded-full animate-bounce ${light ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '150ms' }} />
-          <span className={`w-2 h-2 rounded-full animate-bounce ${light ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '300ms' }} />
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-2 h-2 rounded-full animate-bounce ${light ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '0ms' }} />
+            <span className={`w-2 h-2 rounded-full animate-bounce ${light ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '150ms' }} />
+            <span className={`w-2 h-2 rounded-full animate-bounce ${light ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '300ms' }} />
+          </div>
+          {message && (
+            <span className={`text-xs truncate max-w-xs ${light ? 'text-gray-500' : 'text-gray-400'}`}>{message}</span>
+          )}
+          <button
+            onClick={onStop}
+            className="ml-2 text-xs px-2 py-0.5 bg-red-600 hover:bg-red-500 rounded text-white"
+          >
+            ■ Stop
+          </button>
         </div>
-        {message && (
-          <p className={`text-xs mt-1.5 truncate max-w-xs ${light ? 'text-gray-400' : 'text-gray-500'}`}>{message}</p>
-        )}
       </div>
     </div>
   );

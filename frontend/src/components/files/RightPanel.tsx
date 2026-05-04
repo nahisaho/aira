@@ -12,7 +12,7 @@ export function RightPanel() {
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const theme = usePreferencesStore((s) => s.theme);
   const t = useT();
-  const { files, currentRun, runHistory, fetchFiles, fetchCurrentRun, fetchRunHistory, removeFile } =
+  const { files, runHistory, fetchFiles, fetchCurrentRun, fetchRunHistory, removeFile } =
     useFilesStore();
   const pipelineSteps = usePipelineStore((s) => s.steps);
   const light = theme === 'light';
@@ -59,44 +59,8 @@ export function RightPanel() {
     );
   }
 
-  const handleStop = async () => {
-    if (activeProjectId) {
-      await runsApi.stop(activeProjectId);
-      fetchCurrentRun(activeProjectId);
-    }
-  };
-
   return (
     <div className="flex flex-col h-full p-3 overflow-y-auto">
-      {/* Current Run Status */}
-      <section className="mb-4">
-        <h3 className={`text-xs font-semibold uppercase mb-2 ${light ? 'text-gray-500' : 'text-gray-400'}`}>
-          {t('panel.status')}
-        </h3>
-        {currentRun ? (
-          <div className={`rounded p-3 ${light ? 'bg-gray-100' : 'bg-gray-800'}`}>
-            <div className="flex items-center justify-between">
-              <RunStatusBadge status={currentRun.status} />
-              {currentRun.status === 'running' && (
-                <button
-                  onClick={handleStop}
-                  className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 rounded text-white"
-                >
-                  {t('panel.stop')}
-                </button>
-              )}
-            </div>
-            {currentRun.status === 'running' && (
-              <div className="mt-2 h-1 rounded-full overflow-hidden bg-gray-700">
-                <div className="h-full bg-blue-500 rounded-full animate-pulse w-2/3" style={{ animation: 'indeterminate 1.5s infinite ease-in-out' }} />
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className={`text-sm ${light ? 'text-gray-400' : 'text-gray-500'}`}>{t('panel.idle')}</div>
-        )}
-      </section>
-
       {/* Pipeline Progress */}
       {pipelineSteps.length > 0 && (
         <section className="mb-4">
