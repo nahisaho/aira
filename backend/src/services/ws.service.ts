@@ -17,10 +17,12 @@ function getAllowedOrigins(port: number): Set<string> {
   origins.add(`http://localhost:${port}`);
   origins.add(`http://127.0.0.1:${port}`);
   origins.add(`http://[::1]:${port}`);
-  // Vite dev server
-  origins.add('http://localhost:5173');
-  origins.add('http://127.0.0.1:5173');
-  origins.add('http://[::1]:5173');
+  // Vite dev server (5173 default; 5174 when 5173 is occupied)
+  for (const vitePort of [5173, 5174, 5175]) {
+    origins.add(`http://localhost:${vitePort}`);
+    origins.add(`http://127.0.0.1:${vitePort}`);
+    origins.add(`http://[::1]:${vitePort}`);
+  }
   return origins;
 }
 
@@ -30,13 +32,17 @@ function getAllowedOrigins(port: number): Set<string> {
 export function attachWebSocket(server: Server, port: number): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true });
   const allowedOrigins = getAllowedOrigins(port);
+  const serveFrontend = process.env.AIRA_SERVE_FRONTEND === 'true';
 
   server.on('upgrade', (request: IncomingMessage, socket, head) => {
     const origin = request.headers.origin ?? '';
     const url = request.url ?? '';
 
     // Origin verification
-    if (!allowedOrigins.has(origin)) {
+    // In Docker mode, the host port may differ from the container port,
+    // so allow any localhost origin when serving the embedded frontend.
+    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+    if (origin && !allowedOrigins.has(origin) && !(serveFrontend && isLocalhost)) {
       socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
       socket.destroy();
       return;
@@ -92,6 +98,9 @@ function handleChatMessage(client: WSClient, content: string, messageId?: string
       model,
       onChunk: (chunk) => {
         broadcastToProject(client.projectId, { type: 'chunk', content: chunk });
+      },
+      onProgress: (message) => {
+        broadcastToProject(client.projectId, { type: 'progress', message });
       },
       onStatus: (runId, status) => {
         broadcastToProject(client.projectId, { type: 'status', runId, status });
