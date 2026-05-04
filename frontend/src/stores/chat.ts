@@ -2,6 +2,25 @@ import { create } from 'zustand';
 import { messagesApi, type Message } from '../api/client';
 import { wsClient } from '../api/ws';
 
+// Chunk buffer for batching rapid WebSocket updates into single React renders
+let chunkBuffer = '';
+let rafId: number | null = null;
+
+function flushChunkBuffer() {
+  rafId = null;
+  if (!chunkBuffer) return;
+  const buffered = chunkBuffer;
+  chunkBuffer = '';
+  useChatStore.getState().appendToLast(buffered);
+}
+
+function queueChunk(content: string) {
+  chunkBuffer += content;
+  if (rafId === null) {
+    rafId = requestAnimationFrame(flushChunkBuffer);
+  }
+}
+
 interface ChatStore {
   messages: Message[];
   loading: boolean;
@@ -98,8 +117,8 @@ wsClient.onEvent((event) => {
   const store = useChatStore.getState();
   switch (event.type) {
     case 'chunk':
-      store.appendToLast(event.content);
-      store.setProgressMessage(null); // clear progress once real content arrives
+      queueChunk(event.content);
+      store.setProgressMessage(null);
       break;
     case 'progress':
       store.setProgressMessage(event.message);
@@ -121,6 +140,9 @@ wsClient.onEvent((event) => {
             });
           });
         } else if (event.status === 'completed' || event.status === 'failed' || event.status === 'cancelled') {
+          // Flush any remaining buffered chunks before finalizing
+          if (chunkBuffer) flushChunkBuffer();
+          if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
           store.setRunStatus('idle');
           store.setProgressMessage(null);
           useChatStore.setState({ sending: false }); // safety: clear if still pending
