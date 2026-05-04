@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import { getDatabase } from '../db/index.js';
 import { getBaseDir } from '../config/paths.js';
@@ -39,8 +40,12 @@ const BUILTIN_SKILLS = [
  */
 export function seedBuiltinSkills(): void {
   const db = getDatabase();
-  // skills/ is at the monorepo root, one level above the backend/ cwd
-  const projectRoot = path.resolve(getBaseDir(), '..');
+  // skills/ lives at the monorepo root.
+  // In local dev, cwd is backend/ so root = ../
+  // In Docker, cwd is /app and skills/ is /app/skills/
+  const baseDir = getBaseDir();
+  const projectRoot = fs.existsSync(path.join(baseDir, 'skills')) ? baseDir
+    : path.resolve(baseDir, '..');
 
   // Ensure builtin column exists
   try {
