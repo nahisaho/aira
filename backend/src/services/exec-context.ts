@@ -216,7 +216,26 @@ function buildContextualPrompt(
   history: { role: string; content: string }[],
   currentMessage: string,
 ): string {
-  if (history.length === 0) return currentMessage;
+  const CONTEXT_CHECK_PREAMBLE = [
+    '## IMPORTANT: Context Sufficiency Check',
+    '',
+    'Before starting any work, check if the user\'s request provides enough context.',
+    'If the request is vague or missing critical details (e.g., research topic, scope,',
+    'target, constraints, deliverables), do NOT proceed with execution.',
+    'Instead:',
+    '1. Output a numbered list of specific clarifying questions in the user\'s language',
+    '2. End with: "上記の質問にお答えください。回答をいただければ作業を開始します。"',
+    '3. Do NOT create any files or run any tools until context is sufficient',
+    '',
+    'If context is sufficient, state any assumptions explicitly and proceed.',
+    '',
+    '---',
+    '',
+  ].join('\n');
+
+  if (history.length === 0) {
+    return CONTEXT_CHECK_PREAMBLE + currentMessage;
+  }
 
   const MAX_CONTENT_LEN = 3000;
   const lines: string[] = ['# Conversation History\n'];
