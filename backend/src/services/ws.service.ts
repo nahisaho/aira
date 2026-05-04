@@ -93,22 +93,29 @@ export function attachWebSocket(server: Server, port: number): WebSocketServer {
 function handleChatMessage(client: WSClient, content: string, messageId?: string, model?: string): void {
   // Import dynamically to avoid circular deps
   import('./exec-context.js').then(({ executeChat }) => {
-    executeChat(client.projectId, content, {
-      existingMessageId: messageId,
-      model,
-      onChunk: (chunk) => {
-        broadcastToProject(client.projectId, { type: 'chunk', content: chunk });
-      },
-      onProgress: (message) => {
-        broadcastToProject(client.projectId, { type: 'progress', message });
-      },
-      onStatus: (runId, status) => {
-        broadcastToProject(client.projectId, { type: 'status', runId, status });
-      },
-      onComplete: (_runId, _exitCode) => {
-        // Clients can fetch updated state via REST
-      },
-    });
+    try {
+      executeChat(client.projectId, content, {
+        existingMessageId: messageId,
+        model,
+        onChunk: (chunk) => {
+          broadcastToProject(client.projectId, { type: 'chunk', content: chunk });
+        },
+        onProgress: (message) => {
+          broadcastToProject(client.projectId, { type: 'progress', message });
+        },
+        onStatus: (runId, status) => {
+          broadcastToProject(client.projectId, { type: 'status', runId, status });
+        },
+        onComplete: (_runId, _exitCode) => {
+          // Clients can fetch updated state via REST
+        },
+      });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[ws] executeChat error: ${errMsg}`);
+      broadcastToProject(client.projectId, { type: 'chunk', content: `⚠️ ${errMsg}` });
+      broadcastToProject(client.projectId, { type: 'status', runId: '', status: 'failed' });
+    }
   });
 }
 
