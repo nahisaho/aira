@@ -79,6 +79,12 @@ export function syncSkillFiles(projectId: string): void {
     .filter(s => s.status === 'available')
     .map(s => path.resolve(s.skill_path));
 
+  // Log resolved skill directories for debugging
+  for (const dir of skillDirs) {
+    const exists = fs.existsSync(dir);
+    console.log(`[syncSkillFiles] skill dir: ${dir} (exists=${exists})`);
+  }
+
   const githubDir = path.join(workspaceDir, '.github');
   const skillsOutDir = path.join(githubDir, 'skills');
   const agentsOutDir = path.join(githubDir, 'agents');

@@ -25,6 +25,12 @@ const BUILTIN_SKILLS = [
     description: 'Harness-optimized collaborative research partner suite covering literature review, experimental design, data analysis, academic writing, peer review, reproducibility, and presentation with full Orchestrator routing and verification loops.',
     repo_url: 'https://github.com/nahisaho/coreclaw-marketplace/tree/main/coreclaw-skills-hub/skills/co-scientist',
   },
+  {
+    slug: 'spread1000-assistant',
+    name: 'spread1000-builder',
+    description: '文部科学省 AI for Science 萌芽的挑戦研究創出事業（SPReAD）公募支援スイート。研究プラン策定から Azure 構築・申請書作成・応募手続きまで 12 の専門サブスキルで支援。',
+    repo_url: 'https://github.com/nahisaho/spread1000-builder/tree/main/src',
+  },
 ];
 
 /**
@@ -33,7 +39,8 @@ const BUILTIN_SKILLS = [
  */
 export function seedBuiltinSkills(): void {
   const db = getDatabase();
-  const projectRoot = getBaseDir();
+  // skills/ is at the monorepo root, one level above the backend/ cwd
+  const projectRoot = path.resolve(getBaseDir(), '..');
 
   // Ensure builtin column exists
   try {
@@ -43,11 +50,17 @@ export function seedBuiltinSkills(): void {
   }
 
   for (const skill of BUILTIN_SKILLS) {
-    const existing = db.prepare('SELECT id FROM skills WHERE name = ? AND builtin = 1').get(skill.slug);
-    if (existing) continue;
+    const skillPath = path.join(projectRoot, 'skills', skill.slug);
+
+    // Check by display name (not slug) to handle slug renames
+    const existing = db.prepare('SELECT id FROM skills WHERE name = ? AND builtin = 1').get(skill.name) as { id: string } | undefined;
+    if (existing) {
+      // Update path in case the slug (directory name) was renamed
+      db.prepare('UPDATE skills SET skill_path = ? WHERE id = ?').run(skillPath, existing.id);
+      continue;
+    }
 
     const id = crypto.randomUUID();
-    const skillPath = path.join(projectRoot, 'skills', skill.slug);
     db.prepare(
       `INSERT INTO skills (id, name, description, source_type, source_url, skill_path, status, builtin)
        VALUES (?, ?, ?, 'local', ?, ?, 'available', 1)`,
