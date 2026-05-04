@@ -7,6 +7,7 @@ interface ChatStore {
   loading: boolean;
   sending: boolean;
   runStatus: 'idle' | 'running' | 'completed' | 'failed';
+  progressMessage: string | null;
 
   fetchMessages: (projectId: string) => Promise<void>;
   sendMessage: (projectId: string, content: string) => Promise<void>;
@@ -14,6 +15,7 @@ interface ChatStore {
   addMessage: (message: Message) => void;
   appendToLast: (content: string) => void;
   setRunStatus: (status: ChatStore['runStatus']) => void;
+  setProgressMessage: (message: string | null) => void;
   reset: () => void;
 }
 
@@ -22,6 +24,7 @@ export const useChatStore = create<ChatStore>((set) => ({
   loading: false,
   sending: false,
   runStatus: 'idle',
+  progressMessage: null,
 
   fetchMessages: async (projectId: string) => {
     set({ loading: true });
@@ -38,7 +41,8 @@ export const useChatStore = create<ChatStore>((set) => ({
     try {
       // Save user message via REST
       const message = await messagesApi.send(projectId, content);
-      set((s) => ({ messages: [...s.messages, message], sending: false }));
+      set((s) => ({ messages: [...s.messages, message] }));
+      // Keep sending=true until run starts (WS will drive it)
 
       // Get selected model
       const { usePreferencesStore } = await import('./preferences');
@@ -84,7 +88,9 @@ export const useChatStore = create<ChatStore>((set) => ({
 
   setRunStatus: (status) => set({ runStatus: status }),
 
-  reset: () => set({ messages: [], loading: false, sending: false, runStatus: 'idle' }),
+  setProgressMessage: (message) => set({ progressMessage: message }),
+
+  reset: () => set({ messages: [], loading: false, sending: false, runStatus: 'idle', progressMessage: null }),
 }));
 
 // Wire WS events to chat store
@@ -93,11 +99,17 @@ wsClient.onEvent((event) => {
   switch (event.type) {
     case 'chunk':
       store.appendToLast(event.content);
+      store.setProgressMessage(null); // clear progress once real content arrives
+      break;
+    case 'progress':
+      store.setProgressMessage(event.message);
       break;
     case 'status':
       if (event.runId) {
         if (event.status === 'running') {
           store.setRunStatus('running');
+          store.setProgressMessage(null); // clear old progress
+          useChatStore.setState({ sending: false }); // REST phase done; run is live
           // Refresh run history to show running state
           import('./files').then(({ useFilesStore }) => {
             import('./project').then(({ useProjectStore }) => {
@@ -108,8 +120,10 @@ wsClient.onEvent((event) => {
               }
             });
           });
-        } else if (event.status === 'completed' || event.status === 'failed') {
+        } else if (event.status === 'completed' || event.status === 'failed' || event.status === 'cancelled') {
           store.setRunStatus('idle');
+          store.setProgressMessage(null);
+          useChatStore.setState({ sending: false }); // safety: clear if still pending
           // Trigger files & runs refresh
           import('./files').then(({ useFilesStore }) => {
             import('./project').then(({ useProjectStore }) => {
@@ -123,6 +137,45 @@ wsClient.onEvent((event) => {
           });
         }
       }
+      break;
+
+    // ── Real-time file updates from the agent workspace ──
+    case 'file_added':
+      import('./files').then(({ useFilesStore }) => {
+        const f = event.file;
+        useFilesStore.getState().addFile({
+          id: f.id,
+          project_id: '',
+          file_path: f.file_path,
+          size_bytes: f.size_bytes,
+          content_hash: '',
+          source: 'agent',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      });
+      break;
+
+    case 'file_modified':
+      import('./files').then(({ useFilesStore }) => {
+        const f = event.file;
+        useFilesStore.getState().updateFile({
+          id: f.id,
+          project_id: '',
+          file_path: f.file_path,
+          size_bytes: f.size_bytes,
+          content_hash: '',
+          source: 'agent',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      });
+      break;
+
+    case 'file_deleted':
+      import('./files').then(({ useFilesStore }) => {
+        useFilesStore.getState().removeFile(event.fileId);
+      });
       break;
   }
 });
