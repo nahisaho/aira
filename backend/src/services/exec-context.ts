@@ -218,49 +218,15 @@ export function assembleExecContext(projectId: string): ExecContext {
   };
 }
 
-/**
- * Build a contextualized prompt by prepending conversation history.
- * The agent-runner maintains in-memory state between turns, but we also
- * embed DB history so that a freshly spawned runner (after idle timeout)
- * can resume without losing context.
- */
-/**
- * Build a prompt containing conversation history and the current user message.
- *
- * Workspace instruction files (copilot-instructions.md, AGENTS.md, SKILL.md)
- * are NOT embedded here — the Copilot CLI discovers and loads them natively
- * from the workspace directory (see Agent Skills specification).
- */
-function buildContextualPrompt(
-  history: { role: string; content: string }[],
-  currentMessage: string,
-): string {
-  if (history.length === 0) return currentMessage;
-
-  const MAX_CONTENT_LEN = 3000;
-  const lines: string[] = ['# Conversation History\n'];
-
-  for (const msg of history) {
-    const label = msg.role === 'user' ? 'User' : 'Assistant';
-    const content = msg.content.length > MAX_CONTENT_LEN
-      ? msg.content.slice(0, MAX_CONTENT_LEN) + '\n...[truncated]'
-      : msg.content;
-    lines.push(`## ${label}\n\n${content}\n`);
-  }
-
-  lines.push('---\n\n# Current Message\n');
-  lines.push(currentMessage);
-  return lines.join('\n');
-}
 
 /**
  * Execute a chat message by spawning an agent run (Docker container or host
  * process, depending on availability).
  *
- * Each user message triggers a fresh Copilot CLI invocation with the full
- * conversation history prepended to the prompt — enabling multi-turn dialogue
- * without relying on a persistent process. This mirrors the CoreClaw model:
- * one container per run, stateless by default, context reconstructed from DB.
+ * Each user message triggers a fresh Copilot CLI invocation. On the first
+ * message for a project, a named session is created (--name). Subsequent
+ * messages resume the same session (--resume) so the CLI preserves its own
+ * conversation history. DB history is kept as cold-start recovery.
  */
 export function executeChat(
   projectId: string,
@@ -277,15 +243,13 @@ export function executeChat(
   const db = getDatabase();
   const ctx = assembleExecContext(projectId);
 
-  // Fetch conversation history BEFORE saving current message so context is complete.
-  const historyRows = db.prepare(
-    `SELECT id, role, content FROM messages
-     WHERE project_id = ? AND role IN ('user', 'assistant')
-     ORDER BY created_at ASC LIMIT 40`,
-  ).all(projectId) as { id: string; role: string; content: string }[];
+  // Check if this project has existing messages (for cold-start detection)
+  const existingMsgCount = (db.prepare(
+    `SELECT COUNT(*) as cnt FROM messages WHERE project_id = ? AND role IN ('user', 'assistant')`,
+  ).get(projectId) as { cnt: number }).cnt;
 
   // Atomic message + run creation
-  const { msgId, runId } = (db.transaction(() => {
+  const { runId } = (db.transaction(() => {
     let msgId = callbacks.existingMessageId;
     const runId = crypto.randomUUID();
 
@@ -302,12 +266,13 @@ export function executeChat(
 
     db.prepare('UPDATE projects SET last_activity = CURRENT_TIMESTAMP WHERE id = ?').run(projectId);
 
-    return { msgId, runId };
-  }) as () => { msgId: string; runId: string })();
+    return { runId };
+  }) as () => { runId: string })();
 
-  // Build prompt: history + current message (cold-start recovery via DB)
-  const filteredHistory = historyRows.filter(m => m.id !== msgId);
-  const fullPrompt = buildContextualPrompt(filteredHistory, userMessage);
+  // CLI maintains its own history via --resume; just pass the raw user message.
+  // DB messages are kept for UI display and cold-start recovery.
+  const prompt = userMessage;
+  console.log(`[exec-context] prompt=${prompt.length}chars first=${existingMsgCount === 0}`);
 
   // Create assistant message for streaming accumulation
   const assistantMsgId = crypto.randomUUID();
@@ -323,7 +288,7 @@ export function executeChat(
     {
       projectId,
       workspaceDir: ctx.workspaceDir,
-      prompt: fullPrompt,
+      prompt,
       token: ctx.token,
       model: callbacks.model,
       mcpConfigFile: ctx.mcpConfigFile,

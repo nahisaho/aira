@@ -1,40 +1,31 @@
 /**
- * Container Runner  (CoreClaw-inspired)
+ * Container Runner — Session-based CLI orchestrator
  *
- * Executes GitHub Copilot CLI inside a Docker container (one per run).
- * When Docker is unavailable, falls back to a host child process.
+ * Executes GitHub Copilot CLI as a one-process-per-message host process.
+ * Uses --name/--resume to maintain session continuity across invocations
+ * so the CLI preserves its own conversation history, skill state, and
+ * context between turns.
  *
- * Design decisions (from studying CoreClaw + NanoClaw + Hermes):
+ * Design:
+ *  • **Session continuity** — first message uses `--name`, subsequent
+ *    messages use `--resume` so the CLI's built-in session management
+ *    handles conversation history (no need to rebuild from DB).
  *
- *  • **Isolation first** — each run gets a fresh container; workspace is
- *    bind-mounted read-write so Copilot's file edits land on the host.
+ *  • **Native skill discovery** — the CLI auto-discovers skills from
+ *    .github/skills/ and loads them based on description matching.
  *
- *  • **Credential proxy** — the container connects to the credential proxy
- *    (running on the host's docker-bridge gateway) instead of GitHub directly,
- *    so the raw GITHUB_TOKEN never enters the container environment.
+ *  • **Structured streaming** — JSON events (assistant.message_delta,
+ *    tool.execution_start, assistant.turn_end) are parsed and forwarded.
  *
- *  • **Structured streaming** — the agent-runner inside the container outputs
- *    newline-delimited JSON events.  We parse `assistant.message_delta` →
- *    `onChunk` and `tool.execution_start` → `onProgress`, mirroring CoreClaw's
- *    streaming output model.
- *
- *  • **Host fallback** — if Docker is not running or the image is missing,
- *    a local child-process runner is used instead (same JSON protocol).
- *    This preserves the developer experience on machines without Docker.
- *
- *  • **Cancellation** — the caller receives a `stop()` function that kills
- *    the container (or child process) and terminates the run cleanly.
+ *  • **Cancellation** — the caller receives a stop() function that kills
+ *    the process and terminates the run cleanly.
  */
 
 import { spawn, execSync, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROXY_PORT } from './credential-proxy.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────
-
-/** Container image built by container/build.sh */
-const CONTAINER_IMAGE = process.env.AIRA_CONTAINER_IMAGE ?? 'aira-agent:latest';
 
 /** Max time (ms) a single Copilot CLI run is allowed to take. */
 const RUN_TIMEOUT_MS = parseInt(process.env.CONTAINER_TIMEOUT ?? String(3 * 60 * 60 * 1000), 10);
@@ -58,95 +49,57 @@ export interface RunnerOptions {
 }
 
 export interface ActiveRun {
-  /** Call to request cancellation of the in-flight run. */
   stop: () => void;
 }
 
-// ── Docker availability check ──────────────────────────────────────────────
-
-let _dockerAvailable: boolean | null = null;
-let _imageExists: boolean | null = null;
-
-function isDockerAvailable(): boolean {
-  if (_dockerAvailable !== null) return _dockerAvailable;
-  try {
-    execSync('docker info', { stdio: 'pipe', timeout: 8_000 });
-    _dockerAvailable = true;
-  } catch {
-    _dockerAvailable = false;
-  }
-  return _dockerAvailable;
-}
-
-function containerImageExists(): boolean {
-  if (_imageExists !== null) return _imageExists;
-  try {
-    const out = execSync(
-      `docker image inspect ${CONTAINER_IMAGE} --format "{{.Id}}"`,
-      { stdio: 'pipe', timeout: 8_000, encoding: 'utf8' },
-    ).trim();
-    _imageExists = out.length > 0;
-  } catch {
-    _imageExists = false;
-  }
-  return _imageExists;
-}
-
-/** Reset cache (used after docker build completes). */
-export function invalidateDockerCache(): void {
-  _dockerAvailable = null;
-  _imageExists = null;
-}
-
-// ── Host-gateway resolution (for container → proxy communication) ──────────
+// ── Session name registry ──────────────────────────────────────────────────
 
 /**
- * Returns the IP address containers can use to reach the host.
- * On Linux: usually 172.17.0.1 (docker0 bridge).
- * Docker Desktop (macOS/Windows): host.docker.internal.
+ * Tracks which projects have an active CLI session (by name).
+ * First message creates a session with --name, subsequent messages use --resume.
  */
-function hostGateway(): string {
-  if (process.platform === 'linux') {
-    // Try to read the docker0 bridge address
+const projectSessions = new Map<string, string>();
+
+function getSessionName(projectId: string): string {
+  return `aira-${projectId.slice(0, 12)}`;
+}
+
+/** Clear session for a project (e.g., on project delete or reset). */
+export function clearSession(projectId: string): void {
+  projectSessions.delete(projectId);
+}
+
+// ── CLI resolution ─────────────────────────────────────────────────────────
+
+function resolveHostCli(): { command: string; argsPrefix: string[] } {
+  if (process.platform === 'win32') {
     try {
-      const output = execSync(
-        "ip route show | grep docker0 | awk '{print $NF}'",
-        { stdio: 'pipe', encoding: 'utf8', timeout: 3_000 },
-      ).trim().split('\n')[0] ?? '';
-      if (output) return output;
+      const cmdPath = execSync('where copilot.cmd', { encoding: 'utf8', timeout: 10_000 })
+        .trim().split('\n')[0]!.trim();
+      const content = fs.readFileSync(cmdPath, 'utf8');
+      const m = content.match(/"([^"]*node(?:\.exe)?)"[^"]*"([^"]*\.js)"/i);
+      if (m) {
+        const dir = path.dirname(cmdPath);
+        const nodeExe = path.resolve((m[1]!).replace(/%~dp0/gi, dir + path.sep));
+        const scriptPath = path.resolve((m[2]!).replace(/%~dp0/gi, dir + path.sep));
+        return { command: nodeExe, argsPrefix: [scriptPath] };
+      }
     } catch { /* fall through */ }
-    return '172.17.0.1'; // docker0 default
   }
-  return 'host.docker.internal';
-}
-
-// ── MCP config file handling ───────────────────────────────────────────────
-
-/**
- * If there is an MCP config file on the host, write a copy to a temp location
- * accessible from inside the container (within the workspace dir so it is
- * covered by the existing workspace mount).
- */
-function prepareContainerMcpConfig(
-  workspaceDir: string,
-  hostMcpConfigFile: string | null | undefined,
-): { hostPath: string; containerPath: string } | null {
-  if (!hostMcpConfigFile) return null;
   try {
-    const content = fs.readFileSync(hostMcpConfigFile, 'utf8');
-    const tmpDir = path.join(workspaceDir, '.aira-tmp');
-    fs.mkdirSync(tmpDir, { recursive: true });
-    const tmpFile = path.join(tmpDir, `mcp-${Date.now()}.json`);
-    fs.writeFileSync(tmpFile, content, 'utf8');
-    // Inside the container, the workspace is mounted at /workspace
-    const containerPath = `/workspace/.aira-tmp/${path.basename(tmpFile)}`;
-    return { hostPath: tmpFile, containerPath };
-  } catch {
-    return null;
-  }
+    execSync('copilot --version', { encoding: 'utf8', timeout: 10_000, stdio: 'pipe' });
+    return { command: 'copilot', argsPrefix: [] };
+  } catch { /* fall through */ }
+  try {
+    const scriptPath = require.resolve('@github/copilot/dist/cli.js');
+    return { command: process.execPath, argsPrefix: [scriptPath] };
+  } catch { /* fall through */ }
+  throw new Error(
+    'GitHub Copilot CLI not found. Install it with: npm install -g @github/copilot',
+  );
 }
 
-// ── JSON event parsing (shared by Docker and host modes) ───────────────────
+// ── JSON event parsing ─────────────────────────────────────────────────────
 
 function formatToolStart(toolName: string, args: Record<string, unknown>): string {
   const cmd  = typeof args.command  === 'string' ? args.command.trim()  : '';
@@ -194,11 +147,19 @@ function parseLine(
       cbs.onProgress(formatToolStart(n, a));
       break;
     }
-    case 'session.tools_loaded': {
+    case 'session.tools_loaded':
+    case 'session.tools_updated': {
       const names = Array.isArray(data.tools)
         ? (data.tools as Array<{ name?: string }>).map(t => t.name).filter(Boolean).join(', ')
         : '';
       if (names) cbs.onProgress(`Tools loaded: ${names}`);
+      break;
+    }
+    case 'session.skills_loaded': {
+      const skills = Array.isArray(data.skills)
+        ? (data.skills as Array<{ name?: string }>).map(s => s.name).filter(Boolean).join(', ')
+        : '';
+      if (skills) console.log(`[copilot-cli] Skills loaded: ${skills}`);
       break;
     }
     default:
@@ -225,126 +186,13 @@ function attachStreamReader(
   });
 }
 
-// ── Docker runner ──────────────────────────────────────────────────────────
-
-function runInDocker(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
-  const gateway = hostGateway();
-  const proxyUrl = `http://${gateway}:${PROXY_PORT}`;
-  const mcpConf = prepareContainerMcpConfig(opts.workspaceDir, opts.mcpConfigFile);
-
-  const containerName = `aira-run-${opts.projectId.slice(0, 8)}-${Date.now()}`;
-  const state: ParseState = { deltasSeen: false, finalMessage: '' };
-
-  const env: string[] = [
-    `COPILOT_PROMPT=${opts.prompt}`,
-    `GITHUB_API_URL=${proxyUrl}`,
-    `GITHUB_TOKEN=proxy`, // placeholder — real token injected by proxy
-    ...(opts.model ? [`COPILOT_MODEL=${opts.model}`] : []),
-    ...(mcpConf    ? [`MCP_CONFIG_FILE=${mcpConf.containerPath}`] : []),
-  ];
-
-  const dockerArgs = [
-    'run', '--rm',
-    '--name', containerName,
-    // Workspace mount (read-write so Copilot can edit files)
-    '-v', `${opts.workspaceDir}:/workspace`,
-    // Extra host: makes host.docker.internal resolve on Linux
-    ...(process.platform === 'linux' ? ['--add-host', 'host.docker.internal:host-gateway'] : []),
-    // Environment
-    ...env.flatMap(e => ['-e', e]),
-    CONTAINER_IMAGE,
-  ];
-
-  console.log(`[container-runner] docker run ${containerName}`);
-
-  const child = spawn('docker', dockerArgs, {
-    cwd: opts.workspaceDir,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-
-  attachStreamReader(child, state, cbs);
-
-  child.stderr?.on('data', (d: Buffer) => {
-    console.debug(`[${containerName}] ${d.toString('utf8').trimEnd()}`);
-  });
-
-  let settled = false;
-  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
-
-  function settle(exitCode: number | null, error?: string): void {
-    if (settled) return;
-    settled = true;
-    if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
-    // Cleanup MCP temp file
-    if (mcpConf?.hostPath) {
-      try { fs.unlinkSync(mcpConf.hostPath); } catch { /* ignore */ }
-    }
-    if (error) {
-      cbs.onError(error);
-    } else {
-      if (!state.deltasSeen && state.finalMessage) {
-        cbs.onChunk(state.finalMessage);
-      }
-      cbs.onDone(exitCode);
-    }
-  }
-
-  child.on('close', (code) => settle(code));
-  child.on('error', (err) => settle(null, `Docker spawn error: ${err.message}`));
-
-  timeoutHandle = setTimeout(() => {
-    console.warn(`[container-runner] Run timeout for ${containerName}`);
-    stopFn();
-    settle(null, 'Run timed out');
-  }, RUN_TIMEOUT_MS);
-
-  function stopFn(): void {
-    try {
-      execSync(`docker stop ${containerName}`, { stdio: 'pipe', timeout: 15_000 });
-    } catch {
-      child.kill('SIGKILL');
-    }
-  }
-
-  return { stop: stopFn };
-}
-
-// ── Host process fallback runner ───────────────────────────────────────────
-
-/**
- * Resolve the Copilot CLI on the host (same logic as the old agent.service.ts).
- */
-function resolveHostCli(): { command: string; argsPrefix: string[] } {
-  if (process.platform === 'win32') {
-    try {
-      const cmdPath = execSync('where copilot.cmd', { encoding: 'utf8', timeout: 10_000 })
-        .trim().split('\n')[0]!.trim();
-      const content = fs.readFileSync(cmdPath, 'utf8');
-      const m = content.match(/"([^"]*node(?:\.exe)?)"[^"]*"([^"]*\.js)"/i);
-      if (m) {
-        const dir = path.dirname(cmdPath);
-        const nodeExe = path.resolve((m[1]!).replace(/%~dp0/gi, dir + path.sep));
-        const scriptPath = path.resolve((m[2]!).replace(/%~dp0/gi, dir + path.sep));
-        return { command: nodeExe, argsPrefix: [scriptPath] };
-      }
-    } catch { /* fall through */ }
-  }
-  try {
-    execSync('copilot --version', { encoding: 'utf8', timeout: 10_000, stdio: 'pipe' });
-    return { command: 'copilot', argsPrefix: [] };
-  } catch { /* fall through */ }
-  // Node.js require fallback (monorepo: copilot installed via workspace)
-  try {
-    const scriptPath = require.resolve('@github/copilot/dist/cli.js');
-    return { command: process.execPath, argsPrefix: [scriptPath] };
-  } catch { /* fall through */ }
-  throw new Error(
-    'GitHub Copilot CLI not found. Install it with: npm install -g @github/copilot',
-  );
-}
+// ── Host process runner ────────────────────────────────────────────────────
 
 function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
   const cli = resolveHostCli();
+  const sessionName = getSessionName(opts.projectId);
+  const hasSession = projectSessions.has(opts.projectId);
+
   const args = [
     ...cli.argsPrefix,
     '--allow-all',
@@ -353,10 +201,19 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
     '--stream', 'on',
     '--add-github-mcp-tool', 'web_search',
   ];
+
+  // Session continuity: --name for new sessions, --resume for existing ones
+  if (hasSession) {
+    args.push('--resume', sessionName);
+  } else {
+    args.push('--name', sessionName);
+  }
+
   if (opts.model)        args.push('--model', opts.model);
   if (opts.mcpConfigFile) args.push('--additional-mcp-config', `@${opts.mcpConfigFile}`);
 
-  console.log(`[container-runner] host process (prompt=${opts.prompt.length} chars)`);
+  const mode = hasSession ? 'resume' : 'new';
+  console.log(`[copilot-cli] ${mode} session="${sessionName}" prompt=${opts.prompt.length}chars`);
 
   const state: ParseState = { deltasSeen: false, finalMessage: '' };
 
@@ -369,7 +226,7 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
   attachStreamReader(child, state, cbs);
 
   child.stderr?.on('data', (d: Buffer) => {
-    console.debug(`[host-runner] ${d.toString('utf8').trimEnd()}`);
+    console.debug(`[copilot-cli] ${d.toString('utf8').trimEnd()}`);
   });
 
   let settled = false;
@@ -379,9 +236,18 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
     if (settled) return;
     settled = true;
     if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
+
     if (error) {
+      // If resume failed, clear session so next attempt creates a new one
+      if (hasSession && exitCode !== 0) {
+        console.warn(`[copilot-cli] resume failed for "${sessionName}", clearing session`);
+        projectSessions.delete(opts.projectId);
+      }
       cbs.onError(error);
     } else {
+      // Mark session as active on success
+      projectSessions.set(opts.projectId, sessionName);
+
       if (!state.deltasSeen && state.finalMessage) {
         cbs.onChunk(state.finalMessage);
       }
@@ -412,14 +278,9 @@ const activeRuns = new Map<string, ActiveRun>();
 
 /**
  * Start a new agent run.
- * Returns an `ActiveRun` that can be used to cancel the run.
- *
- * Mode selection:
- *  1. Docker + image exists → container isolation (CoreClaw style)
- *  2. Otherwise            → host process (developer fallback)
+ * Uses the host Copilot CLI with session continuity (--name/--resume).
  */
 export function startRun(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
-  // Wrap callbacks so we clean up the registry entry when the run ends.
   const wrapped: RunnerCallbacks = {
     onChunk:    (c) => cbs.onChunk(c),
     onProgress: (m) => cbs.onProgress(m),
@@ -433,24 +294,14 @@ export function startRun(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
     },
   };
 
-  const useDocker = isDockerAvailable() && containerImageExists();
-  const run = useDocker
-    ? runInDocker(opts, wrapped)
-    : runOnHost(opts, wrapped);
-
-  if (useDocker) {
-    console.log(`[container-runner] mode=docker project=${opts.projectId.slice(0, 8)}`);
-  } else {
-    console.log(`[container-runner] mode=host  project=${opts.projectId.slice(0, 8)} (Docker unavailable or image missing)`);
-  }
-
+  const run = runOnHost(opts, wrapped);
+  console.log(`[copilot-cli] project=${opts.projectId.slice(0, 8)}`);
   activeRuns.set(opts.projectId, run);
   return run;
 }
 
 /**
  * Stop the active run for a project, if any.
- * Returns true if a run was stopped, false if no run was active.
  */
 export function stopRun(projectId: string): boolean {
   const run = activeRuns.get(projectId);
@@ -460,9 +311,7 @@ export function stopRun(projectId: string): boolean {
   return true;
 }
 
-/**
- * Stop all active runs. Called during server shutdown.
- */
+/** Stop all active runs. Called during server shutdown. */
 export function stopAllRuns(): void {
   for (const [projectId, run] of activeRuns) {
     run.stop();
@@ -474,3 +323,6 @@ export function stopAllRuns(): void {
 export function activeRunCount(): number {
   return activeRuns.size;
 }
+
+/** No-op — kept for API compatibility. */
+export function invalidateDockerCache(): void { /* no-op */ }
