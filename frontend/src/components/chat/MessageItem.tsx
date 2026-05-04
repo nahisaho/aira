@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { renderMarkdown } from './markdown';
 import { MarkdownContent } from './MarkdownContent';
 import { usePreferencesStore } from '../../stores/preferences';
@@ -28,6 +29,12 @@ export function MessageItem({ role, content }: MessageItemProps) {
   const theme = usePreferencesStore((s) => s.theme);
   const light = theme === 'light';
 
+  const html = useMemo(() => {
+    if (role === 'user') return '';
+    const cleaned = role === 'assistant' ? stripCliMetadata(content) : content;
+    return renderMarkdown(cleaned);
+  }, [role, content]);
+
   if (role === 'user') {
     return (
       <div className="flex justify-end">
@@ -37,10 +44,6 @@ export function MessageItem({ role, content }: MessageItemProps) {
       </div>
     );
   }
-
-  // Assistant/System: render as markdown
-  const cleaned = role === 'assistant' ? stripCliMetadata(content) : content;
-  const html = renderMarkdown(cleaned);
 
   return (
     <div className="flex justify-start">
