@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { getDatabase } from '../db/index.js';
-import { killProcess } from '../services/agent.service.js';
+import { stopChat } from '../services/exec-context.js';
+import { broadcastToProject } from '../services/ws.service.js';
 
 const runRoutes = new Hono();
 
@@ -61,15 +62,18 @@ runRoutes.post('/api/projects/:id/runs/current/stop', (c) => {
     return c.json({ error: 'No running run found' }, 404);
   }
 
-  const killed = killProcess(run.id, 'user_cancel');
-  if (!killed) {
-    // Process not in our tracking (maybe already exiting)
-    db.prepare(
-      "UPDATE agent_runs SET status = 'cancelled', cancel_reason = 'user_cancel', finished_at = CURRENT_TIMESTAMP WHERE id = ?",
-    ).run(run.id);
-  }
+  // Immediately mark as cancelled in DB so fetchCurrentRun returns idle
+  db.prepare(
+    "UPDATE agent_runs SET status = 'cancelled', cancel_reason = 'user', finished_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('running', 'queued')",
+  ).run(run.id);
 
-  return c.json({ status: 'stopping', runId: run.id });
+  // Notify connected clients immediately
+  broadcastToProject(projectId, { type: 'status', runId: run.id, status: 'cancelled' });
+
+  // Stop via container-runner (kills Docker container or host child process)
+  stopChat(projectId);
+
+  return c.json({ status: 'cancelled', runId: run.id });
 });
 
 // GET /api/projects/:id/runs/:runId/prompt — download run prompt as text
