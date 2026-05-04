@@ -332,7 +332,11 @@ export function executeChat(
 
         const finalRow = db.prepare('SELECT status FROM agent_runs WHERE id = ?').get(runId) as { status: string } | undefined;
 
-        try { reconcileProjectFiles(projectId, db); } catch (err) {
+        try {
+          reconcileProjectFiles(projectId, db);
+          const fileCount = (db.prepare('SELECT COUNT(*) as cnt FROM project_files WHERE project_id = ?').get(projectId) as { cnt: number }).cnt;
+          console.log(`[exec-context] reconciled ${fileCount} files for project ${projectId}`);
+        } catch (err) {
           console.warn('File reconciliation failed:', (err as Error).message);
         }
 
