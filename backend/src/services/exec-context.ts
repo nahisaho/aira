@@ -212,10 +212,68 @@ export function assembleExecContext(projectId: string): ExecContext {
  * embed DB history so that a freshly spawned runner (after idle timeout)
  * can resume without losing context.
  */
+/**
+ * Read workspace instruction files (.github/copilot-instructions.md, AGENTS.md)
+ * and available SKILL.md listings to embed in the prompt.
+ */
+function loadWorkspaceInstructions(workspaceDir: string): string {
+  const sections: string[] = [];
+
+  // 1. copilot-instructions.md — repo-wide behavioural rules
+  const ciPath = path.join(workspaceDir, '.github', 'copilot-instructions.md');
+  try {
+    const ci = fs.readFileSync(ciPath, 'utf8').trim();
+    if (ci) {
+      sections.push(
+        '# System Instructions (copilot-instructions.md)\n',
+        'You MUST follow these instructions exactly.\n',
+        ci,
+      );
+    }
+  } catch { /* not present */ }
+
+  // 2. AGENTS.md — routing rules & skill catalogue
+  const agentsPath = path.join(workspaceDir, 'AGENTS.md');
+  try {
+    const agents = fs.readFileSync(agentsPath, 'utf8').trim();
+    if (agents) {
+      sections.push(
+        '\n# Agent Routing Rules (AGENTS.md)\n',
+        agents,
+      );
+    }
+  } catch { /* not present */ }
+
+  // 3. List available SKILL.md files so the agent knows what subskills exist
+  const skillsDir = path.join(workspaceDir, '.github', 'skills');
+  try {
+    const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+    const skillNames = entries
+      .filter(e => e.isDirectory())
+      .filter(e => fs.existsSync(path.join(skillsDir, e.name, 'SKILL.md')))
+      .map(e => e.name);
+    if (skillNames.length > 0) {
+      sections.push(
+        '\n# Available Subskills\n',
+        'When routing to a subskill, read its SKILL.md first:',
+        '  `read_file .github/skills/{name}/SKILL.md`',
+        '',
+        'Available: ' + skillNames.join(', '),
+      );
+    }
+  } catch { /* no skills dir */ }
+
+  return sections.length > 0 ? sections.join('\n') + '\n\n---\n\n' : '';
+}
+
 function buildContextualPrompt(
   history: { role: string; content: string }[],
   currentMessage: string,
+  workspaceDir: string,
 ): string {
+  // Embed workspace instructions (copilot-instructions.md, AGENTS.md, skills list)
+  const instructions = loadWorkspaceInstructions(workspaceDir);
+
   const CONTEXT_CHECK_PREAMBLE = [
     '## IMPORTANT: Context Sufficiency Check',
     '',
@@ -234,11 +292,11 @@ function buildContextualPrompt(
   ].join('\n');
 
   if (history.length === 0) {
-    return CONTEXT_CHECK_PREAMBLE + currentMessage;
+    return instructions + CONTEXT_CHECK_PREAMBLE + currentMessage;
   }
 
   const MAX_CONTENT_LEN = 3000;
-  const lines: string[] = ['# Conversation History\n'];
+  const lines: string[] = [instructions, '# Conversation History\n'];
 
   for (const msg of history) {
     const label = msg.role === 'user' ? 'User' : 'Assistant';
@@ -307,7 +365,7 @@ export function executeChat(
 
   // Build prompt: history + current message (cold-start recovery via DB)
   const filteredHistory = historyRows.filter(m => m.id !== msgId);
-  const fullPrompt = buildContextualPrompt(filteredHistory, userMessage);
+  const fullPrompt = buildContextualPrompt(filteredHistory, userMessage, ctx.workspaceDir);
 
   // Create assistant message for streaming accumulation
   const assistantMsgId = crypto.randomUUID();
