@@ -55,7 +55,7 @@ renderer.image = ({ href, title, text }) => {
 
 renderer.code = ({ text, lang }) => {
   if (lang === 'mermaid') {
-    return `<pre class="mermaid not-prose rounded p-3 my-2 overflow-x-auto">${escapeHtml(text)}</pre>`;
+    return `<pre class="mermaid-source not-prose rounded p-3 my-2 overflow-x-auto">${escapeHtml(text)}</pre>`;
   }
   return `<pre class="not-prose rounded p-3 my-2 overflow-x-auto"><code class="language-${escapeAttr(lang || '')}">${escapeHtml(text)}</code></pre>`;
 };

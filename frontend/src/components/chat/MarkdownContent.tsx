@@ -9,6 +9,7 @@ function initMermaid(dark: boolean) {
     theme: dark ? 'dark' : 'default',
     securityLevel: 'strict',
     fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+    suppressErrorRendering: true,
   });
   mermaidInitialized = true;
 }
@@ -26,7 +27,7 @@ export function MarkdownContent({ html, className = '', dark = true }: MarkdownC
     const el = ref.current;
     if (!el) return;
 
-    const mermaidBlocks = el.querySelectorAll<HTMLPreElement>('pre.mermaid');
+    const mermaidBlocks = el.querySelectorAll<HTMLPreElement>('pre.mermaid-source:not(.mermaid-rendered)');
     if (mermaidBlocks.length === 0) return;
 
     if (!mermaidInitialized) initMermaid(dark);
@@ -46,7 +47,9 @@ export function MarkdownContent({ html, className = '', dark = true }: MarkdownC
             block.classList.add('mermaid-rendered');
           }
         } catch {
-          // Leave raw text if rendering fails
+          // Leave raw text if rendering fails; remove error container if mermaid injected one
+          const errEl = document.getElementById(`d${id}`);
+          if (errEl) errEl.remove();
         }
       }
     })();
