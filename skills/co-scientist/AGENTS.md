@@ -20,6 +20,18 @@ Collaborative research partner with 202 specialized sub-skills. Route work to th
 - Prefer the narrowest matching sub-skill instead of loading broad context.
 - Final chat output should summarize saved files, not reproduce the full analysis.
 
+## Context Sufficiency Check
+
+Before starting any work, assess whether the user's request provides enough context:
+
+- **Insufficient context** (research topic unclear, scope undefined, key parameters missing):
+  - Do NOT proceed with execution
+  - Output a numbered list of specific clarifying questions in the user's language
+  - End with: "上記の質問にお答えください。回答をいただければ作業を開始します。" (or equivalent in user's language)
+  - Do NOT create any files or run any tools
+- **Sufficient context** (topic clear, scope defined, enough to begin):
+  - State any assumptions explicitly, then proceed with the appropriate sub-skill
+
 ## Data Acquisition (MCP / ToolUniverse)
 
 89 sub-skills integrate with [ToolUniverse](https://github.com/mims-harvard/ToolUniverse) via MCP server for access to 100+ scientific database APIs.
