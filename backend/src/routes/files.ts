@@ -244,7 +244,11 @@ fileRoutes.get('/api/projects/:id/files/download-all', (c) => {
   }
 
   const archive = archiver('zip', { zlib: { level: 6 } });
-  archive.directory(workspaceDir, false);
+  archive.glob('**/*', {
+    cwd: workspaceDir,
+    ignore: ['.git/**', '.github/**', 'AGENTS.md'],
+    dot: false,
+  });
   archive.finalize();
 
   const { readable, writable } = new TransformStream();

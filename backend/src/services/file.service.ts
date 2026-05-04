@@ -131,6 +131,10 @@ export function scanWorkspace(
 ): Array<{ relativePath: string; size: number; mtimeMs: number; hash: string }> {
   const results: Array<{ relativePath: string; size: number; mtimeMs: number; hash: string }> = [];
 
+  // System instruction directories/files written by AIRA — not user-generated output.
+  // These mirror CoreClaw's convention and must not appear in the file panel.
+  const SYSTEM_ENTRIES = new Set(['.github', '.git', 'AGENTS.md']);
+
   function walk(dir: string): void {
     let entries: fs.Dirent[];
     try {
@@ -140,6 +144,12 @@ export function scanWorkspace(
     }
 
     for (const entry of entries) {
+      // Skip system instruction files/dirs at any depth when entry name matches
+      // (top-level check is sufficient since .github is only at workspace root)
+      const relativePath = path.relative(workspaceDir, path.join(dir, entry.name));
+      const topSegment = relativePath.split(path.sep)[0];
+      if (topSegment && SYSTEM_ENTRIES.has(topSegment)) continue;
+
       const fullPath = path.join(dir, entry.name);
 
       // Skip symlinks (use lstat via Dirent)
@@ -151,7 +161,7 @@ export function scanWorkspace(
         try {
           const stat = fs.lstatSync(fullPath);
           results.push({
-            relativePath: path.relative(workspaceDir, fullPath),
+            relativePath,
             size: stat.size,
             mtimeMs: stat.mtimeMs,
             hash: hashFile(fullPath),
