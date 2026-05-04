@@ -39,4 +39,10 @@ app.route('/', fileRoutes);
 app.route('/', skillsRoutes);
 app.route('/', mcpRoutes);
 
+// Global error handler — ensures all errors return JSON (not empty bodies)
+app.onError((err, c) => {
+  console.error('[AIRA] Unhandled error:', err.message);
+  return c.json({ error: err.message || 'Internal server error' }, 500);
+});
+
 export { app };

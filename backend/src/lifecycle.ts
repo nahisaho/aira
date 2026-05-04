@@ -1,6 +1,6 @@
 /**
  * AIRA Backend Lifecycle — embeddable start/stop API.
- * Used by both CLI (server.ts) and Electron (electron/main.ts).
+ * Used by CLI (server.ts).
  */
 import { serve } from '@hono/node-server';
 import type { ServerType } from '@hono/node-server';
@@ -12,10 +12,19 @@ import { runPreflight } from './services/preflight.js';
 import { attachWebSocket } from './services/ws.service.js';
 import { seedBuiltinSkills } from './services/skills.service.js';
 import { seedBuiltinMcpAll } from './services/mcp.service.js';
+import { stopAllRuns } from './services/container-runner.js';
+import {
+  startCredentialProxy,
+  stopCredentialProxy,
+  setTokenSupplier,
+  PROXY_PORT,
+} from './services/credential-proxy.js';
+import { AuthService } from './services/auth.service.js';
 import type { Server } from 'node:http';
 
 let server4: ServerType | null = null;
 let server6: ServerType | null = null;
+let proxyServer: import('node:http').Server | null = null;
 
 export interface StartOptions {
   port: number;
@@ -60,7 +69,16 @@ export async function startServer(portOrOpts: number | StartOptions): Promise<St
   seedBuiltinMcpAll();
   console.log('[AIRA] Built-in skills and MCP seeded');
 
-  // 5. Start servers
+  // 5. Credential proxy (token injection for Docker containers)
+  const authService = new AuthService();
+  setTokenSupplier(() => authService.resolveToken() ?? null);
+  try {
+    proxyServer = await startCredentialProxy(PROXY_PORT);
+  } catch (err) {
+    console.warn(`[AIRA] Credential proxy failed to start on port ${PROXY_PORT}: ${(err as Error).message}`);
+  }
+
+  // 6. Start HTTP servers
   let hasIpv4 = false;
   let hasIpv6 = false;
 
@@ -93,8 +111,13 @@ export async function startServer(portOrOpts: number | StartOptions): Promise<St
 }
 
 /** Stop the AIRA backend gracefully. */
-export function stopServer(): void {
+export async function stopServer(): Promise<void> {
   console.log('[AIRA] Shutting down...');
+  stopAllRuns();
+  if (proxyServer) {
+    await stopCredentialProxy(proxyServer);
+    proxyServer = null;
+  }
   if (server4) {
     server4.close();
     server4 = null;
@@ -132,7 +155,7 @@ function recoverOrphanRuns(): void {
 
 /**
  * Enable serving frontend static files from the backend.
- * Used by Electron to serve the frontend from the same HTTP origin.
+ * Used in Docker/production to serve the frontend from the same HTTP origin.
  * Must be called BEFORE startServer().
  */
 export function enableStaticServing(frontendDir: string): void {
