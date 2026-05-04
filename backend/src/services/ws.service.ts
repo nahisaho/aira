@@ -113,7 +113,14 @@ function handleChatMessage(client: WSClient, content: string, messageId?: string
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error(`[ws] executeChat error: ${errMsg}`);
-      broadcastToProject(client.projectId, { type: 'chunk', content: `⚠️ ${errMsg}` });
+
+      // Send user-friendly error as assistant message
+      const isTokenError = errMsg.includes('Token not configured') || errMsg.includes('GITHUB_TOKEN');
+      const userMessage = isTokenError
+        ? '⚠️ GitHubトークンが未設定です。設定画面からトークンを設定してください。'
+        : `⚠️ エラーが発生しました: ${errMsg}`;
+
+      broadcastToProject(client.projectId, { type: 'chunk', content: userMessage });
       broadcastToProject(client.projectId, { type: 'status', runId: '', status: 'failed' });
     }
   });

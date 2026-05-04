@@ -124,40 +124,38 @@ wsClient.onEvent((event) => {
       store.setProgressMessage(event.message);
       break;
     case 'status':
-      if (event.runId) {
-        if (event.status === 'running') {
-          store.setRunStatus('running');
-          store.setProgressMessage(null); // clear old progress
-          useChatStore.setState({ sending: false }); // REST phase done; run is live
-          // Refresh run history to show running state
-          import('./files').then(({ useFilesStore }) => {
-            import('./project').then(({ useProjectStore }) => {
-              const projectId = useProjectStore.getState().activeProjectId;
-              if (projectId) {
-                useFilesStore.getState().fetchCurrentRun(projectId);
-                useFilesStore.getState().fetchRunHistory(projectId);
-              }
-            });
+      if (event.status === 'running') {
+        store.setRunStatus('running');
+        store.setProgressMessage(null); // clear old progress
+        useChatStore.setState({ sending: false }); // REST phase done; run is live
+        // Refresh run history to show running state
+        import('./files').then(({ useFilesStore }) => {
+          import('./project').then(({ useProjectStore }) => {
+            const projectId = useProjectStore.getState().activeProjectId;
+            if (projectId) {
+              useFilesStore.getState().fetchCurrentRun(projectId);
+              useFilesStore.getState().fetchRunHistory(projectId);
+            }
           });
-        } else if (event.status === 'completed' || event.status === 'failed' || event.status === 'cancelled') {
-          // Flush any remaining buffered chunks before finalizing
-          if (chunkBuffer) flushChunkBuffer();
-          if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
-          store.setRunStatus('idle');
-          store.setProgressMessage(null);
-          useChatStore.setState({ sending: false }); // safety: clear if still pending
-          // Trigger files & runs refresh
-          import('./files').then(({ useFilesStore }) => {
-            import('./project').then(({ useProjectStore }) => {
-              const projectId = useProjectStore.getState().activeProjectId;
-              if (projectId) {
-                useFilesStore.getState().fetchFiles(projectId);
-                useFilesStore.getState().fetchRunHistory(projectId);
-                useFilesStore.getState().fetchCurrentRun(projectId);
-              }
-            });
+        });
+      } else if (event.status === 'completed' || event.status === 'failed' || event.status === 'cancelled') {
+        // Flush any remaining buffered chunks before finalizing
+        if (chunkBuffer) flushChunkBuffer();
+        if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+        store.setRunStatus('idle');
+        store.setProgressMessage(null);
+        useChatStore.setState({ sending: false }); // safety: clear if still pending
+        // Trigger files & runs refresh
+        import('./files').then(({ useFilesStore }) => {
+          import('./project').then(({ useProjectStore }) => {
+            const projectId = useProjectStore.getState().activeProjectId;
+            if (projectId) {
+              useFilesStore.getState().fetchFiles(projectId);
+              useFilesStore.getState().fetchRunHistory(projectId);
+              useFilesStore.getState().fetchCurrentRun(projectId);
+            }
           });
-        }
+        });
       }
       break;
 
