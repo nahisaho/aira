@@ -32,7 +32,17 @@ export function MessageItem({ role, content }: MessageItemProps) {
   const html = useMemo(() => {
     if (role === 'user') return '';
     const cleaned = role === 'assistant' ? stripCliMetadata(content) : content;
-    return renderMarkdown(cleaned);
+    try {
+      const result = renderMarkdown(cleaned);
+      if (!result || result.trim().length === 0) {
+        console.warn('[MessageItem] renderMarkdown returned empty, falling back to escaped text');
+        return `<pre style="white-space:pre-wrap">${cleaned.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`;
+      }
+      return result;
+    } catch (err) {
+      console.error('[MessageItem] renderMarkdown error:', err);
+      return `<pre style="white-space:pre-wrap">${cleaned.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`;
+    }
   }, [role, content]);
 
   if (role === 'user') {
