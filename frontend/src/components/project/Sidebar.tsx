@@ -8,7 +8,7 @@ import { ProjectSettingsPane } from './ProjectSettingsPane';
 import { SettingsPane } from '../settings/SettingsPane';
 
 export function Sidebar() {
-  const { projects, activeProjectId, loading, fetchProjects, setActiveProject } =
+  const { projects, activeProjectId, loading, fetchProjects, setActiveProject, projectSkills } =
     useProjectStore();
   const theme = usePreferencesStore((s) => s.theme);
   const t = useT();
@@ -67,6 +67,11 @@ export function Sidebar() {
               className="flex-1 text-left px-3 py-2 text-sm min-w-0"
             >
               <span className="block truncate">{project.name}</span>
+              {projectSkills[project.id]?.length > 0 && (
+                <span className={`block text-xs mt-0.5 truncate ${light ? 'text-blue-500' : 'text-blue-400'}`}>
+                  {projectSkills[project.id].map((s) => s.name).join(', ')}
+                </span>
+              )}
               {project.last_activity && (
                 <span className={`block text-xs mt-0.5 ${light ? 'text-gray-400' : 'text-gray-500'}`}>
                   {new Date(project.last_activity.endsWith('Z') ? project.last_activity : project.last_activity + 'Z').toLocaleString()}
@@ -112,7 +117,11 @@ export function Sidebar() {
       {showProjectSettings && (
         <ProjectSettingsPane
           projectId={showProjectSettings}
-          onClose={() => setShowProjectSettings(null)}
+          onClose={() => {
+            // Refresh skills for the project after settings change
+            useProjectStore.getState().fetchProjectSkills(showProjectSettings);
+            setShowProjectSettings(null);
+          }}
         />
       )}
       {deleteTarget && (

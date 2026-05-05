@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { projectsApi, type Project } from '../api/client';
+import { projectsApi, skillsApi, type Project, type Skill } from '../api/client';
 import { wsClient } from '../api/ws';
 
 interface ProjectStore {
@@ -7,8 +7,10 @@ interface ProjectStore {
   activeProjectId: string | null;
   loading: boolean;
   error: string | null;
+  projectSkills: Record<string, Skill[]>;
 
   fetchProjects: () => Promise<void>;
+  fetchProjectSkills: (projectId: string) => Promise<void>;
   createProject: (name: string) => Promise<Project>;
   deleteProject: (id: string) => Promise<void>;
   renameProject: (id: string, name: string) => Promise<void>;
@@ -20,14 +22,36 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   activeProjectId: null,
   loading: false,
   error: null,
+  projectSkills: {},
 
   fetchProjects: async () => {
     set({ loading: true, error: null });
     try {
       const projects = await projectsApi.list();
       set({ projects, loading: false });
+      // Fetch skills for all projects in parallel
+      const skillEntries = await Promise.all(
+        projects.map(async (p) => {
+          try {
+            const skills = await skillsApi.listProject(p.id);
+            return [p.id, skills] as const;
+          } catch {
+            return [p.id, []] as const;
+          }
+        }),
+      );
+      set({ projectSkills: Object.fromEntries(skillEntries) });
     } catch (err) {
       set({ error: (err as Error).message, loading: false });
+    }
+  },
+
+  fetchProjectSkills: async (projectId: string) => {
+    try {
+      const skills = await skillsApi.listProject(projectId);
+      set((s) => ({ projectSkills: { ...s.projectSkills, [projectId]: skills } }));
+    } catch {
+      // ignore
     }
   },
 
