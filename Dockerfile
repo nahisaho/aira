@@ -31,7 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --break-system-packages tooluniverse
 
 # Install GitHub Copilot CLI globally
-RUN npm install -g @github/copilot && npm cache clean --force
+RUN npm install -g @github/copilot@1.0.41-0 && npm cache clean --force
 
 # Install only production dependencies
 COPY package.json package-lock.json ./
@@ -45,8 +45,8 @@ COPY --from=frontend-build /app/frontend/dist frontend/dist
 COPY --from=backend-build /app/backend/src/config backend/src/config
 COPY skills/ skills/
 
-# Create data directories
-RUN mkdir -p data projects && chown -R node:node /app
+# Create data directories and ensure node user owns its home (for copilot CLI config)
+RUN mkdir -p data projects /home/node/.copilot && chown -R node:node /app /home/node/.copilot
 
 USER node
 

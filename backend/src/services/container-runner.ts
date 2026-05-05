@@ -224,8 +224,8 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
       ...cli.argsPrefix,
       '--allow-all',
       // stdin mode: prompt is written to stdin then closed (EOF).
-      // This keeps the CLI in interactive mode where ask_user is available,
-      // enabling multi-turn skills like context-collector.
+      // Note: EOF closes interactive mode, so ask_user tool is NOT available.
+      // Skills that need Q&A output questions as regular text instead.
       '--output-format', 'json',
       '--stream', 'on',
       '--add-github-mcp-tool', 'web_search',

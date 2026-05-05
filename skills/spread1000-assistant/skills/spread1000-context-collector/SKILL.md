@@ -59,6 +59,13 @@ Analyze the user's initial prompt and internally assess the status of the 6 elem
 - Attach a category label to each question
 - If the user answers "わからない" (don't know), propose an estimated value and confirm
 
+**Output Rules (CRITICAL)**:
+- Output the question as **regular chat response text**. Do NOT rely on `ask_user` tool (it may not be available)
+- After outputting a question, **STOP immediately**. Do NOT call any other tools (no `web_search`, `bash`, `create`, `edit`)
+- The user's answer will arrive in their next message — wait for it
+- Each question-answer exchange is a separate turn
+- The ONLY tools allowed during context collection are `report_intent` and `skill`
+
 **Question Categories and Order**:
 
 | Order | Category | Example Question (SPReAD-specific) |
