@@ -341,6 +341,14 @@ const activeRuns = new Map<string, ActiveRun>();
  * Uses the host Copilot CLI with session continuity (--name/--resume).
  */
 export function startRun(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
+  // Stop any existing active run for this project to prevent parallel execution.
+  const existing = activeRuns.get(opts.projectId);
+  if (existing) {
+    console.warn(`[copilot-cli] Stopping existing run for project=${opts.projectId.slice(0, 8)}`);
+    existing.stop();
+    activeRuns.delete(opts.projectId);
+  }
+
   const wrapped: RunnerCallbacks = {
     onChunk:    (c) => cbs.onChunk(c),
     onProgress: (m) => cbs.onProgress(m),

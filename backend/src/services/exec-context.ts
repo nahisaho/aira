@@ -287,16 +287,42 @@ export function executeChat(
   }) as () => { runId: string })();
 
   // CLI maintains its own history via --resume; just pass the raw user message.
-  // DB messages are kept for UI display and cold-start recovery.
-  const prompt = userMessage;
+  // On cold-start (resume fails → new session), the CLI won't have history.
+  // Build a full conversation prompt so the new session has context.
   const isFirstMessage = existingMsgCount === 0;
-  console.log(`[exec-context] prompt=${prompt.length}chars first=${isFirstMessage}`);
 
-  // On first message, clear any stale CLI session so we start fresh.
-  // This prevents session contamination from a previous container lifecycle.
+  let prompt: string;
   if (isFirstMessage) {
+    // First message — no history needed, just the user message.
+    prompt = userMessage;
     clearSession(projectId);
+  } else {
+    // Subsequent message — include conversation history for cold-start recovery.
+    // If --resume succeeds, the CLI ignores stdin history (it already has it).
+    // If --resume fails and a new session is created, this history ensures continuity.
+    const history = db.prepare(
+      `SELECT role, content FROM messages
+       WHERE project_id = ? AND role IN ('user', 'assistant') AND content != ''
+       ORDER BY created_at ASC`,
+    ).all(projectId) as Array<{ role: string; content: string }>;
+
+    // Exclude the last entry if it's the empty assistant placeholder we just inserted,
+    // and exclude the current user message (already in history from the INSERT above).
+    const pastMessages = history.filter(m => m.content.trim() !== '');
+
+    if (pastMessages.length > 1) {
+      // Build a multi-turn prompt: previous turns as context, current message last.
+      const turns = pastMessages.slice(0, -1).map(m =>
+        m.role === 'user' ? `User: ${m.content}` : `Assistant: ${m.content}`
+      ).join('\n\n');
+      prompt = `[Previous conversation]\n${turns}\n\n[Current message]\n${userMessage}`;
+      console.log(`[exec-context] cold-start prompt: ${pastMessages.length - 1} history turns + current message`);
+    } else {
+      prompt = userMessage;
+    }
   }
+
+  console.log(`[exec-context] prompt=${prompt.length}chars first=${isFirstMessage}`);
 
   // Create assistant message for streaming accumulation
   const assistantMsgId = crypto.randomUUID();

@@ -40,3 +40,4 @@ coverage/
 dist-electron/
 electron/dist/
 test-results/
+copilot-sessions/
