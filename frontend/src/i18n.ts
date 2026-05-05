@@ -3,7 +3,7 @@ export type Locale = 'ja' | 'en';
 const translations = {
   ja: {
     // Sidebar
-    'sidebar.title': 'AIRA',
+    'sidebar.title': 'AIRA α',
     'sidebar.subtitle': 'AI Research Administrator',
     'sidebar.newProject': '+ 新規',
     'sidebar.settings': '⚙ 設定',
@@ -93,7 +93,7 @@ const translations = {
   },
   en: {
     // Sidebar
-    'sidebar.title': 'AIRA',
+    'sidebar.title': 'AIRA α',
     'sidebar.subtitle': 'AI Research Administrator',
     'sidebar.newProject': '+ New',
     'sidebar.settings': '⚙ Settings',
