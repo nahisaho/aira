@@ -25,31 +25,42 @@ to maximize downstream phase accuracy.
 Determine whether the following 6 elements can be extracted from the user's initial prompt.
 If 3 or more elements are unknown, activate this skill.
 
-| Element | Meaning in SPReAD | Criteria |
-|---------|-------------------|----------|
-| PURPOSE | Research goal / what to achieve with AI | Contains action verbs like 「〜を解明」「〜を予測」 |
-| TARGET | Research subject / field | A specific academic field or subject is explicitly stated |
-| SCOPE | Scope / scale of research | Data scale, target period, or geographic scope is mentioned |
-| TIMELINE | Research period | Awareness of the ~180-day research period |
-| CONSTRAINTS | Constraints | Budget, equipment, personnel, or ethical constraints are mentioned |
-| DELIVERABLES | Expected outputs | Papers, software, models, etc. are mentioned |
+**判定ルール（厳格）**: 各要素は、ユーザーが **明示的に記述** した場合のみ ✅ とする。研究テーマの記述から **推測・類推できる** 場合でも、ユーザーが直接言及していなければ ❌（不明）とする。
+
+| Element | Meaning in SPReAD | ✅ の条件（厳格） | ❌ の例（推測不可） |
+|---------|-------------------|------------------|-------------------|
+| PURPOSE | Research goal / what to achieve with AI | 「〜を解明」「〜を予測」等の動作動詞を含む | （通常は記述される） |
+| TARGET | Research subject / field | 具体的な学術分野・対象が明記されている | （通常は記述される） |
+| SCOPE | Scope / scale of research | データ **規模**（件数・サンプル数）、対象 **地域**・**期間** が **数値付きで** 明記 | 「血液検査データ」だけでは ❌（規模不明） |
+| TIMELINE | Research period | 180日間の研究期間内の **マイルストーン** や **段階的計画** が明記 | 言及なし → ❌ |
+| CONSTRAINTS | Constraints | **予算額**・**人員数**・**設備制約**・**倫理制約** が具体的に明記 | 言及なし → ❌ |
+| DELIVERABLES | Expected outputs | **論文**・**ソフトウェア**・**モデル**・**データセット** 等の成果物 **形態** が明記 | 「〜を可能にする」は目標であり成果物形態ではない → ❌ |
 
 ## Workflow
 
 ### Step 1: Context Sufficiency Assessment
 
-Analyze the user's initial prompt and internally assess the status of the 6 elements.
+Analyze the user's initial prompt and **必ずチャットに判定結果を出力する**（内部判定のみは禁止）。
+
+**⚠️ 重要**: 判定は「推測できるか」ではなく「ユーザーが明示的に記述したか」で行う。
+例えば、「血液検査データからFHを予測する」というプロンプトから SCOPE（データ規模）を推測してはならない。
 
 ```
-判定結果の例:
-  PURPOSE:      ✅ 「材料探索を加速したい」
-  TARGET:       ✅ 「無機固体材料」
-  SCOPE:        ❌ 不明
-  TIMELINE:     ❌ 不明
-  CONSTRAINTS:  ❌ 不明
-  DELIVERABLES: ❌ 不明
-  → 不足4要素 ≥ 3 → context-collector を起動
+必ず以下の形式で出力すること:
+
+📋 コンテキスト充足度判定:
+  PURPOSE:      ✅/❌ [根拠]
+  TARGET:       ✅/❌ [根拠]
+  SCOPE:        ✅/❌ [根拠]
+  TIMELINE:     ✅/❌ [根拠]
+  CONSTRAINTS:  ✅/❌ [根拠]
+  DELIVERABLES: ✅/❌ [根拠]
+  → 不足N要素 → [判定結果]
 ```
+
+**判定後のアクション**:
+- 不足3要素以上 → **即座に質問1つを出力して停止**（ツール呼び出し禁止）
+- 不足2要素以下 → 仮定を明示して作業開始可
 
 ### Step 2: One-Question-at-a-Time Information Collection
 
