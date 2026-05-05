@@ -2,11 +2,20 @@
  * Container Runner — Session-based CLI orchestrator
  *
  * Executes GitHub Copilot CLI as a one-process-per-message host process.
+ * Uses stdin mode (no --prompt flag) so the CLI runs in interactive mode
+ * where ask_user is available, enabling multi-turn skills like
+ * context-collector. The prompt is written to stdin and stdin is closed
+ * (EOF) so the CLI processes it and exits.
+ *
  * Uses --name/--resume to maintain session continuity across invocations
  * so the CLI preserves its own conversation history, skill state, and
  * context between turns.
  *
  * Design:
+ *  • **Interactive mode via stdin** — prompt is piped through stdin+EOF
+ *    instead of --prompt flag. This keeps ask_user available so skills
+ *    can ask the user questions one at a time.
+ *
  *  • **Session continuity** — first message uses `--name`, subsequent
  *    messages use `--resume` so the CLI's built-in session management
  *    handles conversation history (no need to rebuild from DB).
@@ -189,6 +198,12 @@ function attachStreamReader(
       if (line) parseLine(line, state, cbs);
     }
   });
+  // Flush any remaining unterminated line when stdout closes
+  proc.stdout?.on('end', () => {
+    const remaining = buf.trim();
+    if (remaining) parseLine(remaining, state, cbs);
+    buf = '';
+  });
 }
 
 // ── Host process runner ────────────────────────────────────────────────────
@@ -201,11 +216,16 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
   const baseSessionName = getSessionName(opts.projectId);
   const knownSession = projectSessions.get(opts.projectId);
 
-  function spawnCli(sessionArg: '--resume' | '--name', sessionName: string): ActiveRun {
+  // Mutable stop handle — updated on retry so callers always cancel the active child.
+  let currentStop: (() => void) | null = null;
+
+  function spawnCli(sessionArg: '--resume' | '--name', sessionName: string): void {
     const args = [
       ...cli.argsPrefix,
       '--allow-all',
-      '--prompt', opts.prompt,
+      // stdin mode: prompt is written to stdin then closed (EOF).
+      // This keeps the CLI in interactive mode where ask_user is available,
+      // enabling multi-turn skills like context-collector.
       '--output-format', 'json',
       '--stream', 'on',
       '--add-github-mcp-tool', 'web_search',
@@ -223,10 +243,20 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
     const child = spawn(cli.command, args, {
       cwd: opts.workspaceDir,
       env: { ...process.env, GITHUB_TOKEN: opts.token },
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     attachStreamReader(child, state, cbs);
+
+    // Write prompt to stdin and close (EOF signals end of input).
+    // Use .end(data) for atomicity — avoids EPIPE on fast child exit.
+    const payload = opts.prompt.endsWith('\n') ? opts.prompt : opts.prompt + '\n';
+    child.stdin?.end(payload);
+    child.stdin?.on('error', (err: NodeJS.ErrnoException) => {
+      // Ignore broken pipe — child may have exited before we finished writing.
+      if (err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED') return;
+      console.warn(`[copilot-cli] stdin error: ${err.message}`);
+    });
 
     let stderrBuf = '';
     child.stderr?.on('data', (d: Buffer) => {
@@ -285,17 +315,20 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
       setTimeout(() => { if (child.exitCode === null) child.kill('SIGKILL'); }, 5_000);
     }
 
-    return { stop: stopFn };
+    // Update the mutable stop handle so outer callers cancel the right child.
+    currentStop = stopFn;
   }
 
   // If we know a session name from a previous successful run, resume it.
   // Otherwise try --resume with the base name (may exist from previous lifecycle),
   // falling back to --name on failure.
   if (knownSession) {
-    return spawnCli('--resume', knownSession);
+    spawnCli('--resume', knownSession);
   } else {
-    return spawnCli('--resume', baseSessionName);
+    spawnCli('--resume', baseSessionName);
   }
+
+  return { stop: () => currentStop?.() };
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────

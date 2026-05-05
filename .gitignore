@@ -39,3 +39,4 @@ coverage/
 # Electron
 dist-electron/
 electron/dist/
+test-results/
