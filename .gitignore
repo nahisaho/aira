@@ -8,6 +8,8 @@ build/
 
 # Runtime data (contains DB with plaintext secrets)
 data/
+projects/
+copilot-sessions/
 
 # Environment
 .env
@@ -25,19 +27,19 @@ data/
 .DS_Store
 Thumbs.db
 
-# WASM build artifacts
-frontend/src/wasm/pkg/
-target/
+# Removed modules
+wasm/
+frontend/src/wasm/
+container/
+dist-electron/
+electron/dist/
 
-# Test coverage
+# Test
+test-results/
 coverage/
+e2e/
+playwright.config.ts
 
 # Temporary files
 *.tmp
 *.bak
-
-# Electron
-dist-electron/
-electron/dist/
-test-results/
-copilot-sessions/
