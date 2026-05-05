@@ -61,10 +61,14 @@ Analyze the user's initial prompt and internally assess the status of the 6 elem
 
 **Output Rules (CRITICAL)**:
 - Output the question as **regular chat response text**. Do NOT rely on `ask_user` tool (it may not be available)
-- After outputting a question, **STOP immediately**. Do NOT call any other tools (no `web_search`, `bash`, `create`, `edit`)
+- After outputting a question, **STOP immediately**. **ALL tool calls are prohibited**:
+  - No `web_search`, `bash`, `create`, `edit`
+  - **No MCP tools** (`ToolUniverse-execute_tool`, `ToolUniverse-search_tools`, etc.)
+  - No other tools of any kind
+  - Only `report_intent` and `skill` are allowed
 - The user's answer will arrive in their next message — wait for it
 - Each question-answer exchange is a separate turn
-- The ONLY tools allowed during context collection are `report_intent` and `skill`
+- This restriction continues until the meta-prompt is generated and approved
 
 **Question Categories and Order**:
 
