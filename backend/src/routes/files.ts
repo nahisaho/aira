@@ -79,6 +79,28 @@ fileRoutes.get('/api/projects/:id/files/:fileId/download', (c) => {
     const resolved = resolveFilePath(workspaceDir, file.file_path);
     const content = fs.readFileSync(resolved);
     const filename = path.basename(file.file_path);
+    const ext = path.extname(filename).toLowerCase();
+
+    // Serve PDFs inline so the browser's built-in viewer can render them
+    const inlineTypes: Record<string, string> = {
+      '.pdf': 'application/pdf',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+      '.bmp': 'image/bmp',
+    };
+    const contentType = inlineTypes[ext];
+    if (contentType) {
+      return new Response(content, {
+        headers: {
+          'Content-Type': contentType,
+          'Content-Disposition': `inline; filename="${filename.replace(/[^\x20-\x7E]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        },
+      });
+    }
 
     const asciiName = filename.replace(/[^\x20-\x7E]/g, '_');
     return new Response(content, {

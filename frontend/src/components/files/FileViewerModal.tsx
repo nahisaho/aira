@@ -24,9 +24,10 @@ export function FileViewerModal({ projectId, fileId, filePath, onClose }: FileVi
   const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'bmp', 'svg'].includes(ext);
   const isMarkdown = ['md', 'markdown'].includes(ext);
   const isExcel = ['xlsx', 'xls', 'xlsm', 'xlsb', 'csv'].includes(ext);
+  const isPdf = ext === 'pdf';
 
   useEffect(() => {
-    if (isImage) {
+    if (isImage || isPdf) {
       setLoading(false);
       return;
     }
@@ -107,6 +108,14 @@ export function FileViewerModal({ projectId, fileId, filePath, onClose }: FileVi
                 className="max-w-full max-h-[60vh] object-contain"
               />
             </div>
+          )}
+
+          {isPdf && (
+            <iframe
+              src={filesApi.downloadUrl(projectId, fileId)}
+              className="w-full h-[70vh] border-0 rounded"
+              title={filePath}
+            />
           )}
 
           {isExcel && sheets.length > 0 && (
