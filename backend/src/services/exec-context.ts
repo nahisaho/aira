@@ -196,17 +196,6 @@ export function assembleExecContext(projectId: string): ExecContext {
   // Ensure workspace is a valid git repo so Copilot CLI discovers instruction files.
   ensureWorkspaceRepo(workspaceDir);
 
-  // Auto-assign default skill if project has no skills assigned.
-  // This handles projects created before auto-assignment was added.
-  const currentSkills = skillsService.getProjectSkills(projectId);
-  if (currentSkills.length === 0) {
-    const allSkills = skillsService.listAll();
-    if (allSkills.length > 0) {
-      skillsService.assignToProject(projectId, allSkills[0]!.id);
-      console.log(`[exec-context] Auto-assigned skill "${allSkills[0]!.name}" to project ${projectId}`);
-    }
-  }
-
   // Sync skill files to workspace before spawning the CLI.
   // This is a safety net; normally done at skill-assignment time via the API.
   syncSkillFiles(projectId);

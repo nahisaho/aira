@@ -44,17 +44,13 @@ projectRoutes.post('/api/projects', async (c) => {
     const project = projectService.create(parsed.data.name, parsed.data.description);
     seedBuiltinMcpForProject(project.id);
 
-    // Auto-assign default skill set to new project.
-    // If skillSetId is provided, use it; otherwise assign all available skills.
-    const allSkills = skillsService.listAll();
+    // Auto-assign skill set to new project only when explicitly specified.
     if (parsed.data.skillSetId) {
+      const allSkills = skillsService.listAll();
       const skill = allSkills.find((s: { id: string; name: string }) => s.id === parsed.data.skillSetId || s.name === parsed.data.skillSetId);
       if (skill) {
         skillsService.assignToProject(project.id, skill.id);
       }
-    } else if (allSkills.length > 0) {
-      // Assign first available skill as default
-      skillsService.assignToProject(project.id, allSkills[0]!.id);
     }
     syncSkillFiles(project.id);
 
