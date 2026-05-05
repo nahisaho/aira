@@ -24,10 +24,20 @@ Formulate the optimal AI-powered research plan for the researcher's domain.
 - Researcher's domain (e.g., materials science, life science, meteorology)
 - Research theme or problem overview
 - Current research methods / data overview (optional)
+- **Enhanced meta-prompt** from context-collector (if available):
+  - Layer 1: 確認済み入力（6要素 + Baseline/Gap + Data Readiness）→ 事実として使用
+  - Layer 2: 推定コンテキスト（研究仮説・検証候補アプローチ・評価指標）→ 仮説として検証
+  - Layer 3: プログラム制約（SPReAD 予算・期間・審査観点）→ ハード制約として遵守
 
 ## Workflow
 
 1. **Hearing**: Confirm the researcher's field, theme, and current challenges
+   - If enhanced meta-prompt (Layer 1+2+3) exists, extract inputs from it:
+     - Layer 1: PURPOSE, TARGET, SCOPE, Baseline/Gap, Data Readiness → skip redundant questions
+     - Layer 2: 研究仮説 → use as starting hypothesis (validate, don't assume correct)
+     - Layer 2: 検証候補アプローチ → validate against literature (confirm or reject each)
+     - Layer 3: Budget/timeline constraints → apply as hard constraints
+   - If meta-prompt doesn't exist, proceed with standard hearing
 2. **Web Search (MCP: github-mcp-server)** (primary broad survey):
    Use the github-mcp-server search tools to gather a wide overview first:
    - Latest AI for Science trends and success cases in the researcher's domain
@@ -63,8 +73,14 @@ Formulate the optimal AI-powered research plan for the researcher's domain.
    > If `tooluniverse` MCP is unavailable, document the reason and continue with Web Search results only.
 4. **AI Strategy Formulation**:
    - Map AI methods to research challenges
+   - **Validate Layer 2 hypotheses**: For each candidate approach from the meta-prompt:
+     - If confirmed by literature → adopt with citation
+     - If contradicted → reject with reason and propose alternative
+     - If inconclusive → flag as "further investigation needed"
    - Clarify expected outcomes and breakthroughs
    - Estimate required computational resources (GPU, storage, network, etc.)
+   - **Update evaluation criteria**: Refine metrics from meta-prompt Layer 2 based on literature review
+   - **Resolve unknowns**: Address open questions from meta-prompt Layer 2 "未解決事項"
 5. **Research Plan Generation**: Save as `output/{project-name}/phase0-research-plan.md`
    - Reuse `assets/research-plan-template.md` when producing the research plan
    - **Section 4 (文献調査)**: Copy ToolUniverse execute_tool results verbatim — do NOT paraphrase or fill from memory
@@ -89,6 +105,9 @@ Formulate the optimal AI-powered research plan for the researcher's domain.
 - [ ] Required computational resources are quantitatively estimated
 - [ ] Research schedule (milestones) is included
 - [ ] Novelty and innovativeness in the AI for Science context is explained
+- [ ] Meta-prompt Layer 2 の検証候補アプローチが文献調査に基づき確認/棄却されている
+- [ ] Meta-prompt Layer 2 の未解決事項が対処されている（解消✅ or 仮定値で進行⚠️）
+- [ ] 審査6観点（`assets/spread-policy.md` 参照）に対する自己評価が付記されている
 
 ## Gotchas
 
