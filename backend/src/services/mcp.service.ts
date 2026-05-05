@@ -29,8 +29,8 @@ const BUILTIN_MCP_CONFIGS = [
     name: 'tooluniverse',
     type: 'stdio' as const,
     config: {
-      command: 'tooluniverse-smcp',
-      args: ['--compact-mode'],
+      command: 'tooluniverse-stdio',
+      args: ['--compact-mode', '--transport', 'stdio'],
       env: {},
       description: 'ToolUniverse MCP server providing access to 100+ scientific database APIs including PubMed, ChEMBL, Ensembl, UniProt, STRING, Reactome, GDC, DepMap, and more.',
       url: 'https://github.com/mims-harvard/ToolUniverse',

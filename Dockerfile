@@ -30,6 +30,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install ToolUniverse MCP server
 RUN pip install --break-system-packages tooluniverse
 
+# Wrapper script: tooluniverse outputs banners on stdout that corrupt JSON-RPC.
+# Filter them so only JSON lines pass through.
+RUN printf '#!/bin/sh\nexec tooluniverse-smcp "$@" 2>/dev/null | grep --line-buffered "^{"\n' > /usr/local/bin/tooluniverse-stdio \
+    && chmod +x /usr/local/bin/tooluniverse-stdio
+
 # Install GitHub Copilot CLI globally
 RUN npm install -g @github/copilot@1.0.41-0 && npm cache clean --force
 
@@ -46,9 +51,14 @@ COPY --from=backend-build /app/backend/src/config backend/src/config
 COPY skills/ skills/
 
 # Create data directories and ensure node user owns its home (for copilot CLI config)
-RUN mkdir -p data projects /home/node/.copilot && chown -R node:node /app /home/node/.copilot
+RUN mkdir -p data projects /home/node/.copilot/session-state && chown -R node:node /app /home/node/.copilot
 
-USER node
+# Use root for entrypoint to fix volume permissions, then drop to node
+COPY --chmod=755 <<'EOF' /entrypoint.sh
+#!/bin/sh
+chown -R node:node /home/node/.copilot 2>/dev/null
+exec su -s /bin/sh node -c "exec node backend/dist/server.js"
+EOF
 
 ENV NODE_ENV=production
 ENV AIRA_PORT=3000
@@ -59,4 +69,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 
-CMD ["node", "backend/dist/server.js"]
+ENTRYPOINT ["/entrypoint.sh"]
