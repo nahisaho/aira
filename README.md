@@ -15,14 +15,14 @@ AIRA-α は、GitHub Copilot CLI を推論エンジンとして活用する Web 
 docker pull ghcr.io/nahisaho/aira:v1.0.0
 
 # コンテナの起動
-docker run -d -p 3000:3000 \
+docker run -d -p 3001:3000 \
   -e GITHUB_TOKEN="<your-github-token>" \
   -v aira-data:/app/backend/data \
   -v aira-projects:/app/backend/projects \
   ghcr.io/nahisaho/aira:v1.0.0
 ```
 
-ブラウザで `http://localhost:3000` にアクセスしてください。
+ブラウザで `http://localhost:3001` にアクセスしてください。
 
 ### 前提条件
 
@@ -43,6 +43,16 @@ docker run -d -p 3000:3000 \
 | **ファイル管理** | 生成ファイルの表示・ダウンロード（ZIP 一括含む）、PDF / Excel / 画像ビューア内蔵 |
 | **ファイルアップロード** | 入力データのアップロード |
 | **実行履歴** | パイプライン進捗の可視化、プロンプト保存・ダウンロード |
+
+### MCP サーバー連携
+
+プロジェクトごとに MCP（Model Context Protocol）サーバーを有効化し、外部ツール・データソースにアクセスできます。
+
+| MCP サーバー | 提供機能 |
+|-------------|---------|
+| **ToolUniverse** | 89 の科学データベース（PubMed、ChEMBL、UniProt、Ensembl、GWAS Catalog、ClinVar、Reactome 等）へのアクセス。化合物検索、遺伝子・タンパク質情報取得、パスウェイ解析、文献検索など |
+| **Azure MCP** | Azure リソースの管理・操作。VM / GPU クラスタの構成確認、ストレージ操作、コスト見積もり、リソースデプロイなど |
+| **Microsoft Learn MCP** | Microsoft Learn ドキュメントの検索・参照。Azure サービスの仕様確認、ベストプラクティス取得、技術ドキュメントの即時参照 |
 
 ### ビルトイン Agent Skills
 
