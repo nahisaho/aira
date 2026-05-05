@@ -1,135 +1,130 @@
-# AIRA — AI Research Administrator
+# AIRA-α — AI Research Administrator
 
-> CoreClaw ライクな WASM ベースのチャットボットシステム  
+> Web ベースの AI Research Administrator  
 > GitHub Copilot CLI をエージェントエンジンとして使用  
-> **v0.1.0: シングルユーザー・localhost 専用**
+> **v1.0.0**
 
 ## 概要
 
-AIRAは、[CoreClaw](https://github.com/nahisaho/coreclaw)に着想を得た
-WASMベースのチャットボットアプリケーションです。
-**プロジェクト単位**でAgent SkillsとMCPサーバーを管理し、
-生成ファイルの閲覧・ダウンロードが可能です。
+AIRA-α は、GitHub Copilot CLI を推論エンジンとして活用する Web ベースの AI Research Administrator です。**プロジェクト単位**で Agent Skills と MCP サーバーを管理し、研究の全ライフサイクルを支援します。Docker イメージとして提供され、すぐに利用を開始できます。
+
+## クイックスタート
+
+```bash
+# Docker イメージの取得
+docker pull ghcr.io/nahisaho/aira:v1.0.0
+
+# コンテナの起動
+docker run -d -p 3000:3000 \
+  -e GITHUB_TOKEN="<your-github-token>" \
+  -v aira-data:/app/backend/data \
+  -v aira-projects:/app/backend/projects \
+  ghcr.io/nahisaho/aira:v1.0.0
+```
+
+ブラウザで `http://localhost:3000` にアクセスしてください。
+
+### 前提条件
+
+- Docker
+- GitHub Copilot ライセンス
+- GitHub Token（`GITHUB_TOKEN` 環境変数または Settings 画面で設定）
 
 ## 主な機能
 
-- **チャットUI**: WebSocketストリーミングによるリアルタイム応答
-- **プロジェクト管理**: 作成・削除・名前変更
-- **Agent Skills**: プロジェクトごとにSkillsを割り当て
-- **MCP設定**: プロジェクトごとにMCPサーバーを設定（有効/無効切替）
-- **ファイル管理**: 生成ファイルの表示・ダウンロード（ZIP一括含む）
-- **ファイルアップロード**: 入力ファイルのアップロード
-- **Excelビューアー**: xlsx/xls/csvファイルのマルチシート表示
-- **実行履歴**: プロンプト保存・ダウンロード付き
-- **WASMフロントエンド**: React + TypeScript + WASMコンポーネント
+### プラットフォーム機能
+
+| 機能 | 説明 |
+|------|------|
+| **チャット UI** | WebSocket ストリーミングによるリアルタイム応答、Markdown レンダリング対応 |
+| **プロジェクト管理** | プロジェクトの作成・削除・名前変更、プロジェクト単位での設定管理 |
+| **Agent Skills** | プロジェクトごとに研究支援スキルを割り当て・切替 |
+| **MCP 設定** | プロジェクトごとに MCP サーバーを設定（有効/無効切替） |
+| **ファイル管理** | 生成ファイルの表示・ダウンロード（ZIP 一括含む）、PDF / Excel / 画像ビューア内蔵 |
+| **ファイルアップロード** | 入力データのアップロード |
+| **実行履歴** | パイプライン進捗の可視化、プロンプト保存・ダウンロード |
+
+### ビルトイン Agent Skills
+
+#### 🧬 Co-Scientist（汎用研究パートナー）
+
+研究の全ライフサイクルを協働で支援する汎用エージェントスイートです。**189 の専門サブスキル**を備え、以下の領域をカバーします。
+
+| カテゴリ | 主なサブスキル |
+|----------|--------------|
+| **文献調査・レビュー** | 文献検索、系統的レビュー、メタ分析、引用チェック |
+| **研究計画・実験設計** | 研究プランニング、実験デザイン（DOE）、仮説パイプライン |
+| **データ分析・統計** | EDA、統計検定、ベイズ統計、因果推論、欠損データ分析 |
+| **機械学習・AI** | 分類・回帰、深層学習、AutoML、説明可能AI、強化学習、連合学習 |
+| **バイオインフォマティクス** | ゲノム解析、トランスクリプトミクス、プロテオミクス、メタボロミクス、シングルセル解析 |
+| **創薬・薬理学** | 分子ドッキング、ADMET、化合物スクリーニング、ドラッグリポジショニング |
+| **医療・臨床** | 臨床試験分析、医療画像AI、精密医療、薬理ゲノミクス |
+| **学術執筆・発表** | 論文作成、LaTeX エクスポート、査読対応、プレゼンテーション作成 |
+| **データベース連携（MCP）** | PubMed、ChEMBL、UniProt、Ensembl、GWAS Catalog 等 89 の科学データベースに MCP 経由でアクセス |
+
+**特徴**: ファイルファースト出力、検証ループ（PLAN → EXECUTE → VERIFY → REPORT → LOG）、再現性保証、カラーバリアフリー図表
+
+#### 📋 SPReAD-1000 Assistant（SPReAD 公募支援）
+
+文部科学省「AI for Science 萌芽的挑戦研究創出事業（SPReAD）」の公募申請を一貫して支援する専門エージェントスイートです。**12 の専門サブスキル**で申請プロセス全体をカバーします。
+
+| サブスキル | 役割 |
+|-----------|------|
+| **context-collector** | 研究テーマのコンテキスト収集、3 層メタプロンプト生成（事実/仮説/制約） |
+| **research-planner** | 文献調査に基づく 180 日間の研究計画策定 |
+| **proposal-writer** | 審査 6 観点に最適化された申請書草稿の作成 |
+| **azure-architect** | 研究計画に基づく Azure クラウド構成設計 |
+| **cost-estimator** | Azure リソースの月額/年間コスト見積もり（500 万円直接経費内） |
+| **azure-deployer** | Bicep/Terraform による Azure 環境のデプロイ |
+| **iac-deployer** | IaC テンプレートの生成・検証・デプロイ |
+| **diagram-generator** | アーキテクチャ図・研究フロー図の自動生成 |
+| **experiment-guide** | 実験プロトコル設計・データ管理ガイダンス |
+| **final-reviewer** | 申請書の最終品質レビュー・改善提案 |
+| **submission-guide** | e-Rad 提出手続きのガイダンス |
+| **post-award** | 採択後の報告書作成・進捗管理支援 |
+
+**特徴**: 1 問 1 答のコンテキスト収集、3 層メタプロンプト（事実/推定/プログラム制約）、SPReAD 審査基準に最適化
 
 ## 技術スタック
 
 | レイヤー | 技術 |
-|---|---|
+|----------|------|
 | フロントエンド | React 19 + TypeScript + Vite 6 + Tailwind CSS v4 + Zustand 5 |
-| WASM | Rust + wasm-pack (Markdown/Mermaid レンダリング) |
-| バックエンド | Node.js 22+ + TypeScript + Hono |
-| DB | SQLite (better-sqlite3, WAL モード) |
-| エージェント | GitHub Copilot CLI (@GitHub/copilot) |
-| コンテナー | Docker（マルチステージビルド）|
+| バックエンド | Node.js 22 + TypeScript + Hono |
+| DB | SQLite（better-sqlite3、WAL モード） |
+| エージェント | GitHub Copilot CLI（@githubnext/copilot） |
+| コンテナ | Docker（マルチステージビルド） |
 
-## 前提条件
+## 開発
 
-- **OS**: Linux, macOS 13+, Windows 10/11
-- Node.js 22+
-- GitHub Copilotライセンス
-- GitHub Token（`GITHUB_TOKEN`環境変数またはSettings画面で設定）
-
-## クイックスタート (Web 版)
+### ソースからビルド
 
 ```bash
-# リポジトリクローン
 git clone https://github.com/nahisaho/aira.git
 cd aira
-
-# 依存関係インストール
 npm install
-
-# ビルド (フロントエンド + バックエンド)
 npm run build
 
-# バックエンド起動
-cd backend && node dist/server.js
-
-# フロントエンド開発サーバー起動 (別ターミナル)
-cd frontend && npm run dev
+# Docker イメージのビルド
+docker build -t aira-app .
 ```
-
-ブラウザで `http://localhost:5173` にアクセス。
-on
-## ビルド方法
-
-### Web 版 (開発)
-
-```bash
-# 全ワークスペースをビルド
-npm run build
-
-# バックエンドのみ
-npm run build --workspace=backend
-
-# フロントエンドのみ
-npm run build --workspace=frontend
-
-# 開発モード (ホットリロード)
-npm run dev
-```
-
-### Docker
-
-```bash
-# イメージビルド
-npm run docker:build
-# または
-docker build -t aira:latest .
-
-# コンテナ実行
-npm run docker:run
-# または
-docker run -p 3000:3000 \
-  -e GITHUB_TOKEN=your_token \
-  -v aira-data:/app/data \
-  -v aira-projects:/app/projects \
-  aira:latest
-```
-
-DockerイメージにはCopilot CLIが内包されています。
-`http://localhost:3000`でフロントエンドとAPIの両方にアクセスできます。
 
 ### テスト
 
 ```bash
-# ユニットテスト
 npm test
-
-# E2E テスト (Playwright)
-npm run test:e2e
-
-# リント
 npm run lint
 ```
 
-## プロジェクト構成
+### プロジェクト構成
 
 ```
 aira/
 ├── frontend/          # React フロントエンド
 ├── backend/           # Hono バックエンド
-│   └── src/
-│       ├── config/    # パス設定 (Docker 対応)
-│       ├── routes/    # API ルート
-│       ├── services/  # ビジネスロジック
-│       ├── middleware/ # セキュリティミドルウェア
-│       ├── lifecycle.ts  # 組み込み可能なサーバーAPI
-│       └── server.ts     # CLI エントリポイント
 ├── skills/            # ビルトイン Agent Skills
-├── wasm/              # Rust WASM モジュール
+│   ├── co-scientist/          # 汎用研究パートナー（189 サブスキル）
+│   └── spread1000-assistant/  # SPReAD 公募支援（12 サブスキル）
 ├── docs/              # 設計ドキュメント
 └── Dockerfile         # マルチステージ Docker ビルド
 ```
@@ -137,19 +132,9 @@ aira/
 ## 環境変数
 
 | 変数 | 説明 | デフォルト |
-|---|---|---|
+|------|------|-----------|
 | `GITHUB_TOKEN` | GitHub Personal Access Token | — |
 | `AIRA_PORT` | バックエンドポート | `3000` |
-| `AIRA_SERVE_FRONTEND` | フロントエンドを同一ポートで配信 | `false` |
-| `VITE_DEV_PORT` | Vite 開発サーバーポート | `5173` |
-
-## ドキュメント
-
-- [要件定義書](docs/requirements/REQ-001-system-requirements.md)
-- [システムアーキテクチャ設計](docs/design/DES-001-system-architecture.md)
-- [ADR-001: フロントエンドフレームワーク選定](docs/adr/ADR-001-frontend-framework.md)
-- [ADR-002: バックエンドランタイム選定](docs/adr/ADR-002-backend-runtime.md)
-- [プロジェクト概要](steering/project.md)
 
 ## ライセンス
 
