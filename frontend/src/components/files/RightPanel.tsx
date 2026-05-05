@@ -243,9 +243,9 @@ function FileEntry({ file, light, projectId, t, onView, onDelete }: {
   const icon = fileIcon(ext);
   return (
     <div className={`rounded px-3 py-2 text-sm ${light ? 'bg-gray-100' : 'bg-gray-800'}`}>
-      <div className={`truncate mb-1 ${light ? 'text-gray-700' : 'text-gray-300'}`}>
+      <div className={`truncate mb-1 ${light ? 'text-gray-700' : 'text-gray-300'}`} title={file.file_path}>
         <span className="mr-1.5">{icon}</span>
-        {file.file_path}
+        {file.file_path.split('/').pop() || file.file_path}
       </div>
       <div className="flex gap-2">
         <button
