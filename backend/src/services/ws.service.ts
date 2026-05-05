@@ -109,6 +109,9 @@ function handleChatMessage(client: WSClient, content: string, messageId?: string
         onComplete: (_runId, _exitCode) => {
           // Clients can fetch updated state via REST
         },
+        onFileCreated: (file) => {
+          broadcastToProject(client.projectId, { type: 'file_added', file });
+        },
       });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);

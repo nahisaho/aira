@@ -250,6 +250,7 @@ export function executeChat(
     onProgress?: (message: string) => void;
     onStatus: (runId: string, status: string) => void;
     onComplete: (runId: string, exitCode: number | null) => void;
+    onFileCreated?: (file: { id: string; file_path: string; size_bytes: number }) => void;
   },
 ): string {
   const db = getDatabase();
@@ -352,6 +353,28 @@ export function executeChat(
         }
       },
       onProgress: (msg) => callbacks.onProgress?.(msg),
+      onFileCreated: (absPath) => {
+        // Register file immediately when CLI creates it (don't wait for reconcile)
+        const workspaceDir = ctx.workspaceDir;
+        if (!absPath.startsWith(workspaceDir)) return;
+        const relativePath = path.relative(workspaceDir, absPath);
+        // Skip system files
+        const topSegment = relativePath.split(path.sep)[0];
+        if (topSegment === '.github' || topSegment === '.git' || topSegment === 'AGENTS.md') return;
+        try {
+          const stat = fs.statSync(absPath);
+          const filename = path.basename(relativePath);
+          const id = crypto.randomUUID();
+          db.prepare(`
+            INSERT INTO project_files (id, project_id, filename, file_path, size_bytes, mtime_ms, source)
+            VALUES (?, ?, ?, ?, ?, ?, 'agent')
+            ON CONFLICT(project_id, file_path) DO UPDATE SET
+              size_bytes = excluded.size_bytes, mtime_ms = excluded.mtime_ms, updated_at = CURRENT_TIMESTAMP
+          `).run(id, projectId, filename, relativePath, stat.size, stat.mtimeMs);
+          // Broadcast to frontend
+          callbacks.onFileCreated?.({ id, file_path: relativePath, size_bytes: stat.size });
+        } catch { /* file may not exist yet or be transient */ }
+      },
       onDone: (exitCode) => {
         const remaining = redactor.flush();
         if (remaining) {

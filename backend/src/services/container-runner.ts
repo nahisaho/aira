@@ -46,6 +46,7 @@ export interface RunnerCallbacks {
   onProgress: (message: string) => void;
   onDone:     (exitCode: number | null) => void;
   onError:    (message: string) => void;
+  onFileCreated?: (filePath: string) => void;
 }
 
 export interface RunnerOptions {
@@ -128,7 +129,7 @@ interface ParseState {
 function parseLine(
   line: string,
   state: ParseState,
-  cbs: Pick<RunnerCallbacks, 'onChunk' | 'onProgress'>,
+  cbs: Pick<RunnerCallbacks, 'onChunk' | 'onProgress' | 'onFileCreated'>,
 ): void {
   let event: { type?: string; data?: Record<string, unknown> };
   try { event = JSON.parse(line) as typeof event; } catch { return; }
@@ -171,6 +172,12 @@ function parseLine(
       if (skills) console.log(`[copilot-cli] Skills loaded: ${skills}`);
       break;
     }
+    case 'session.info': {
+      if (data.infoType === 'file_created' && typeof data.message === 'string') {
+        cbs.onFileCreated?.(data.message);
+      }
+      break;
+    }
     default:
       if (type) {
         // Log unknown events with their data for debugging
@@ -186,7 +193,7 @@ function parseLine(
 function attachStreamReader(
   proc: ChildProcess,
   state: ParseState,
-  cbs: Pick<RunnerCallbacks, 'onChunk' | 'onProgress'>,
+  cbs: Pick<RunnerCallbacks, 'onChunk' | 'onProgress' | 'onFileCreated'>,
 ): void {
   let buf = '';
   proc.stdout?.on('data', (data: Buffer) => {
@@ -352,6 +359,7 @@ export function startRun(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
   const wrapped: RunnerCallbacks = {
     onChunk:    (c) => cbs.onChunk(c),
     onProgress: (m) => cbs.onProgress(m),
+    onFileCreated: (p) => cbs.onFileCreated?.(p),
     onDone: (code) => {
       activeRuns.delete(opts.projectId);
       cbs.onDone(code);
