@@ -42,7 +42,7 @@ Integrate the research plan, Azure architecture design, and cost estimate to gen
    - **IV. 達成目標** (100–500 characters) — マイルストーン at mid-term / 中間（3ヶ月後）and final / 最終（6ヶ月後）
    - **V. AI利活用のノウハウ抽出・共有の実現計画** (60–300 characters) — Community sharing and cross-domain expansion
      - Reuse `assets/knowhow-sharing-template.md` when producing the know-how sharing section
-   - **Reference: Figure attachment** (max 1 figure) — Select from Phase 1b draw.io architecture diagrams
+   - **Reference: Figure attachment** (max 1 figure) — Azure architecture diagram from Phase 1
    - **VI. 研究業績等** (max 5 items) — Bullet list of journal papers, conference presentations, and books
    - Research infrastructure plan (Azure architecture)
    - Expense plan and 積算根拠 / cost justification (直接経費 ≤ ¥5M)
@@ -72,7 +72,7 @@ Integrate the research plan, Azure architecture design, and cost estimate to gen
   - Read `references/dmp-guide.md` when producing data management sections
 - Strictly observe the character limits for each section (Japanese/English character ranges are specified per section)
 - 様式1 must be submitted as Excel (PDF conversion is not allowed). Count characters in the template and keep within limits
-- Maximum 1 figure. Select the most appropriate diagram from the Phase 1b draw.io architecture diagrams
+- Maximum 1 figure. Select the most appropriate diagram from the Phase 1 architecture design
 
 ## Security Guardrails
 

@@ -47,9 +47,6 @@ Design the optimal Microsoft Azure architecture for the research plan.
    - Reuse `assets/architecture-template.md` when producing the design document
    - Include WAF validation results as a "WAF Best Practices Compliance" section in the design document
 6. **Final Verification**: Confirm the design meets research plan requirements
-7. **Auto-trigger Phase 1b**: After saving the design document and obtaining user approval, automatically invoke `spread1000-diagram-generator` to generate system architecture diagrams from the design.
-   - This ensures diagrams are available for the proposal's 参考）図 section before Phase 2 (cost estimation)
-   - Do NOT wait for a separate user request — proceed directly to diagram generation
 
 ## Deliverables
 

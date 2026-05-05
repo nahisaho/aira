@@ -52,11 +52,7 @@ WHEN: 研究テーマへのAI活用方法を知りたい、研究プランを作
 DO: → `spread1000-research-planner`
 
 WHEN: Azure上の研究基盤アーキテクチャを設計したい、GPUクラスタ・MLパイプライン構成を決めたい
-DO:
-  1. → `spread1000-azure-architect`
-  2. Phase 1 完了後 → `spread1000-diagram-generator` を自動起動（Phase 1b）
-     - draw.io MCP でシステム構成図・データフロー図を生成
-     - 申請書の「参考）図」セクションで使用するため、Phase 2 より先に実行する
+DO: → `spread1000-azure-architect`
 
 WHEN: Azureの利用コストを見積もりたい、予算計画を立てたい
 DO: → `spread1000-cost-estimator`
@@ -79,9 +75,6 @@ DO: → `spread1000-submission-guide`
 WHEN: 採択後の手続きを知りたい、中間報告を書きたい、最終報告書を作りたい、予算変更したい、費目間流用したい、論文謝辞の書き方を知りたい
 DO: → `spread1000-post-award`
 
-WHEN: システム構成図を作りたい、アーキテクチャ図をdraw.ioで作成したい、Azure構成の図面を生成したい、データフロー図が欲しい
-DO: → `spread1000-diagram-generator`
-
 WHEN: Bicepテンプレートを生成したい、CI/CDパイプラインを構築したい、IaCコードを作りたい
 DO: → `spread1000-iac-deployer`
 
@@ -100,10 +93,7 @@ DO: → `spread1000-experiment-guide`
    - YES → `spread1000-research-planner`
    - NO → next
 2. 研究プランは確定済みで Azure 構成が必要？
-   - YES → `spread1000-azure-architect`（完了後、自動で 2b へ）
-   - NO → next
-2b. Azure 構成設計書が完成し、構成図が未生成？
-   - YES → `spread1000-diagram-generator`（Phase 1b: 申請書の図セクション用）
+   - YES → `spread1000-azure-architect`
    - NO → next
 3. Azure 構成は確定済みでコスト見積もりが必要？
    - YES → `spread1000-cost-estimator`
@@ -138,7 +128,6 @@ DO: → `spread1000-experiment-guide`
 Pre   → `spread1000-context-collector`: コンテキスト充足度判定 → 不足時は1問1答で収集 → メタプロンプト生成 ⏸️ ユーザー承認
 Phase 0  → `spread1000-research-planner`: 研究テーマのヒアリング、Web調査、AI活用研究プラン策定 ⏸️ ユーザー承認
 Phase 1  → `spread1000-azure-architect`: 研究プランに基づくAzureアーキテクチャ設計 ⏸️ ユーザー承認
-Phase 1b → `spread1000-diagram-generator`: draw.io MCPによるシステム構成図・データフロー図生成（申請書の「参考）図」用）
 Phase 2  → `spread1000-cost-estimator`: Azure構成のコスト算出・予算計画
 Phase 3  → `spread1000-proposal-writer`: SPReAD申請書の生成 ⏸️ ユーザー承認
 Phase 3b → `proposal-reviewer` agent: 申請書の品質レビュー（6審査観点） ⏸️ ユーザー確認
@@ -154,7 +143,7 @@ Phase 6  → `spread1000-post-award`: 採択後管理（交付申請・中間報
 | Urgency | Keywords | Workflow |
 |---------|----------|---------|
 | Normal | (default) | Full workflow (Pre + Phase 0–6) |
-| Urgent | "急ぎ", "締切直前" | Pre + Phase 0+3 (プラン＋申請書) — 実際には Phase 0+1b+2+3 (プラン＋図＋コスト見積＋申請書) を実行 |
+| Urgent | "急ぎ", "締切直前" | Pre + Phase 0+2+3 (プラン＋コスト見積＋申請書) |
 | Critical | "今すぐ" | Pre + Phase 2+3 (コスト見積＋申請書) |
 
 > **⚠️ コスト見積り（Phase 2）はいかなる Urgency でもスキップ不可。** Azure Retail Prices API からの単価取得なしに申請書の経費欄を埋めてはならない。

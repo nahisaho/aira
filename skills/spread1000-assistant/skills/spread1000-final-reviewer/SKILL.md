@@ -118,7 +118,7 @@ Read `references/scoring-rubric.md` when performing peer review scoring.
 | 6 | 予算上限 | Phase 3 の直接経費 ≤ 500万円 |
 | 7 | 間接経費 | Phase 3 の間接経費 = 直接経費 × 30% |
 | 8 | VM仕様とモデル規模 | Phase 1 の GPU仕様 ↔ Phase 0 のモデルサイズ |
-| 9 | 図と本文の整合性 | Phase 1b の図 ↔ Phase 3 の記述 |
+| 9 | 図と本文の整合性 | Phase 1 の設計 ↔ Phase 3 の記述 |
 | 10 | 研究期間 | 全フェーズで約180日間と一致 |
 
 ### Step 6: 予算妥当性の深掘り検証
