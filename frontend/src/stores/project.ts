@@ -54,6 +54,9 @@ export const useProjectStore = create<ProjectStore>((set) => ({
 
   setActiveProject: (id: string | null) => {
     set({ activeProjectId: id });
+    // Reset per-project UI state when switching projects
+    import('./pipeline').then(({ usePipelineStore }) => usePipelineStore.getState().reset());
+    import('./chat').then(({ useChatStore }) => useChatStore.getState().reset());
     if (id) {
       wsClient.connect(id);
     } else {
