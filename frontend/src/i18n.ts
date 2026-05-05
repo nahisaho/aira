@@ -37,6 +37,13 @@ const translations = {
     'settings.viewMode': '表示モード',
     'settings.light': 'ライト',
     'settings.dark': 'ダーク',
+    'settings.cli': 'Copilot CLI',
+    'settings.cliVersion': 'バージョン',
+    'settings.cliNotFound': 'CLI が見つかりません',
+    'settings.cliUpdate': 'アップデート',
+    'settings.cliUpdating': 'アップデート中...',
+    'settings.cliUpdateSuccess': '✓ アップデート完了',
+    'settings.cliUpdateFailed': '✗ アップデート失敗',
 
     // Projects
     'project.newTitle': '新規プロジェクト',
@@ -127,6 +134,13 @@ const translations = {
     'settings.viewMode': 'View Mode',
     'settings.light': 'Light',
     'settings.dark': 'Dark',
+    'settings.cli': 'Copilot CLI',
+    'settings.cliVersion': 'Version',
+    'settings.cliNotFound': 'CLI not found',
+    'settings.cliUpdate': 'Update',
+    'settings.cliUpdating': 'Updating...',
+    'settings.cliUpdateSuccess': '✓ Update complete',
+    'settings.cliUpdateFailed': '✗ Update failed',
 
     // Projects
     'project.newTitle': 'New Project',

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { execFile, execFileSync } from 'node:child_process';
 import { AuthService, TokenConflictError } from '../services/auth.service.js';
 
 const settingsRoutes = new Hono();
@@ -55,6 +56,44 @@ settingsRoutes.post('/api/settings/validate-token', async (c) => {
     return c.json({ valid: true, login: result.login, scopes: result.scopes });
   }
   return c.json({ valid: false }, 200);
+});
+
+// GET /api/settings/cli-version — get current CLI version
+settingsRoutes.get('/api/settings/cli-version', (c) => {
+  try {
+    const version = execFileSync('copilot', ['--version'], {
+      encoding: 'utf-8',
+      timeout: 10_000,
+    }).trim();
+    return c.json({ version });
+  } catch {
+    return c.json({ version: null, error: 'CLI not found' }, 200);
+  }
+});
+
+// POST /api/settings/cli-update — run copilot update
+settingsRoutes.post('/api/settings/cli-update', async (c) => {
+  const result = await new Promise<{ ok: boolean; stdout: string; stderr: string }>((resolve) => {
+    execFile('copilot', ['update'], { timeout: 120_000 }, (err, stdout, stderr) => {
+      resolve({ ok: !err, stdout: stdout || '', stderr: stderr || '' });
+    });
+  });
+
+  const output = result.stdout + result.stderr;
+
+  if (!result.ok) {
+    return c.json({ success: false, output: output || 'Update failed' });
+  }
+
+  try {
+    const version = execFileSync('copilot', ['--version'], {
+      encoding: 'utf-8',
+      timeout: 10_000,
+    }).trim();
+    return c.json({ success: true, output, version });
+  } catch {
+    return c.json({ success: true, output, version: null });
+  }
 });
 
 export { settingsRoutes };

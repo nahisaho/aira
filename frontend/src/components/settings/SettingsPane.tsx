@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settings';
 import { usePreferencesStore, type Theme } from '../../stores/preferences';
 import { useT } from '../../useT';
+import { settingsApi } from '../../api/client';
 import type { Locale } from '../../i18n';
 
 export function SettingsPane({ onClose }: { onClose: () => void }) {
@@ -23,6 +24,8 @@ export function SettingsPane({ onClose }: { onClose: () => void }) {
           <ThemeSettings />
           <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
           <AuthSettings />
+          <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
+          <CliUpdateSettings />
         </div>
       </div>
     </div>
@@ -178,6 +181,74 @@ function AuthSettings() {
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+function CliUpdateSettings() {
+  const t = useT();
+  const [version, setVersion] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    settingsApi.getCliVersion().then((res) => {
+      setVersion(res.version);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const handleUpdate = async () => {
+    setUpdating(true);
+    setResult(null);
+    try {
+      const res = await settingsApi.updateCli();
+      if (res.success) {
+        if (res.version) setVersion(res.version);
+        setResult({ success: true, message: t('settings.cliUpdateSuccess') });
+      } else {
+        setResult({ success: false, message: `${t('settings.cliUpdateFailed')}: ${res.output}` });
+      }
+    } catch {
+      setResult({ success: false, message: t('settings.cliUpdateFailed') });
+    }
+    setUpdating(false);
+  };
+
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-gray-300 dark:text-gray-300 light:text-gray-700 mb-3">
+        {t('settings.cli')}
+      </h3>
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400">
+            {t('settings.cliVersion')}:{' '}
+            {loading ? '...' : version ? (
+              <span className="text-gray-200 font-mono">{version}</span>
+            ) : (
+              <span className="text-yellow-400">{t('settings.cliNotFound')}</span>
+            )}
+          </span>
+          <button
+            onClick={handleUpdate}
+            disabled={updating || loading}
+            className={`text-xs px-3 py-1 rounded transition-colors ${
+              updating
+                ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-500'
+            }`}
+          >
+            {updating ? t('settings.cliUpdating') : t('settings.cliUpdate')}
+          </button>
+        </div>
+        {result && (
+          <p className={`text-xs ${result.success ? 'text-green-400' : 'text-red-400'}`}>
+            {result.message}
+          </p>
+        )}
+      </div>
     </section>
   );
 }

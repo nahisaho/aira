@@ -209,6 +209,10 @@ export const settingsApi = {
     request<void>('/settings/token', { method: 'DELETE' }),
   validateToken: () =>
     request<{ valid: boolean; login?: string; scopes?: string[] }>('/settings/validate-token', { method: 'POST' }),
+  getCliVersion: () =>
+    request<{ version: string | null; error?: string }>('/settings/cli-version'),
+  updateCli: () =>
+    request<{ success: boolean; output: string; version?: string | null }>('/settings/cli-update', { method: 'POST' }),
 };
 
 // ─── Skills ───
