@@ -226,10 +226,10 @@ function CliUpdateSettings() {
       </h3>
       <div className="space-y-3">
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-gray-300">
             {t('settings.cliVersion')}:{' '}
             {loading ? '...' : version ? (
-              <span className="text-gray-200 font-mono">{version}</span>
+              <span className="text-white font-mono">{version}</span>
             ) : (
               <span className="text-yellow-400">{t('settings.cliNotFound')}</span>
             )}
