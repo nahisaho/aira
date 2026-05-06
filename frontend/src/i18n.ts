@@ -45,6 +45,13 @@ const translations = {
     'settings.cliUpdateSuccess': '✓ アップデート完了',
     'settings.cliUpdateFailed': '✗ アップデート失敗',
 
+    // Agents Repos
+    'settings.agentsRepo': 'Agents リポジトリ',
+    'settings.agentsRepoAdd': '追加',
+    'settings.agentsRepoNone': 'リポジトリ未登録',
+    'settings.agentsRepoSync': '同期',
+    'settings.agentsRepoLastSync': '最終同期',
+
     // Projects
     'project.newTitle': '新規プロジェクト',
     'project.nameLabel': 'プロジェクト名',
@@ -141,6 +148,13 @@ const translations = {
     'settings.cliUpdating': 'Updating...',
     'settings.cliUpdateSuccess': '✓ Update complete',
     'settings.cliUpdateFailed': '✗ Update failed',
+
+    // Agents Repos
+    'settings.agentsRepo': 'Agents Repositories',
+    'settings.agentsRepoAdd': 'Add',
+    'settings.agentsRepoNone': 'No repositories configured',
+    'settings.agentsRepoSync': 'Sync',
+    'settings.agentsRepoLastSync': 'Last synced',
 
     // Projects
     'project.newTitle': 'New Project',

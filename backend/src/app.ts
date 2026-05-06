@@ -14,6 +14,7 @@ import { runRoutes } from './routes/runs.js';
 import { fileRoutes } from './routes/files.js';
 import { skillsRoutes } from './routes/skills.js';
 import { mcpRoutes } from './routes/mcp.js';
+import { agentsRepoRoutes } from './routes/agents-repos.js';
 
 const app = new Hono();
 
@@ -38,6 +39,7 @@ app.route('/', runRoutes);
 app.route('/', fileRoutes);
 app.route('/', skillsRoutes);
 app.route('/', mcpRoutes);
+app.route('/', agentsRepoRoutes);
 
 // Global error handler — ensures all errors return JSON (not empty bodies)
 app.onError((err, c) => {

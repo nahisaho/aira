@@ -43,3 +43,6 @@ playwright.config.ts
 # Temporary files
 *.tmp
 *.bak
+
+# Agents repo cache
+agents-cache/

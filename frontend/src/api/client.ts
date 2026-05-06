@@ -289,3 +289,29 @@ export const mcpApi = {
 export const healthApi = {
   check: () => request<{ status: string }>('/health'),
 };
+
+// ─── Agents Repos ───
+
+export interface AgentsRepo {
+  id: string;
+  url: string;
+  name: string;
+  lastSync: string | null;
+  status: 'idle' | 'syncing' | 'error';
+  error: string | null;
+}
+
+export const agentsRepoApi = {
+  list: () => request<AgentsRepo[]>('/settings/agents-repos'),
+  add: (url: string, name?: string) =>
+    request<AgentsRepo>('/settings/agents-repos', {
+      method: 'POST',
+      body: JSON.stringify({ url, name }),
+    }),
+  remove: (id: string) =>
+    request<void>(`/settings/agents-repos/${id}`, { method: 'DELETE' }),
+  sync: (id: string) =>
+    request<AgentsRepo>(`/settings/agents-repos/${id}/sync`, { method: 'POST' }),
+  syncAll: () =>
+    request<{ status: string; repos: AgentsRepo[] }>('/settings/agents-repos/sync-all', { method: 'POST' }),
+};

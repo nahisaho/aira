@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settings';
 import { usePreferencesStore, type Theme } from '../../stores/preferences';
 import { useT } from '../../useT';
-import { settingsApi } from '../../api/client';
+import { settingsApi, agentsRepoApi } from '../../api/client';
+import type { AgentsRepo } from '../../api/client';
 import type { Locale } from '../../i18n';
 
 export function SettingsPane({ onClose }: { onClose: () => void }) {
@@ -26,6 +27,8 @@ export function SettingsPane({ onClose }: { onClose: () => void }) {
           <AuthSettings />
           <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
           <CliUpdateSettings />
+          <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
+          <AgentsRepoSettings />
         </div>
       </div>
     </div>
@@ -249,6 +252,123 @@ function CliUpdateSettings() {
           </p>
         )}
       </div>
+    </section>
+  );
+}
+function AgentsRepoSettings() {
+  const t = useT();
+  const [repos, setRepos] = useState<AgentsRepo[]>([]);
+  const [urlInput, setUrlInput] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchRepos = async () => {
+    try {
+      const data = await agentsRepoApi.list();
+      setRepos(data);
+    } catch { /* ignore */ }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchRepos(); }, []);
+
+  const handleAdd = async () => {
+    if (!urlInput.trim()) return;
+    setError(null);
+    try {
+      await agentsRepoApi.add(urlInput.trim());
+      setUrlInput('');
+      await fetchRepos();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to add');
+    }
+  };
+
+  const handleRemove = async (id: string) => {
+    try {
+      await agentsRepoApi.remove(id);
+      await fetchRepos();
+    } catch { /* ignore */ }
+  };
+
+  const handleSync = async (id: string) => {
+    setSyncing(id);
+    setError(null);
+    try {
+      await agentsRepoApi.sync(id);
+      await fetchRepos();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Sync failed');
+      await fetchRepos();
+    }
+    setSyncing(null);
+  };
+
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-gray-300 dark:text-gray-300 light:text-gray-700 mb-3">
+        {t('settings.agentsRepo')}
+      </h3>
+
+      {/* Add repo form */}
+      <div className="flex gap-2 mb-3">
+        <input
+          type="text"
+          value={urlInput}
+          onChange={(e) => setUrlInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          placeholder="https://github.com/owner/repo"
+          className="flex-1 bg-gray-700 text-gray-100 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          onClick={handleAdd}
+          className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 rounded text-white"
+        >
+          {t('settings.agentsRepoAdd')}
+        </button>
+      </div>
+
+      {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+
+      {/* Repos list */}
+      {loading ? (
+        <p className="text-xs text-gray-500">{t('sidebar.loading')}</p>
+      ) : repos.length === 0 ? (
+        <p className="text-xs text-gray-500">{t('settings.agentsRepoNone')}</p>
+      ) : (
+        <div className="space-y-2">
+          {repos.map((repo) => (
+            <div key={repo.id} className="flex items-center gap-2 bg-gray-700/50 rounded px-3 py-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-200 truncate font-medium">{repo.name}</p>
+                <p className="text-xs text-gray-400 truncate">{repo.url}</p>
+                {repo.lastSync && (
+                  <p className="text-xs text-gray-500">
+                    {t('settings.agentsRepoLastSync')}: {new Date(repo.lastSync).toLocaleString()}
+                  </p>
+                )}
+                {repo.error && (
+                  <p className="text-xs text-red-400 truncate">{repo.error}</p>
+                )}
+              </div>
+              <button
+                onClick={() => handleSync(repo.id)}
+                disabled={syncing === repo.id}
+                className="text-xs text-blue-400 hover:text-blue-300 disabled:text-gray-500"
+              >
+                {syncing === repo.id ? '⟳' : t('settings.agentsRepoSync')}
+              </button>
+              <button
+                onClick={() => handleRemove(repo.id)}
+                className="text-xs text-red-400 hover:text-red-300"
+              >
+                {t('settings.remove')}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

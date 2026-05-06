@@ -12,6 +12,7 @@ import { runPreflight } from './services/preflight.js';
 import { attachWebSocket } from './services/ws.service.js';
 import { seedBuiltinSkills } from './services/skills.service.js';
 import { seedBuiltinMcpAll } from './services/mcp.service.js';
+import { AgentsRepoService } from './services/agents-repo.service.js';
 import { stopAllRuns } from './services/container-runner.js';
 import {
   startCredentialProxy,
@@ -68,6 +69,15 @@ export async function startServer(portOrOpts: number | StartOptions): Promise<St
   seedBuiltinSkills();
   seedBuiltinMcpAll();
   console.log('[AIRA] Built-in skills and MCP seeded');
+
+  // 4b. Sync external agents repos (non-blocking)
+  const agentsRepoService = new AgentsRepoService();
+  try {
+    agentsRepoService.syncAll();
+    console.log('[AIRA] External agents repos synced');
+  } catch (err) {
+    console.warn(`[AIRA] Agents repo sync warning: ${(err as Error).message}`);
+  }
 
   // 5. Credential proxy (token injection for Docker containers)
   const authService = new AuthService();
