@@ -1,25 +1,25 @@
-# AIRA-α — AI Research Administrator
+# AIRA-β — AI Research Administrator
 
 > Web ベースの AI Research Administrator  
 > GitHub Copilot CLI をエージェントエンジンとして使用  
-> **v1.0.0**
+> **v2.0.0**
 
 ## 概要
 
-AIRA-α は、GitHub Copilot CLI を推論エンジンとして活用する Web ベースの AI Research Administrator です。**プロジェクト単位**で Agent Skills と MCP サーバーを管理し、研究の全ライフサイクルを支援します。Docker イメージとして提供され、すぐに利用を開始できます。
+AIRA-β は、GitHub Copilot CLI を推論エンジンとして活用する Web ベースの AI Research Administrator です。**プロジェクト単位**で Agent Skills と MCP サーバーを管理し、研究の全ライフサイクルを支援します。Docker イメージとして提供され、すぐに利用を開始できます。
 
 ## クイックスタート
 
 ```bash
 # Docker イメージの取得
-docker pull ghcr.io/nahisaho/aira:v1.0.0
+docker pull ghcr.io/nahisaho/aira:v2.0.0
 
 # コンテナの起動
 docker run -d -p 3001:3000 \
   -e GITHUB_TOKEN="<your-github-token>" \
   -v aira-data:/app/backend/data \
   -v aira-projects:/app/backend/projects \
-  ghcr.io/nahisaho/aira:v1.0.0
+  ghcr.io/nahisaho/aira:v2.0.0
 ```
 
 ブラウザで `http://localhost:3001` にアクセスしてください。
@@ -43,6 +43,7 @@ docker run -d -p 3001:3000 \
 | **ファイル管理** | 生成ファイルの表示・ダウンロード（ZIP 一括含む）、PDF / Excel / 画像ビューア内蔵 |
 | **ファイルアップロード** | 入力データのアップロード |
 | **実行履歴** | パイプライン進捗の可視化、プロンプト保存・ダウンロード |
+| **外部 Agents リポジトリ** | GitHub リポジトリから Agent Skills を取得・同期（複数リポジトリ対応） |
 
 ### MCP サーバー連携
 
@@ -94,6 +95,26 @@ docker run -d -p 3001:3000 \
 | **post-award** | 採択後の報告書作成・進捗管理支援 |
 
 **特徴**: 1 問 1 答のコンテキスト収集、3 層メタプロンプト（事実/推定/プログラム制約）、SPReAD 審査基準に最適化
+
+### 🔗 外部 Agents リポジトリ（v2.0.0）
+
+Settings から GitHub リポジトリを登録し、カスタム Agent Skills を追加できます。
+
+```
+リポジトリ構成例:
+your-repo/
+└── agents/
+    ├── agent-a/
+    │   ├── AGENTS.md
+    │   ├── copilot-instructions.md
+    │   └── skills/
+    ├── agent-b/
+    └── agent-c/
+```
+
+- **複数リポジトリ対応**: 複数の GitHub リポジトリを登録可能
+- **Private リポジトリ対応**: 設定済み GitHub Token で認証
+- **自動同期**: サーバー起動時に自動同期、手動同期ボタンあり
 
 ## 技術スタック
 
