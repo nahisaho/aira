@@ -167,15 +167,15 @@ export class AgentsRepoService {
       // Sanitize: remove token from error messages
       const sanitized = msg.replace(/x-access-token:[^@]+@/g, '***@');
       if (sanitized.includes('not found') || sanitized.includes('Repository not found')) {
-        throw new Error('GitHub リポジトリが存在しません。URL を確認してください。');
+        throw new AgentsRepoError('REPO_NOT_FOUND');
       }
       if (sanitized.includes('Could not resolve host')) {
-        throw new Error('GitHub リポジトリが存在しません。URL を確認してください。');
+        throw new AgentsRepoError('REPO_NOT_FOUND');
       }
       if (sanitized.includes('Authentication failed') || sanitized.includes('could not read Username')) {
-        throw new Error('GitHub リポジトリへのアクセスが拒否されました。トークンと URL を確認してください。');
+        throw new AgentsRepoError('AUTH_FAILED');
       }
-      throw new Error(sanitized);
+      throw new AgentsRepoError('SYNC_FAILED', sanitized);
     }
   }
 
@@ -197,7 +197,7 @@ export class AgentsRepoService {
   private registerAgents(repo: AgentsRepo, cacheDir: string): void {
     const agentsDir = path.join(cacheDir, 'agents');
     if (!fs.existsSync(agentsDir)) {
-      throw new Error(`リポジトリに 'agents/' ディレクトリが見つかりません: ${repo.url}`);
+      throw new AgentsRepoError('NO_AGENTS_DIR', repo.url);
     }
 
     const entries = fs.readdirSync(agentsDir, { withFileTypes: true });
@@ -287,5 +287,18 @@ export class RepoNotFoundError extends Error {
   constructor(id: string) {
     super(`Repository not found: ${id}`);
     this.name = 'RepoNotFoundError';
+  }
+}
+
+export type AgentsRepoErrorCode = 'REPO_NOT_FOUND' | 'AUTH_FAILED' | 'NO_AGENTS_DIR' | 'SYNC_FAILED';
+
+export class AgentsRepoError extends Error {
+  code: AgentsRepoErrorCode;
+  detail?: string;
+  constructor(code: AgentsRepoErrorCode, detail?: string) {
+    super(code);
+    this.name = 'AgentsRepoError';
+    this.code = code;
+    this.detail = detail;
   }
 }

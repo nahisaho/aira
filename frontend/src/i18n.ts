@@ -51,6 +51,10 @@ const translations = {
     'settings.agentsRepoNone': 'リポジトリ未登録',
     'settings.agentsRepoSync': '同期',
     'settings.agentsRepoLastSync': '最終同期',
+    'settings.agentsRepoError.REPO_NOT_FOUND': 'GitHub リポジトリが存在しません。URL を確認してください。',
+    'settings.agentsRepoError.AUTH_FAILED': 'GitHub リポジトリへのアクセスが拒否されました。トークンと URL を確認してください。',
+    'settings.agentsRepoError.NO_AGENTS_DIR': 'リポジトリに agents/ ディレクトリが見つかりません。',
+    'settings.agentsRepoError.SYNC_FAILED': '同期に失敗しました。',
 
     // Projects
     'project.newTitle': '新規プロジェクト',
@@ -155,6 +159,10 @@ const translations = {
     'settings.agentsRepoNone': 'No repositories configured',
     'settings.agentsRepoSync': 'Sync',
     'settings.agentsRepoLastSync': 'Last synced',
+    'settings.agentsRepoError.REPO_NOT_FOUND': 'GitHub repository not found. Please check the URL.',
+    'settings.agentsRepoError.AUTH_FAILED': 'Access denied. Please check your token and URL.',
+    'settings.agentsRepoError.NO_AGENTS_DIR': 'No agents/ directory found in the repository.',
+    'settings.agentsRepoError.SYNC_FAILED': 'Sync failed.',
 
     // Projects
     'project.newTitle': 'New Project',

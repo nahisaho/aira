@@ -299,7 +299,13 @@ function AgentsRepoSettings() {
       await agentsRepoApi.sync(id);
       await fetchRepos();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Sync failed');
+      const errorCode = (err as { data?: { error_code?: string } })?.data?.error_code;
+      if (errorCode) {
+        const key = `settings.agentsRepoError.${errorCode}` as Parameters<typeof t>[0];
+        setError(t(key));
+      } else {
+        setError(err instanceof Error ? err.message : 'Sync failed');
+      }
       await fetchRepos();
     }
     setSyncing(null);

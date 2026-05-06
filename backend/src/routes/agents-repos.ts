@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { AgentsRepoService, DuplicateRepoError, RepoNotFoundError } from '../services/agents-repo.service.js';
+import { AgentsRepoService, DuplicateRepoError, RepoNotFoundError, AgentsRepoError } from '../services/agents-repo.service.js';
 
 const agentsRepoRoutes = new Hono();
 const service = new AgentsRepoService();
@@ -58,6 +58,9 @@ agentsRepoRoutes.post('/api/settings/agents-repos/:id/sync', (c) => {
   } catch (err) {
     if (err instanceof RepoNotFoundError) {
       return c.json({ error: err.message }, 404);
+    }
+    if (err instanceof AgentsRepoError) {
+      return c.json({ error_code: err.code, detail: err.detail }, 400);
     }
     return c.json({ error: err instanceof Error ? err.message : 'Sync failed' }, 500);
   }
