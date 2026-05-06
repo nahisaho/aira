@@ -26,7 +26,17 @@ agentsRepoRoutes.post('/api/settings/agents-repos', async (c) => {
 
   try {
     const repo = service.addRepo(parsed.data.url, parsed.data.name);
-    return c.json(repo, 201);
+    try {
+      const synced = service.syncRepo(repo.id);
+      return c.json(synced, 201);
+    } catch (syncErr) {
+      // Sync failed — remove the repo and return error
+      service.removeRepo(repo.id);
+      if (syncErr instanceof AgentsRepoError) {
+        return c.json({ error_code: syncErr.code, detail: syncErr.detail }, 400);
+      }
+      return c.json({ error: syncErr instanceof Error ? syncErr.message : 'Sync failed' }, 400);
+    }
   } catch (err) {
     if (err instanceof DuplicateRepoError) {
       return c.json({ error: err.message }, 409);
