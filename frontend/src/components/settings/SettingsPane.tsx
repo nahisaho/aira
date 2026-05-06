@@ -304,7 +304,8 @@ function AgentsRepoSettings() {
         const key = `settings.agentsRepoError.${errorCode}` as Parameters<typeof t>[0];
         setError(t(key));
       } else {
-        setError(err instanceof Error ? err.message : 'Sync failed');
+        const msg = (err as { data?: { error?: string } })?.data?.error;
+        setError(msg || (err instanceof Error ? err.message : 'Sync failed'));
       }
       await fetchRepos();
     }
@@ -355,7 +356,11 @@ function AgentsRepoSettings() {
                   </p>
                 )}
                 {repo.error && (
-                  <p className="text-xs text-red-400 truncate">{repo.error}</p>
+                  <p className="text-xs text-red-400 truncate">
+                    {t((`settings.agentsRepoError.${repo.error}`) as Parameters<typeof t>[0]) !== `settings.agentsRepoError.${repo.error}`
+                      ? t((`settings.agentsRepoError.${repo.error}`) as Parameters<typeof t>[0])
+                      : repo.error}
+                  </p>
                 )}
               </div>
               <button
