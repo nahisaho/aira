@@ -353,7 +353,7 @@ function AgentsRepoSettings() {
       ) : (
         <div className="space-y-2">
           {repos.map((repo) => (
-            <div key={repo.id} className="flex items-center gap-2 bg-gray-200/80 rounded px-3 py-2">
+            <div key={repo.id} className="flex items-center gap-2 bg-blue-100/80 rounded px-3 py-2">
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-gray-900 truncate font-medium">{repo.name}</p>
                 <p className="text-xs text-gray-400 truncate">{repo.url}</p>
