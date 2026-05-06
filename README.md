@@ -12,7 +12,9 @@ AIRA-β は、GitHub Copilot CLI を推論エンジンとして活用する Web 
 
 ```bash
 # Docker イメージの取得
-docker pull ghcr.io/nahisaho/aira:v2.0.0
+docker pull ghcr.io/nahisaho/aira:2.0.1
+
+docker pull ghcr.io/nahisaho/aira:latest (最新版)
 
 # コンテナの起動
 docker run -d -p 3001:3000 \
@@ -96,7 +98,7 @@ docker run -d -p 3001:3000 \
 
 **特徴**: 1 問 1 答のコンテキスト収集、3 層メタプロンプト（事実/推定/プログラム制約）、SPReAD 審査基準に最適化
 
-### 🔗 外部 Agents リポジトリ（v2.0.0）
+### 🔗 外部 Agents リポジトリ（v2.0.1）
 
 Settings から GitHub リポジトリを登録し、カスタム Agent Skills を追加できます。
 
