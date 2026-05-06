@@ -141,25 +141,41 @@ export class AgentsRepoService {
     // Inject token for authenticated access to private repos
     const authUrl = this.getAuthenticatedUrl(url);
 
-    if (fs.existsSync(path.join(cacheDir, '.git'))) {
-      // Update remote URL with current token and pull
-      execFileSync('git', ['-C', cacheDir, 'remote', 'set-url', 'origin', authUrl], {
-        timeout: 10_000,
-        encoding: 'utf-8',
-      });
-      execFileSync('git', ['-C', cacheDir, 'pull', '--ff-only'], {
-        timeout: 60_000,
-        encoding: 'utf-8',
-      });
-    } else {
-      // Fresh clone
-      if (!fs.existsSync(AGENTS_CACHE_DIR())) {
-        fs.mkdirSync(AGENTS_CACHE_DIR(), { recursive: true });
+    try {
+      if (fs.existsSync(path.join(cacheDir, '.git'))) {
+        // Update remote URL with current token and pull
+        execFileSync('git', ['-C', cacheDir, 'remote', 'set-url', 'origin', authUrl], {
+          timeout: 10_000,
+          encoding: 'utf-8',
+        });
+        execFileSync('git', ['-C', cacheDir, 'pull', '--ff-only'], {
+          timeout: 60_000,
+          encoding: 'utf-8',
+        });
+      } else {
+        // Fresh clone
+        if (!fs.existsSync(AGENTS_CACHE_DIR())) {
+          fs.mkdirSync(AGENTS_CACHE_DIR(), { recursive: true });
+        }
+        execFileSync('git', ['clone', '--depth', '1', authUrl, cacheDir], {
+          timeout: 120_000,
+          encoding: 'utf-8',
+        });
       }
-      execFileSync('git', ['clone', '--depth', '1', authUrl, cacheDir], {
-        timeout: 120_000,
-        encoding: 'utf-8',
-      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Sanitize: remove token from error messages
+      const sanitized = msg.replace(/x-access-token:[^@]+@/g, '***@');
+      if (sanitized.includes('not found') || sanitized.includes('Repository not found')) {
+        throw new Error('GitHub リポジトリが存在しません。URL を確認してください。');
+      }
+      if (sanitized.includes('Could not resolve host')) {
+        throw new Error('GitHub リポジトリが存在しません。URL を確認してください。');
+      }
+      if (sanitized.includes('Authentication failed') || sanitized.includes('could not read Username')) {
+        throw new Error('GitHub リポジトリへのアクセスが拒否されました。トークンと URL を確認してください。');
+      }
+      throw new Error(sanitized);
     }
   }
 
@@ -181,7 +197,7 @@ export class AgentsRepoService {
   private registerAgents(repo: AgentsRepo, cacheDir: string): void {
     const agentsDir = path.join(cacheDir, 'agents');
     if (!fs.existsSync(agentsDir)) {
-      throw new Error(`No 'agents/' directory found in repository: ${repo.url}`);
+      throw new Error(`リポジトリに 'agents/' ディレクトリが見つかりません: ${repo.url}`);
     }
 
     const entries = fs.readdirSync(agentsDir, { withFileTypes: true });
