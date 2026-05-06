@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { getDataDir, getBaseDir } from '../config/paths.js';
 import { getDatabase } from '../db/index.js';
+import { AuthService } from './auth.service.js';
 
 export interface AgentsRepo {
   id: string;
@@ -137,8 +138,15 @@ export class AgentsRepoService {
   }
 
   private cloneOrPull(url: string, cacheDir: string): void {
+    // Inject token for authenticated access to private repos
+    const authUrl = this.getAuthenticatedUrl(url);
+
     if (fs.existsSync(path.join(cacheDir, '.git'))) {
-      // Pull latest
+      // Update remote URL with current token and pull
+      execFileSync('git', ['-C', cacheDir, 'remote', 'set-url', 'origin', authUrl], {
+        timeout: 10_000,
+        encoding: 'utf-8',
+      });
       execFileSync('git', ['-C', cacheDir, 'pull', '--ff-only'], {
         timeout: 60_000,
         encoding: 'utf-8',
@@ -148,10 +156,25 @@ export class AgentsRepoService {
       if (!fs.existsSync(AGENTS_CACHE_DIR())) {
         fs.mkdirSync(AGENTS_CACHE_DIR(), { recursive: true });
       }
-      execFileSync('git', ['clone', '--depth', '1', url, cacheDir], {
+      execFileSync('git', ['clone', '--depth', '1', authUrl, cacheDir], {
         timeout: 120_000,
         encoding: 'utf-8',
       });
+    }
+  }
+
+  private getAuthenticatedUrl(url: string): string {
+    const authService = new AuthService();
+    const token = authService.resolveToken();
+    if (!token) return url;
+
+    try {
+      const u = new URL(url);
+      u.username = 'x-access-token';
+      u.password = token;
+      return u.toString();
+    } catch {
+      return url;
     }
   }
 
