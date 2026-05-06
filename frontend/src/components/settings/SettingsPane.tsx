@@ -260,7 +260,6 @@ function AgentsRepoSettings() {
   const [repos, setRepos] = useState<AgentsRepo[]>([]);
   const [urlInput, setUrlInput] = useState('');
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchRepos = async () => {
@@ -299,25 +298,6 @@ function AgentsRepoSettings() {
     } catch { /* ignore */ }
   };
 
-  const handleSync = async (id: string) => {
-    setSyncing(id);
-    setError(null);
-    try {
-      await agentsRepoApi.sync(id);
-      await fetchRepos();
-    } catch (err: unknown) {
-      const errorCode = (err as { data?: { error_code?: string } })?.data?.error_code;
-      if (errorCode) {
-        const key = `settings.agentsRepoError.${errorCode}` as Parameters<typeof t>[0];
-        setError(t(key));
-      } else {
-        const msg = (err as { data?: { error?: string } })?.data?.error;
-        setError(msg || (err instanceof Error ? err.message : 'Sync failed'));
-      }
-      await fetchRepos();
-    }
-    setSyncing(null);
-  };
 
   return (
     <section>
@@ -370,13 +350,6 @@ function AgentsRepoSettings() {
                   </p>
                 )}
               </div>
-              <button
-                onClick={() => handleSync(repo.id)}
-                disabled={syncing === repo.id}
-                className="text-xs text-blue-400 hover:text-blue-300 disabled:text-gray-500"
-              >
-                {syncing === repo.id ? '⟳' : t('settings.agentsRepoSync')}
-              </button>
               <button
                 onClick={() => handleRemove(repo.id)}
                 className="text-xs text-red-400 hover:text-red-300"
