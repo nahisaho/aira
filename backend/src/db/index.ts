@@ -288,7 +288,7 @@ function createSchema(db: CompatDatabase): void {
       id          TEXT PRIMARY KEY,
       name        TEXT NOT NULL,
       description TEXT,
-      source_type TEXT NOT NULL CHECK(source_type IN ('local', 'github', 'marketplace')),
+      source_type TEXT NOT NULL CHECK(source_type IN ('local', 'github', 'marketplace', 'github-agents')),
       source_url  TEXT,
       skill_path  TEXT NOT NULL,
       status      TEXT NOT NULL DEFAULT 'available'
@@ -339,6 +339,33 @@ function createSchema(db: CompatDatabase): void {
   const runCols = db.pragma('table_info(agent_runs)') as Array<{ name: string }>;
   if (Array.isArray(runCols) && !runCols.some(c => c.name === 'prompt')) {
     db.exec("ALTER TABLE agent_runs ADD COLUMN prompt TEXT");
+  }
+
+  // Migrate skills table: add 'github-agents' to source_type constraint
+  try {
+    db.exec("INSERT INTO skills (id, name, source_type, skill_path) VALUES ('__constraint_test__', '__test__', 'github-agents', '__test__')");
+    db.exec("DELETE FROM skills WHERE id = '__constraint_test__'");
+  } catch {
+    // Constraint doesn't allow 'github-agents' — recreate table
+    db.exec(`
+      CREATE TABLE skills_new (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        description TEXT,
+        source_type TEXT NOT NULL CHECK(source_type IN ('local', 'github', 'marketplace', 'github-agents')),
+        source_url  TEXT,
+        skill_path  TEXT NOT NULL,
+        status      TEXT NOT NULL DEFAULT 'available'
+                    CHECK(status IN ('available', 'importing', 'error')),
+        last_error  TEXT,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        builtin     INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    db.exec(`INSERT INTO skills_new SELECT id, name, description, source_type, source_url, skill_path, status, last_error, created_at, updated_at, COALESCE(builtin, 0) FROM skills`);
+    db.exec('DROP TABLE skills');
+    db.exec('ALTER TABLE skills_new RENAME TO skills');
   }
 }
 
