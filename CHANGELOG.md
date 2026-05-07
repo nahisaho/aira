@@ -2,6 +2,13 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.0.2] — 2026-05-07
+
+### Added
+- **メッセージ送信オプション**: 設定画面から送信キーを選択可能
+  - Enter キー（デフォルト）: Enter で送信、Shift+Enter で改行
+  - Ctrl+Enter キー: Ctrl+Enter で送信、Enter で改行
+
 ## [v2.0.0] — 2026-05-07
 
 ### Added

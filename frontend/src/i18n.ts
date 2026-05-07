@@ -56,6 +56,13 @@ const translations = {
     'settings.agentsRepoError.NO_AGENTS_DIR': 'リポジトリに agents/ ディレクトリが見つかりません。',
     'settings.agentsRepoError.SYNC_FAILED': '同期に失敗しました。',
 
+    // Send key
+    'settings.sendKey': 'メッセージ送信',
+    'settings.sendKey.Enter': 'Enter キー',
+    'settings.sendKey.CtrlEnter': 'Ctrl + Enter キー',
+    'settings.sendKey.hint.Enter': 'Shift+Enter で改行',
+    'settings.sendKey.hint.CtrlEnter': 'Enter で改行',
+
     // Projects
     'project.newTitle': '新規プロジェクト',
     'project.nameLabel': 'プロジェクト名',
@@ -163,6 +170,13 @@ const translations = {
     'settings.agentsRepoError.AUTH_FAILED': 'Access denied. Please check your token and URL.',
     'settings.agentsRepoError.NO_AGENTS_DIR': 'No agents/ directory found in the repository.',
     'settings.agentsRepoError.SYNC_FAILED': 'Sync failed.',
+
+    // Send key
+    'settings.sendKey': 'Send message',
+    'settings.sendKey.Enter': 'Enter key',
+    'settings.sendKey.CtrlEnter': 'Ctrl + Enter key',
+    'settings.sendKey.hint.Enter': 'Shift+Enter for new line',
+    'settings.sendKey.hint.CtrlEnter': 'Enter for new line',
 
     // Projects
     'project.newTitle': 'New Project',

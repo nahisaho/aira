@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settings';
-import { usePreferencesStore, type Theme } from '../../stores/preferences';
+import { usePreferencesStore, type Theme, type SendKey } from '../../stores/preferences';
 import { useT } from '../../useT';
 import { settingsApi, agentsRepoApi } from '../../api/client';
 import type { AgentsRepo } from '../../api/client';
@@ -23,6 +23,8 @@ export function SettingsPane({ onClose }: { onClose: () => void }) {
           <LanguageSettings />
           <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
           <ThemeSettings />
+          <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
+          <SendKeySettings />
           <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
           <AuthSettings />
           <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
@@ -89,6 +91,42 @@ function ThemeSettings() {
           ),
         )}
       </div>
+    </section>
+  );
+}
+
+function SendKeySettings() {
+  const t = useT();
+  const { sendKey, setSendKey } = usePreferencesStore();
+
+  const options: { value: SendKey; labelKey: 'settings.sendKey.Enter' | 'settings.sendKey.CtrlEnter' }[] = [
+    { value: 'Enter', labelKey: 'settings.sendKey.Enter' },
+    { value: 'Ctrl+Enter', labelKey: 'settings.sendKey.CtrlEnter' },
+  ];
+
+  const hintKey = sendKey === 'Enter' ? 'settings.sendKey.hint.Enter' : 'settings.sendKey.hint.CtrlEnter';
+
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-gray-300 dark:text-gray-300 light:text-gray-700 mb-3">
+        {t('settings.sendKey')}
+      </h3>
+      <div className="flex gap-2">
+        {options.map(({ value, labelKey }) => (
+          <button
+            key={value}
+            onClick={() => setSendKey(value)}
+            className={`px-4 py-2 rounded text-sm transition-colors ${
+              sendKey === value
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600 dark:bg-gray-700 light:bg-gray-200 light:text-gray-700'
+            }`}
+          >
+            {t(labelKey)}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-gray-500 mt-2">{t(hintKey)}</p>
     </section>
   );
 }

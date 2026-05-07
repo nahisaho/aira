@@ -2,7 +2,7 @@
 
 > Web ベースの AI Research Administrator  
 > GitHub Copilot CLI をエージェントエンジンとして使用  
-> **v2.0.0**
+> **v2.0.2**
 
 ## 概要
 
@@ -12,7 +12,7 @@ AIRA-β は、GitHub Copilot CLI を推論エンジンとして活用する Web 
 
 ```bash
 # Docker イメージの取得
-docker pull ghcr.io/nahisaho/aira:2.0.1
+docker pull ghcr.io/nahisaho/aira:v2.0.2
 
 docker pull ghcr.io/nahisaho/aira:latest (最新版)
 
@@ -21,7 +21,7 @@ docker run -d -p 3001:3000 \
   -e GITHUB_TOKEN="<your-github-token>" \
   -v aira-data:/app/backend/data \
   -v aira-projects:/app/backend/projects \
-  ghcr.io/nahisaho/aira:v2.0.0
+  ghcr.io/nahisaho/aira:v2.0.2
 ```
 
 ブラウザで `http://localhost:3001` にアクセスしてください。

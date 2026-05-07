@@ -16,6 +16,7 @@ export function ChatPane() {
   const theme = usePreferencesStore((s) => s.theme);
   const model = usePreferencesStore((s) => s.model);
   const setModel = usePreferencesStore((s) => s.setModel);
+  const sendKey = usePreferencesStore((s) => s.sendKey);
   const t = useT();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -39,9 +40,16 @@ export function ChatPane() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+    if (sendKey === 'Ctrl+Enter') {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    } else {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
     }
   };
 
