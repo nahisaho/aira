@@ -24,6 +24,9 @@ fileRoutes.get('/api/projects/:id/files', (c) => {
   const projectId = c.req.param('id');
   const db = getDatabase();
 
+  // Always reconcile so subdirectory files are included
+  reconcileProjectFiles(projectId, db);
+
   const files = db.prepare(
     'SELECT * FROM project_files WHERE project_id = ? ORDER BY file_path ASC',
   ).all(projectId);
