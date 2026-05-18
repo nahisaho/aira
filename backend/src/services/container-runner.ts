@@ -53,9 +53,13 @@ export interface RunnerOptions {
   projectId:    string;
   workspaceDir: string;
   prompt:       string;
+  /** Full history prompt used only when creating a new session (--name fallback). */
+  coldStartPrompt?: string;
   token:        string;
   model?:       string;
   mcpConfigFile?: string | null;
+  /** If true, skip --resume and directly create a new session. */
+  forceNewSession?: boolean;
 }
 
 export interface ActiveRun {
@@ -242,8 +246,14 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
     if (opts.model)        args.push('--model', opts.model);
     if (opts.mcpConfigFile) args.push('--additional-mcp-config', `@${opts.mcpConfigFile}`);
 
+    // For --resume, send only the raw user message (CLI already has history).
+    // For --name (new session / cold-start fallback), send the full history prompt.
+    const inputPrompt = sessionArg === '--resume'
+      ? opts.prompt
+      : (opts.coldStartPrompt ?? opts.prompt);
+
     const mode = sessionArg === '--resume' ? 'resume' : 'new';
-    console.log(`[copilot-cli] ${mode} session="${sessionName}" prompt=${opts.prompt.length}chars`);
+    console.log(`[copilot-cli] ${mode} session="${sessionName}" prompt=${inputPrompt.length}chars`);
 
     const state: ParseState = { deltasSeen: false, finalMessage: '' };
 
@@ -257,7 +267,7 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
 
     // Write prompt to stdin and close (EOF signals end of input).
     // Use .end(data) for atomicity — avoids EPIPE on fast child exit.
-    const payload = opts.prompt.endsWith('\n') ? opts.prompt : opts.prompt + '\n';
+    const payload = inputPrompt.endsWith('\n') ? inputPrompt : inputPrompt + '\n';
     child.stdin?.end(payload);
     child.stdin?.on('error', (err: NodeJS.ErrnoException) => {
       // Ignore broken pipe — child may have exited before we finished writing.
@@ -287,8 +297,9 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
         error = stderrMsg || `CLI exited with code ${exitCode}`;
       }
 
-      // If --resume failed (e.g., no such session or multiple matches), retry with --name
-      if (error && sessionArg === '--resume') {
+      // If --resume failed (e.g., no such session or multiple matches), retry with --name.
+      // Only retry if no user-visible output was emitted to avoid duplicating content.
+      if (error && sessionArg === '--resume' && !state.deltasSeen && !state.finalMessage) {
         console.warn(`[copilot-cli] resume failed: ${error.split('\n')[0]}, retrying with --name`);
         projectSessions.delete(opts.projectId);
         const uniqueName = `${baseSessionName}-${Date.now().toString(36)}`;
@@ -326,10 +337,12 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
     currentStop = stopFn;
   }
 
-  // If we know a session name from a previous successful run, resume it.
-  // Otherwise try --resume with the base name (may exist from previous lifecycle),
-  // falling back to --name on failure.
-  if (knownSession) {
+  // If forceNewSession is set (first message or cleared history), skip --resume entirely.
+  // Otherwise try to resume an existing session, falling back to --name on failure.
+  if (opts.forceNewSession) {
+    const uniqueName = `${baseSessionName}-${Date.now().toString(36)}`;
+    spawnCli('--name', uniqueName);
+  } else if (knownSession) {
     spawnCli('--resume', knownSession);
   } else {
     spawnCli('--resume', baseSessionName);

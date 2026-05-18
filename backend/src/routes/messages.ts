@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { MessageService, ClearHistoryDuringRunError } from '../services/message.service.js';
+import { clearSession } from '../services/container-runner.js';
 
 const messageRoutes = new Hono();
 const messageService = new MessageService();
@@ -45,6 +46,8 @@ messageRoutes.delete('/api/projects/:id/messages', (c) => {
 
   try {
     messageService.clearHistory(projectId);
+    // Reset CLI session so next message starts fresh (avoids stale session history).
+    clearSession(projectId);
     return c.body(null, 204);
   } catch (err) {
     if (err instanceof ClearHistoryDuringRunError) {

@@ -245,7 +245,9 @@ export function executeChat(
   const db = getDatabase();
   const ctx = assembleExecContext(projectId);
 
-  // Check if this project has existing messages (for cold-start detection)
+  // Check if this project has existing messages (for cold-start detection).
+  // Note: the current user message was already created via REST before executeChat,
+  // so count <= 1 means this is the first message (only the current one exists).
   const existingMsgCount = (db.prepare(
     `SELECT COUNT(*) as cnt FROM messages WHERE project_id = ? AND role IN ('user', 'assistant')`,
   ).get(projectId) as { cnt: number }).cnt;
@@ -276,43 +278,41 @@ export function executeChat(
     return { runId };
   }) as () => { runId: string })();
 
-  // CLI maintains its own history via --resume; just pass the raw user message.
-  // On cold-start (resume fails → new session), the CLI won't have history.
-  // Build a full conversation prompt so the new session has context.
-  const isFirstMessage = existingMsgCount === 0;
+  // The prompt sent to the CLI depends on session mode:
+  // - On --resume: only the raw user message (CLI already has history in its session).
+  // - On --name (new session / cold-start fallback): full history for context continuity.
+  // Previously, sending full history on --resume caused the model to see duplicated
+  // context, leading to repeated/doubled response strings.
+  const isFirstMessage = existingMsgCount <= 1;
 
-  let prompt: string;
-  if (isFirstMessage) {
-    // First message — no history needed, just the user message.
-    prompt = userMessage;
-    clearSession(projectId);
-  } else {
-    // Subsequent message — include conversation history for cold-start recovery.
-    // If --resume succeeds, the CLI ignores stdin history (it already has it).
-    // If --resume fails and a new session is created, this history ensures continuity.
+  let coldStartPrompt: string | undefined;
+  if (!isFirstMessage) {
+    // Build a full conversation prompt for cold-start recovery (--name fallback).
     const history = db.prepare(
       `SELECT role, content FROM messages
        WHERE project_id = ? AND role IN ('user', 'assistant') AND content != ''
        ORDER BY created_at ASC`,
     ).all(projectId) as Array<{ role: string; content: string }>;
 
-    // Exclude the last entry if it's the empty assistant placeholder we just inserted,
-    // and exclude the current user message (already in history from the INSERT above).
     const pastMessages = history.filter(m => m.content.trim() !== '');
 
     if (pastMessages.length > 1) {
-      // Build a multi-turn prompt: previous turns as context, current message last.
       const turns = pastMessages.slice(0, -1).map(m =>
         m.role === 'user' ? `User: ${m.content}` : `Assistant: ${m.content}`
       ).join('\n\n');
-      prompt = `[Previous conversation]\n${turns}\n\n[Current message]\n${userMessage}`;
+      coldStartPrompt = `[Previous conversation]\n${turns}\n\n[Current message]\n${userMessage}`;
       console.log(`[exec-context] cold-start prompt: ${pastMessages.length - 1} history turns + current message`);
-    } else {
-      prompt = userMessage;
     }
   }
 
-  console.log(`[exec-context] prompt=${prompt.length}chars first=${isFirstMessage}`);
+  // For first messages or cleared history, force a new session (skip --resume
+  // which might hit a stale CLI session from a previous lifecycle).
+  const forceNewSession = isFirstMessage;
+  if (forceNewSession) {
+    clearSession(projectId);
+  }
+
+  console.log(`[exec-context] prompt=${userMessage.length}chars first=${isFirstMessage} coldStart=${coldStartPrompt ? coldStartPrompt.length : 0}chars`);
 
   // Create assistant message for streaming accumulation
   const assistantMsgId = crypto.randomUUID();
@@ -328,10 +328,12 @@ export function executeChat(
     {
       projectId,
       workspaceDir: ctx.workspaceDir,
-      prompt,
+      prompt: userMessage,
+      coldStartPrompt,
       token: ctx.token,
       model: callbacks.model,
       mcpConfigFile: ctx.mcpConfigFile,
+      forceNewSession,
     },
     {
       onChunk: (raw) => {
