@@ -182,6 +182,24 @@ function parseLine(
       }
       break;
     }
+    case 'tool.execution_complete': {
+      // Detect files created/modified by create, edit, and multi_edit tools
+      const toolName = typeof data.toolName === 'string' ? data.toolName : '';
+      if (['create', 'edit', 'multi_edit'].includes(toolName)) {
+        // Extract file path from tool result — handle multiple possible field locations
+        const result = (data.result && typeof data.result === 'object') ? data.result as Record<string, unknown> : data;
+        const args = (data.arguments && typeof data.arguments === 'object') ? data.arguments as Record<string, unknown> : {};
+        const filePath = (typeof result.path === 'string' && result.path)
+          || (typeof args.path === 'string' && args.path)
+          || (typeof args.file_path === 'string' && args.file_path)
+          || (typeof args.filePath === 'string' && args.filePath)
+          || (typeof result.file_path === 'string' && result.file_path);
+        if (filePath) {
+          cbs.onFileCreated?.(filePath);
+        }
+      }
+      break;
+    }
     default:
       if (type) {
         // Log unknown events with their data for debugging

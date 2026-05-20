@@ -345,15 +345,17 @@ export function executeChat(
       },
       onProgress: (msg) => callbacks.onProgress?.(msg),
       onFileCreated: (absPath) => {
-        // Register file immediately when CLI creates it (don't wait for reconcile)
+        // Register file immediately when CLI creates/modifies it (don't wait for reconcile)
         const workspaceDir = ctx.workspaceDir;
-        if (!absPath.startsWith(workspaceDir)) return;
-        const relativePath = path.relative(workspaceDir, absPath);
+        // Handle both absolute and relative paths from tool events
+        const resolvedPath = path.isAbsolute(absPath) ? absPath : path.resolve(workspaceDir, absPath);
+        if (!resolvedPath.startsWith(workspaceDir)) return;
+        const relativePath = path.relative(workspaceDir, resolvedPath);
         // Skip system files
         const topSegment = relativePath.split(path.sep)[0];
         if (topSegment === '.github' || topSegment === '.git' || topSegment === 'AGENTS.md') return;
         try {
-          const stat = fs.statSync(absPath);
+          const stat = fs.statSync(resolvedPath);
           const filename = path.basename(relativePath);
           const id = crypto.randomUUID();
           db.prepare(`
@@ -396,6 +398,13 @@ export function executeChat(
         callbacks.onComplete(runId, exitCode);
       },
       onError: (errMsg) => {
+        // Flush any accumulated redactor content
+        const remaining = redactor.flush();
+        if (remaining) {
+          db.prepare('UPDATE messages SET content = content || ? WHERE id = ?').run(remaining, assistantMsgId);
+          callbacks.onChunk(remaining);
+        }
+
         // Send error message to chat as assistant message
         const isAuthError = errMsg.includes('authentication') || errMsg.includes('GITHUB_TOKEN')
           || errMsg.includes('Token not configured');
@@ -403,12 +412,21 @@ export function executeChat(
           ? '⚠️ GitHubトークンが未設定または無効です。設定画面からトークンを設定してください。'
           : `⚠️ エラーが発生しました: ${errMsg.split('\n')[0]}`;
 
-        db.prepare('UPDATE messages SET content = ? WHERE id = ?').run(userFacingMsg, assistantMsgId);
+        db.prepare('UPDATE messages SET content = content || ? WHERE id = ?').run(userFacingMsg, assistantMsgId);
         callbacks.onChunk(userFacingMsg);
 
         db.prepare(
           "UPDATE agent_runs SET status = 'failed', finished_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('running', 'queued')",
         ).run(runId);
+
+        // Reconcile files even on error — CLI may have created files before failing
+        try {
+          reconcileProjectFiles(projectId, db);
+          const fileCount = (db.prepare('SELECT COUNT(*) as cnt FROM project_files WHERE project_id = ?').get(projectId) as { cnt: number }).cnt;
+          console.log(`[exec-context] reconciled ${fileCount} files for project ${projectId} (after error)`);
+        } catch (err) {
+          console.warn('File reconciliation failed (error path):', (err as Error).message);
+        }
 
         if (ctx.mcpConfigFile) {
           try { fs.unlinkSync(ctx.mcpConfigFile); } catch { /* ignore */ }

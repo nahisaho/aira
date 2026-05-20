@@ -160,14 +160,21 @@ export function scanWorkspace(
       } else if (entry.isFile()) {
         try {
           const stat = fs.lstatSync(fullPath);
+          let hash: string;
+          try {
+            hash = hashFile(fullPath);
+          } catch {
+            // Hash may fail for binary/large/in-progress files — still register the file
+            hash = '';
+          }
           results.push({
             relativePath,
             size: stat.size,
             mtimeMs: stat.mtimeMs,
-            hash: hashFile(fullPath),
+            hash,
           });
         } catch {
-          // Skip inaccessible files
+          // Skip truly inaccessible files (stat failed)
         }
       }
     }
@@ -197,7 +204,9 @@ export function reconcileProjectFiles(projectId: string, db: any): void {
 
   const scanned = scanWorkspace(workspaceDir);
 
-  const upsertStmt = db.prepare(`
+  // Use two statements: one for files with valid hashes, one for hash-failed files
+  // that should preserve existing content_hash if available.
+  const upsertWithHash = db.prepare(`
     INSERT INTO project_files (id, project_id, filename, file_path, size_bytes, mtime_ms, content_hash)
     VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(project_id, file_path) DO UPDATE SET
@@ -206,12 +215,25 @@ export function reconcileProjectFiles(projectId: string, db: any): void {
       content_hash = excluded.content_hash,
       updated_at = CURRENT_TIMESTAMP
   `);
+  const upsertNoHash = db.prepare(`
+    INSERT INTO project_files (id, project_id, filename, file_path, size_bytes, mtime_ms, content_hash)
+    VALUES (?, ?, ?, ?, ?, ?, '')
+    ON CONFLICT(project_id, file_path) DO UPDATE SET
+      size_bytes = excluded.size_bytes,
+      mtime_ms = excluded.mtime_ms,
+      updated_at = CURRENT_TIMESTAMP
+  `);
 
   db.transaction(() => {
     for (const file of scanned) {
       const id = crypto.randomUUID();
       const filename = path.basename(file.relativePath);
-      upsertStmt.run(id, projectId, filename, file.relativePath, file.size, file.mtimeMs, file.hash);
+      if (file.hash) {
+        upsertWithHash.run(id, projectId, filename, file.relativePath, file.size, file.mtimeMs, file.hash);
+      } else {
+        // Hash failed — register file but preserve existing content_hash in DB
+        upsertNoHash.run(id, projectId, filename, file.relativePath, file.size, file.mtimeMs);
+      }
     }
 
     const scannedPaths = new Set(scanned.map(f => f.relativePath));
