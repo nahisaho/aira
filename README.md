@@ -2,17 +2,17 @@
 
 > Web ベースの AI Research Administrator  
 > GitHub Copilot CLI をエージェントエンジンとして使用  
-> **v2.0.2**
+> **v2.1.0**
 
 ## 概要
 
-AIRA-β は、GitHub Copilot CLI を推論エンジンとして活用する Web ベースの AI Research Administrator です。**プロジェクト単位**で Agent Skills と MCP サーバーを管理し、研究の全ライフサイクルを支援します。Docker イメージとして提供され、すぐに利用を開始できます。
+AIRA-β は、GitHub Copilot CLI を推論エンジンとして活用する Web ベースの AI Research Administrator です。**プロジェクト単位**で Agent Skills、MCP サーバー、および **Structured RAG**（知識抽出・検索）を管理し、研究の全ライフサイクルを支援します。Docker イメージとして提供され、すぐに利用を開始できます。
 
 ## クイックスタート
 
 ```bash
 # Docker イメージの取得
-docker pull ghcr.io/nahisaho/aira:v2.0.2
+docker pull ghcr.io/nahisaho/aira:v2.1.0
 
 docker pull ghcr.io/nahisaho/aira:latest (最新版)
 
@@ -21,7 +21,7 @@ docker run -d -p 3001:3000 \
   -e GITHUB_TOKEN="<your-github-token>" \
   -v aira-data:/app/backend/data \
   -v aira-projects:/app/backend/projects \
-  ghcr.io/nahisaho/aira:v2.0.2
+  ghcr.io/nahisaho/aira:v2.1.0
 ```
 
 ブラウザで `http://localhost:3001` にアクセスしてください。
@@ -118,13 +118,26 @@ your-repo/
 - **Private リポジトリ対応**: 設定済み GitHub Token で認証
 - **自動同期**: サーバー起動時に自動同期、手動同期ボタンあり
 
+### 🧠 Structured RAG（v2.1.0）
+
+プロジェクト単位の知識抽出・検索機能です。会話履歴とワークスペースファイルから構造化された知識を自動抽出し、後続の対話に活用します。[TypeAgent](https://github.com/microsoft/typeagent) を参考に実装しています。
+
+| 機能 | 説明 |
+|------|------|
+| **知識抽出** | LLM を使用して会話・ファイルからエンティティ・アクション・トピックを抽出 |
+| **転置インデックス** | トークンベースの高速検索（SQLite 内蔵） |
+| **コンテキスト注入** | 検索結果を `rag-context.md` として自動注入 |
+| **プロジェクト設定** | RAG の有効/無効、最大コンテキスト文字数をプロジェクトごとに設定 |
+| **手動再インデックス** | 全メッセージ・ファイルの再抽出 |
+
 ## 技術スタック
 
 | レイヤー | 技術 |
 |----------|------|
 | フロントエンド | React 19 + TypeScript + Vite 6 + Tailwind CSS v4 + Zustand 5 |
 | バックエンド | Node.js 22 + TypeScript + Hono |
-| DB | SQLite（better-sqlite3、WAL モード） |
+| DB | SQLite（sql.js / WASM） |
+| RAG | Structured RAG（LLM 知識抽出 + 転置インデックス） |
 | エージェント | GitHub Copilot CLI（@githubnext/copilot） |
 | コンテナ | Docker（マルチステージビルド） |
 

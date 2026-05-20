@@ -2,6 +2,57 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.1.0] — 2026-05-21
+
+### Added
+- **Structured RAG**: プロジェクト単位の知識抽出・検索機能（[TypeAgent](https://github.com/microsoft/typeagent) 参考）
+  - LLM による会話・ファイルからのエンティティ・アクション・トピック抽出
+  - トークンベース転置インデックスによる高速検索（SQLite 内蔵）
+  - `rag-context.md` による検索結果の自動コンテキスト注入
+  - プロジェクトごとの RAG 有効/無効設定、最大コンテキスト文字数設定
+  - 手動再インデックス API
+- **品質評価フレームワーク**: 400 の評価シナリオによる網羅的品質検証（20 ラウンド × 20 プロンプト）
+
+### Fixed
+- **セキュリティ修正**（14 件 HIGH）:
+  - 静的ファイル配信のパス走査攻撃防止
+  - MCP 設定のプロトタイプ汚染防止（トップレベル + ネスト）
+  - JSON.parse の安全なエラーハンドリング（4 箇所）
+  - Content-Disposition ヘッダーインジェクション防止
+  - CLI ストリームの parseLine クラッシュ防止
+  - hashFile の大容量ファイルメモリスパイク防止
+  - startRun のレース条件修正（プレースホルダー予約方式）
+  - プロジェクト ID の UUID バリデーションミドルウェア追加
+- **安定性修正**（28 件 MEDIUM）:
+  - stderr / stdout バッファ上限設定（64KB / 1MB）
+  - ストリームエラーハンドラー追加
+  - extractTokens 入力サイズ上限（100KB）
+  - credential proxy 30 秒タイムアウト
+  - scanWorkspace 深度制限（50 階層）
+  - ファイル表示 5MB サイズ制限
+  - アップロードファイル名検証（パス走査拒否、200 バイト長制限）
+  - reindexProject の clearIndex 原子性修正
+  - DB 破損時のグレースフルリカバリ（バックアップ + 再作成）
+  - その他バッファ・バリデーション・エラーハンドリング改善
+- **軽微な修正**（8 件 LOW）:
+  - JSON パースログのレート制限
+  - アップロードファイル名エッジケース対応
+
+### Changed
+- DB エンジンを better-sqlite3 から sql.js（WASM）に変更
+- テストフレームワークの依存を sql.js ベースに統一
+
+## [v2.0.4] — 2026-05-08
+
+### Fixed
+- ファイル検出パイプラインの 3 つのバグを修正（サブディレクトリファイルの表示、AI 応答テキストの重複防止）
+
+## [v2.0.3] — 2026-05-08
+
+### Fixed
+- reconcile files on list to show all subdirectory files
+- prevent AI response text duplication by separating resume/cold-start prompts
+
 ## [v2.0.2] — 2026-05-07
 
 ### Added
