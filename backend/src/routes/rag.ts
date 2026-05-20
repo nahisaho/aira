@@ -53,10 +53,7 @@ ragRoutes.post('/api/projects/:id/rag/reindex', async (c) => {
 
   const workspaceDir = pathConfig.getWorkspaceDir(projectId);
 
-  // Clear existing index
-  clearIndex(db, projectId);
-
-  // Reindex in background
+  // Reindex in background — clear old index only after successful reindex
   reindexProject(db, projectId, token, workspaceDir)
     .then(result => {
       console.log(`[rag] reindex complete for ${projectId}: ${result.messages} messages, ${result.files} files`);

@@ -26,6 +26,7 @@ import {
   isMessageIndexed,
   isFileIndexed,
   clearFileKnowledge,
+  clearIndex,
 } from './rag.service.js';
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -375,6 +376,9 @@ export async function reindexProject(
   token: string,
   workspaceDir: string,
 ): Promise<{ messages: number; files: number }> {
+  // Clear existing index before rebuilding — atomic within this function
+  clearIndex(db, projectId);
+
   // Get all messages
   const messages = db.prepare(
     `SELECT id, content FROM messages
