@@ -233,12 +233,12 @@ function attachStreamReader(
       if (line) parseLine(line, state, cbs);
     }
   });
-  // Flush any remaining unterminated line when stdout closes
   proc.stdout?.on('end', () => {
     const remaining = buf.trim();
     if (remaining) parseLine(remaining, state, cbs);
     buf = '';
   });
+  proc.stdout?.on('error', () => { /* ignore stream errors */ });
 }
 
 // ── Host process runner ────────────────────────────────────────────────────
@@ -300,11 +300,15 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
     });
 
     let stderrBuf = '';
+    const MAX_STDERR = 64 * 1024; // 64KB cap
     child.stderr?.on('data', (d: Buffer) => {
       const chunk = d.toString('utf8');
-      stderrBuf += chunk;
+      if (stderrBuf.length < MAX_STDERR) {
+        stderrBuf += chunk.slice(0, MAX_STDERR - stderrBuf.length);
+      }
       console.warn(`[copilot-cli] ${chunk.trimEnd()}`);
     });
+    child.stderr?.on('error', () => { /* ignore stream errors */ });
 
     let settled = false;
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;

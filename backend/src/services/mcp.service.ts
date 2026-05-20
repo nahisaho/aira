@@ -187,6 +187,7 @@ export class McpService {
           const existing_secrets = (existingConfig[secretKey] ?? {}) as Record<string, string>;
 
           for (const [k, v] of Object.entries(patchVal)) {
+            if (['__proto__', 'constructor', 'prototype'].includes(k)) continue;
             if (v === SECRET_MASK) {
               throw new MaskedValueError(secretKey, k);
             }

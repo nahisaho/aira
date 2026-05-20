@@ -192,12 +192,14 @@ function spawnRunner(projectId: string, workspaceDir: string): ManagedRunner {
     }
   });
 
+  child.stdout?.on('error', () => { /* ignore stream errors */ });
   child.stderr?.on('data', (data: Buffer) => {
     // Runner internal logs; suppress in production
     if (process.env.NODE_ENV !== 'production') {
       process.stderr.write(data);
     }
   });
+  child.stderr?.on('error', () => { /* ignore stream errors */ });
 
   child.on('close', () => {
     runners.delete(projectId);
