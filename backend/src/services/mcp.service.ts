@@ -168,7 +168,10 @@ export class McpService {
     const existing = db.prepare('SELECT * FROM project_mcp_configs WHERE id = ?').get(id) as McpConfig | undefined;
     if (!existing) throw new McpNotFoundError(id);
 
-    const existingConfig = JSON.parse(existing.config_json) as Record<string, unknown>;
+    const existingConfig = (() => {
+      try { return JSON.parse(existing.config_json) as Record<string, unknown>; }
+      catch { return {} as Record<string, unknown>; }
+    })();
 
     // Merge with secret semantics for env and headers
     for (const secretKey of ['env', 'headers']) {
@@ -250,7 +253,9 @@ export class McpService {
 
     const secrets: string[] = [];
     for (const row of rows) {
-      const config = JSON.parse(row.config_json) as Record<string, unknown>;
+      let config: Record<string, unknown>;
+      try { config = JSON.parse(row.config_json) as Record<string, unknown>; }
+      catch { continue; }
       for (const key of ['env', 'headers']) {
         const vals = config[key] as Record<string, string> | undefined;
         if (vals && typeof vals === 'object') {
@@ -274,7 +279,9 @@ export class McpService {
 
     const mcpServers: Record<string, unknown> = {};
     for (const row of rows) {
-      const config = JSON.parse(row.config_json);
+      let config: Record<string, unknown>;
+      try { config = JSON.parse(row.config_json); }
+      catch { continue; }
       mcpServers[row.name] = { type: row.type, ...config };
     }
 
@@ -298,7 +305,9 @@ export class McpService {
   }
 
   private maskSecrets(row: McpConfig): McpConfigParsed {
-    const config = JSON.parse(row.config_json) as Record<string, unknown>;
+    let config: Record<string, unknown>;
+    try { config = JSON.parse(row.config_json) as Record<string, unknown>; }
+    catch { config = {}; }
 
     for (const key of ['env', 'headers']) {
       const vals = config[key] as Record<string, string> | undefined;

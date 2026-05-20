@@ -158,40 +158,43 @@ const STOP_WORDS = new Set([
  * Returns candidate terms suitable for inverted index.
  */
 export function extractTokens(text: string): string[] {
+  // Cap input to prevent CPU spikes from regex on very large strings
+  const MAX_TOKEN_INPUT = 100_000;
+  const input = text.length > MAX_TOKEN_INPUT ? text.slice(0, MAX_TOKEN_INPUT) : text;
   const tokens = new Set<string>();
 
   // 1. Extract CamelCase / PascalCase identifiers
-  for (const m of text.matchAll(/\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b/g)) {
+  for (const m of input.matchAll(/\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b/g)) {
     tokens.add(m[1]!.toLowerCase());
   }
 
   // 2. Extract UPPER_CASE constants
-  for (const m of text.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)) {
+  for (const m of input.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)) {
     tokens.add(m[1]!.toLowerCase());
   }
 
   // 3. Extract quoted strings (likely names/terms)
-  for (const m of text.matchAll(/[「"'`]([^「」"'`]{2,40})[」"'`]/g)) {
+  for (const m of input.matchAll(/[「"'`]([^「」"'`]{2,40})[」"'`]/g)) {
     tokens.add(m[1]!.trim().toLowerCase());
   }
 
   // 4. Extract markdown headings
-  for (const m of text.matchAll(/^#{1,4}\s+(.+)$/gm)) {
+  for (const m of input.matchAll(/^#{1,4}\s+(.+)$/gm)) {
     tokens.add(m[1]!.trim().toLowerCase());
   }
 
   // 5. Extract Japanese compound words (katakana sequences ≥ 2 chars)
-  for (const m of text.matchAll(/[\u30A0-\u30FF]{2,}/g)) {
+  for (const m of input.matchAll(/[\u30A0-\u30FF]{2,}/g)) {
     tokens.add(m[0]);
   }
 
   // 6. Extract kanji compound words (≥ 2 chars, likely nouns/terms)
-  for (const m of text.matchAll(/[\u4E00-\u9FFF]{2,}/g)) {
+  for (const m of input.matchAll(/[\u4E00-\u9FFF]{2,}/g)) {
     tokens.add(m[0]);
   }
 
   // 7. Extract English words (≥ 3 chars, not stop words)
-  for (const m of text.matchAll(/\b([a-zA-Z]{3,})\b/g)) {
+  for (const m of input.matchAll(/\b([a-zA-Z]{3,})\b/g)) {
     const w = m[1]!.toLowerCase();
     if (!STOP_WORDS.has(w)) {
       tokens.add(w);
@@ -199,12 +202,12 @@ export function extractTokens(text: string): string[] {
   }
 
   // 8. Extract URLs and file paths as single tokens
-  for (const m of text.matchAll(/(?:https?:\/\/[^\s]+|[\w./\\-]+\.\w{1,5})/g)) {
+  for (const m of input.matchAll(/(?:https?:\/\/[^\s]+|[\w./\\-]+\.\w{1,5})/g)) {
     tokens.add(m[0].toLowerCase());
   }
 
   // 9. Extract numbers with units
-  for (const m of text.matchAll(/\b(\d+(?:\.\d+)?)\s*(万円|円|GB|MB|TB|日間?|時間|分|秒|件|名|人|個)\b/g)) {
+  for (const m of input.matchAll(/\b(\d+(?:\.\d+)?)\s*(万円|円|GB|MB|TB|日間?|時間|分|秒|件|名|人|個)\b/g)) {
     tokens.add(`${m[1]}${m[2]}`);
   }
 

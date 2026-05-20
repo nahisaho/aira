@@ -91,6 +91,15 @@ export function startCredentialProxy(port: number, host = '127.0.0.1'): Promise<
         proxyRes.pipe(res, { end: true });
       });
 
+      // Timeout upstream requests after 30 seconds
+      proxyReq.setTimeout(30_000, () => {
+        proxyReq.destroy();
+        if (!res.headersSent) {
+          res.writeHead(504);
+          res.end('Gateway Timeout');
+        }
+      });
+
       proxyReq.on('error', (err) => {
         console.error('[credential-proxy] upstream error:', err.message);
         if (!res.headersSent) {
