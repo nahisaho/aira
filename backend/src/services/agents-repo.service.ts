@@ -140,6 +140,8 @@ export class AgentsRepoService {
   private cloneOrPull(url: string, cacheDir: string): void {
     // Inject token for authenticated access to private repos
     const authUrl = this.getAuthenticatedUrl(url);
+    // Max repo size: 500MB
+    const MAX_REPO_SIZE_BYTES = 500 * 1024 * 1024;
 
     try {
       if (fs.existsSync(path.join(cacheDir, '.git'))) {
@@ -153,16 +155,30 @@ export class AgentsRepoService {
           encoding: 'utf-8',
         });
       } else {
-        // Fresh clone
+        // Fresh clone (shallow, single-branch to limit size)
         if (!fs.existsSync(AGENTS_CACHE_DIR())) {
           fs.mkdirSync(AGENTS_CACHE_DIR(), { recursive: true });
         }
-        execFileSync('git', ['clone', '--depth', '1', authUrl, cacheDir], {
+        execFileSync('git', ['clone', '--depth', '1', '--single-branch', authUrl, cacheDir], {
           timeout: 120_000,
           encoding: 'utf-8',
         });
       }
+
+      // Post-clone size check
+      try {
+        const sizeOutput = execFileSync('du', ['-sb', cacheDir], { timeout: 10_000, encoding: 'utf-8' });
+        const sizeBytes = parseInt(sizeOutput.split('\t')[0], 10);
+        if (sizeBytes > MAX_REPO_SIZE_BYTES) {
+          fs.rmSync(cacheDir, { recursive: true, force: true });
+          throw new AgentsRepoError('SYNC_FAILED', `Repository exceeds size limit (${Math.round(sizeBytes / 1024 / 1024)}MB > 500MB)`);
+        }
+      } catch (sizeErr) {
+        if (sizeErr instanceof AgentsRepoError) throw sizeErr;
+        // du not available on all platforms; skip size check
+      }
     } catch (err: unknown) {
+      if (err instanceof AgentsRepoError) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       // Sanitize: remove token from error messages
       const sanitized = msg.replace(/x-access-token:[^@]+@/g, '***@');

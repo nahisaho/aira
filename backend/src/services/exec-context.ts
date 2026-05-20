@@ -124,16 +124,22 @@ export function syncSkillFiles(projectId: string): void {
 
   const agentsSections: string[] = [];
   const ciSections: string[] = [];
+  // Size limit per skill file (1MB) to prevent excessive context injection
+  const MAX_SKILL_FILE_SIZE = 1_000_000;
 
   for (const dir of skillDirs) {
     // AGENTS.md → workspace root (merged across all assigned skills)
     try {
-      agentsSections.push(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'));
+      const content = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
+      if (content.length <= MAX_SKILL_FILE_SIZE) agentsSections.push(content);
+      else console.warn(`[syncSkillFiles] skipped oversized AGENTS.md (${content.length} chars) in ${dir}`);
     } catch { /* skip */ }
 
     // copilot-instructions.md → .github/ (merged)
     try {
-      ciSections.push(fs.readFileSync(path.join(dir, 'copilot-instructions.md'), 'utf8'));
+      const content = fs.readFileSync(path.join(dir, 'copilot-instructions.md'), 'utf8');
+      if (content.length <= MAX_SKILL_FILE_SIZE) ciSections.push(content);
+      else console.warn(`[syncSkillFiles] skipped oversized copilot-instructions.md (${content.length} chars) in ${dir}`);
     } catch { /* skip */ }
 
     // Subskill directories → .github/skills/{name}/

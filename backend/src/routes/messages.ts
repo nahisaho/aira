@@ -7,7 +7,7 @@ const messageRoutes = new Hono();
 const messageService = new MessageService();
 
 const createMessageSchema = z.object({
-  content: z.string().min(1),
+  content: z.string().min(1).max(500_000),
 });
 
 // GET /api/projects/:id/messages
