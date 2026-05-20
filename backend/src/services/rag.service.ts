@@ -289,19 +289,22 @@ export function indexMessageTokens(
     ON CONFLICT DO NOTHING
   `);
 
-  // Group tokens as a single "topic" knowledge entry per message
+  // Group tokens as a single "topic" knowledge entry per message (in transaction)
   const topicJson = JSON.stringify(tokens.slice(0, 50).join(', '));
-  insertKnowledge.run(projectId, messageId, topicJson);
-  const kRow = db.prepare(
-    'SELECT id FROM rag_knowledge WHERE project_id = ? AND message_id = ? AND type = ? AND data_json = ?',
-  ).get(projectId, messageId, 'topic', topicJson) as { id: number } | undefined;
 
-  if (kRow) {
-    for (const token of tokens) {
-      insertIndex.run(token, projectId, kRow.id, 0.5);
-      indexed++;
+  db.transaction(() => {
+    insertKnowledge.run(projectId, messageId, topicJson);
+    const kRow = db.prepare(
+      'SELECT id FROM rag_knowledge WHERE project_id = ? AND message_id = ? AND type = ? AND data_json = ?',
+    ).get(projectId, messageId, 'topic', topicJson) as { id: number } | undefined;
+
+    if (kRow) {
+      for (const token of tokens) {
+        insertIndex.run(token, projectId, kRow.id, 0.5);
+        indexed++;
+      }
     }
-  }
+  })();
 
   return indexed;
 }

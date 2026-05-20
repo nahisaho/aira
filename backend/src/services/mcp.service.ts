@@ -201,6 +201,14 @@ export class McpService {
       }
     }
 
+    // Reject prototype pollution keys
+    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+    for (const key of Object.keys(patch)) {
+      if (dangerousKeys.includes(key)) {
+        delete patch[key];
+      }
+    }
+
     // Merge non-secret fields
     const merged = { ...existingConfig, ...patch };
 

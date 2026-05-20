@@ -440,7 +440,8 @@ export function executeChat(
         const topSegment = relativePath.split(path.sep)[0];
         if (topSegment === '.github' || topSegment === '.git' || topSegment === 'AGENTS.md') return;
         try {
-          const stat = fs.statSync(resolvedPath);
+          const stat = fs.lstatSync(resolvedPath);
+          if (stat.isSymbolicLink()) return;
           const filename = path.basename(relativePath);
           const id = crypto.randomUUID();
           db.prepare(`

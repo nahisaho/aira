@@ -181,7 +181,13 @@ export function enableStaticServing(frontendDir: string): void {
 
     // Try to serve the file
     const filePath = urlPath === '/' ? 'index.html' : urlPath.slice(1);
-    const fullPath = path.join(frontendDir, filePath);
+    const fullPath = path.resolve(frontendDir, filePath);
+
+    // Path traversal prevention: ensure resolved path stays within frontendDir
+    const rel = path.relative(frontendDir, fullPath);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      return c.notFound();
+    }
 
     if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
       const content = fs.readFileSync(fullPath);
