@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getDatabase } from '../db/index.js';
 import { getProjectsDir } from '../config/paths.js';
+import { stopRun, clearSession } from './container-runner.js';
 
 export interface Project {
   id: string;
@@ -82,7 +83,14 @@ export class ProjectService {
       throw new ProjectNotFoundError(id);
     }
 
-    this.assertNoActiveRuns(id);
+    // Stop any active runs and clear session before deletion to prevent race
+    stopRun(id);
+    clearSession(id);
+
+    // Mark DB runs as cancelled to prevent zombie state
+    db.prepare(
+      "UPDATE agent_runs SET status = 'cancelled', finished_at = CURRENT_TIMESTAMP WHERE project_id = ? AND status IN ('running', 'queued')",
+    ).run(id);
 
     // FS-first: try to delete workspace
     const workspaceDir = this.getWorkspacePath(id);

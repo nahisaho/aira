@@ -84,7 +84,8 @@ fileRoutes.get('/api/projects/:id/files/:fileId/download', (c) => {
     const filename = path.basename(file.file_path);
     const ext = path.extname(filename).toLowerCase();
 
-    // Serve PDFs inline so the browser's built-in viewer can render them
+    // Serve PDFs and images inline so the browser's built-in viewer can render them
+    // SVG is served as attachment to prevent XSS via scriptable SVG content
     const inlineTypes: Record<string, string> = {
       '.pdf': 'application/pdf',
       '.png': 'image/png',
@@ -92,7 +93,6 @@ fileRoutes.get('/api/projects/:id/files/:fileId/download', (c) => {
       '.jpeg': 'image/jpeg',
       '.gif': 'image/gif',
       '.webp': 'image/webp',
-      '.svg': 'image/svg+xml',
       '.bmp': 'image/bmp',
     };
     const contentType = inlineTypes[ext];
@@ -101,6 +101,7 @@ fileRoutes.get('/api/projects/:id/files/:fileId/download', (c) => {
         headers: {
           'Content-Type': contentType,
           'Content-Disposition': `inline; filename="${filename.replace(/[^\x20-\x7E]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+          'X-Content-Type-Options': 'nosniff',
         },
       });
     }
@@ -110,6 +111,7 @@ fileRoutes.get('/api/projects/:id/files/:fileId/download', (c) => {
       headers: {
         'Content-Type': 'application/octet-stream',
         'Content-Disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (err) {

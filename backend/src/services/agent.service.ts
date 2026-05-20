@@ -185,13 +185,24 @@ function buildRedactor(secrets: string[]) {
 }
 
 /**
+ * Pattern-based redaction for common secret formats.
+ * Applied AFTER exact-match redaction as a safety net.
+ */
+const SECRET_PATTERNS = /\b(ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82}|gho_[A-Za-z0-9]{36}|ghu_[A-Za-z0-9]{36}|ghs_[A-Za-z0-9]{36}|sk-[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{16}|Bearer\s+[A-Za-z0-9\-._~+/]+=*)\b/g;
+
+function redactPatterns(text: string): string {
+  return text.replace(SECRET_PATTERNS, '[REDACTED]');
+}
+
+/**
  * Create a streaming redactor that replaces secret strings with [REDACTED].
  * Handles chunk boundaries with a carry-over buffer.
+ * Also applies pattern-based redaction for common secret formats.
  */
 export function createRedactor(secrets: string[]): (chunk: string) => string {
   const r = buildRedactor(secrets);
-  if (!r) return (chunk: string) => chunk;
-  return r.push;
+  if (!r) return (chunk: string) => redactPatterns(chunk);
+  return (chunk: string) => redactPatterns(r.push(chunk));
 }
 
 /** Flush remaining content from the redactor carry buffer */
@@ -200,8 +211,11 @@ export function createRedactorWithFlush(secrets: string[]): {
   flush: () => string;
 } {
   const r = buildRedactor(secrets);
-  if (!r) return { push: (chunk: string) => chunk, flush: () => '' };
-  return r;
+  if (!r) return { push: (chunk: string) => redactPatterns(chunk), flush: () => '' };
+  return {
+    push: (chunk: string) => redactPatterns(r.push(chunk)),
+    flush: () => redactPatterns(r.flush()),
+  };
 }
 
 // ─── Agent Process Management ───
