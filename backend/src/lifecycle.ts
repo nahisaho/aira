@@ -11,7 +11,7 @@ import { initializeDatabase, getDatabase, closeDatabase } from './db/index.js';
 import { runPreflight } from './services/preflight.js';
 import { attachWebSocket } from './services/ws.service.js';
 import { seedBuiltinSkills } from './services/skills.service.js';
-import { seedBuiltinMcpAll } from './services/mcp.service.js';
+import { seedBuiltinMcpAll, McpService } from './services/mcp.service.js';
 import { AgentsRepoService } from './services/agents-repo.service.js';
 import { stopAllRuns } from './services/container-runner.js';
 import {
@@ -68,6 +68,7 @@ export async function startServer(portOrOpts: number | StartOptions): Promise<St
   // 4. Seed built-ins
   seedBuiltinSkills();
   seedBuiltinMcpAll();
+  new McpService().scavengeStaleConfigs();
   console.log('[AIRA] Built-in skills and MCP seeded');
 
   // 4b. Sync external agents repos (non-blocking)

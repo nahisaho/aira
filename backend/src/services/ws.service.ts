@@ -76,10 +76,23 @@ export function attachWebSocket(server: Server, port: number): WebSocketServer {
 
       ws.on('close', () => {
         clients.delete(client);
+        // Stop CLI run if no more clients are connected for this project
+        if (getProjectClientCount(projectId) === 0) {
+          import('./container-runner.js').then(({ stopRun }) => {
+            if (stopRun(projectId)) {
+              console.log(`[ws] last client disconnected, stopped run for project ${projectId.slice(0, 8)}`);
+            }
+          }).catch(() => {});
+        }
       });
 
       ws.on('error', () => {
         clients.delete(client);
+        if (getProjectClientCount(projectId) === 0) {
+          import('./container-runner.js').then(({ stopRun }) => {
+            stopRun(projectId);
+          }).catch(() => {});
+        }
       });
     });
   });

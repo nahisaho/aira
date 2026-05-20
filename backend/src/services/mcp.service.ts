@@ -105,6 +105,30 @@ export function seedBuiltinMcpAll(): void {
 }
 
 export class McpService {
+  /**
+   * Clean up stale MCP temp config files left by crashed processes.
+   * Called at startup.
+   */
+  scavengeStaleConfigs(): void {
+    try {
+      const tmpDir = pathConfig.getTmpDir();
+      if (!fs.existsSync(tmpDir)) return;
+      const files = fs.readdirSync(tmpDir);
+      let removed = 0;
+      for (const f of files) {
+        if (f.startsWith('mcp-') && f.endsWith('.json')) {
+          try {
+            fs.unlinkSync(path.join(tmpDir, f));
+            removed++;
+          } catch { /* ignore */ }
+        }
+      }
+      if (removed > 0) {
+        console.log(`[mcp] scavenged ${removed} stale config file(s)`);
+      }
+    } catch { /* best effort */ }
+  }
+
   list(projectId: string): McpConfigParsed[] {
     const db = getDatabase();
     const rows = db.prepare(

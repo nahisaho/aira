@@ -346,6 +346,10 @@ export function executeChat(
   let coldStartPrompt: string | undefined;
   if (!isFirstMessage) {
     // Build a full conversation prompt for cold-start recovery (--name fallback).
+    // Limit to recent turns to avoid exceeding CLI token limits (~128K context).
+    // Rough estimate: 1 char ≈ 0.4 tokens → 80K chars ≈ 32K tokens (safe margin).
+    const MAX_COLD_START_CHARS = 80_000;
+
     const history = db.prepare(
       `SELECT role, content FROM messages
        WHERE project_id = ? AND role IN ('user', 'assistant') AND content != ''
@@ -355,11 +359,26 @@ export function executeChat(
     const pastMessages = history.filter(m => m.content.trim() !== '');
 
     if (pastMessages.length > 1) {
-      const turns = pastMessages.slice(0, -1).map(m =>
-        m.role === 'user' ? `User: ${m.content}` : `Assistant: ${m.content}`
-      ).join('\n\n');
-      coldStartPrompt = `[Previous conversation]\n${turns}\n\n[Current message]\n${userMessage}`;
-      console.log(`[exec-context] cold-start prompt: ${pastMessages.length - 1} history turns + current message`);
+      // Take turns from most recent backwards until budget is exhausted
+      const allTurns = pastMessages.slice(0, -1);
+      const selectedTurns: string[] = [];
+      let charBudget = MAX_COLD_START_CHARS - userMessage.length - 100;
+      for (let i = allTurns.length - 1; i >= 0 && charBudget > 0; i--) {
+        const formatted = allTurns[i].role === 'user'
+          ? `User: ${allTurns[i].content}`
+          : `Assistant: ${allTurns[i].content}`;
+        if (formatted.length > charBudget) {
+          // Truncate this turn to fit remaining budget
+          selectedTurns.unshift(formatted.slice(0, charBudget) + '…(truncated)');
+          break;
+        }
+        charBudget -= formatted.length;
+        selectedTurns.unshift(formatted);
+      }
+      const truncated = selectedTurns.length < allTurns.length;
+      const prefix = truncated ? '[Previous conversation (recent history)]\n' : '[Previous conversation]\n';
+      coldStartPrompt = `${prefix}${selectedTurns.join('\n\n')}\n\n[Current message]\n${userMessage}`;
+      console.log(`[exec-context] cold-start prompt: ${selectedTurns.length}/${allTurns.length} history turns + current message (${coldStartPrompt.length} chars)`);
     }
   }
 
@@ -407,8 +426,10 @@ export function executeChat(
         const workspaceDir = ctx.workspaceDir;
         // Handle both absolute and relative paths from tool events
         const resolvedPath = path.isAbsolute(absPath) ? absPath : path.resolve(workspaceDir, absPath);
-        if (!resolvedPath.startsWith(workspaceDir)) return;
-        const relativePath = path.relative(workspaceDir, resolvedPath);
+        // Secure boundary check: ensure resolved path is strictly inside workspace
+        const rel = path.relative(workspaceDir, resolvedPath);
+        if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return;
+        const relativePath = rel;
         // Skip system files
         const topSegment = relativePath.split(path.sep)[0];
         if (topSegment === '.github' || topSegment === '.git' || topSegment === 'AGENTS.md') return;
