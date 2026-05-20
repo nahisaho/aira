@@ -337,33 +337,37 @@ export function indexStructuredKnowledge(
   db.transaction(() => {
     for (const [term, entries] of termMap) {
       for (const entry of entries) {
-        const knowledgeKey = `${entry.type}:${entry.dataJson}`;
-        let knowledgeId: number;
+        try {
+          const knowledgeKey = `${entry.type}:${entry.dataJson}`;
+          let knowledgeId: number;
 
-        if (!seenKnowledge.has(knowledgeKey)) {
-          seenKnowledge.add(knowledgeKey);
-          insertKnowledge.run(projectId, messageId, filePath, entry.type, entry.dataJson);
-          const kRow = db.prepare(
-            `SELECT id FROM rag_knowledge WHERE project_id = ? AND type = ? AND data_json = ?
-             AND (message_id = ? OR (message_id IS NULL AND ? IS NULL))
-             AND (file_path = ? OR (file_path IS NULL AND ? IS NULL))
-             ORDER BY id DESC LIMIT 1`,
-          ).get(projectId, entry.type, entry.dataJson, messageId, messageId, filePath, filePath) as { id: number } | undefined;
-          if (!kRow) continue;
-          knowledgeId = kRow.id;
-        } else {
-          const kRow = db.prepare(
-            `SELECT id FROM rag_knowledge WHERE project_id = ? AND type = ? AND data_json = ?
-             AND (message_id = ? OR (message_id IS NULL AND ? IS NULL))
-             AND (file_path = ? OR (file_path IS NULL AND ? IS NULL))
-             ORDER BY id DESC LIMIT 1`,
-          ).get(projectId, entry.type, entry.dataJson, messageId, messageId, filePath, filePath) as { id: number } | undefined;
-          if (!kRow) continue;
-          knowledgeId = kRow.id;
+          if (!seenKnowledge.has(knowledgeKey)) {
+            seenKnowledge.add(knowledgeKey);
+            insertKnowledge.run(projectId, messageId, filePath, entry.type, entry.dataJson);
+            const kRow = db.prepare(
+              `SELECT id FROM rag_knowledge WHERE project_id = ? AND type = ? AND data_json = ?
+               AND (message_id = ? OR (message_id IS NULL AND ? IS NULL))
+               AND (file_path = ? OR (file_path IS NULL AND ? IS NULL))
+               ORDER BY id DESC LIMIT 1`,
+            ).get(projectId, entry.type, entry.dataJson, messageId, messageId, filePath, filePath) as { id: number } | undefined;
+            if (!kRow) continue;
+            knowledgeId = kRow.id;
+          } else {
+            const kRow = db.prepare(
+              `SELECT id FROM rag_knowledge WHERE project_id = ? AND type = ? AND data_json = ?
+               AND (message_id = ? OR (message_id IS NULL AND ? IS NULL))
+               AND (file_path = ? OR (file_path IS NULL AND ? IS NULL))
+               ORDER BY id DESC LIMIT 1`,
+            ).get(projectId, entry.type, entry.dataJson, messageId, messageId, filePath, filePath) as { id: number } | undefined;
+            if (!kRow) continue;
+            knowledgeId = kRow.id;
+          }
+
+          insertIndex.run(term, projectId, knowledgeId, entry.score);
+          indexed++;
+        } catch (itemErr) {
+          console.warn(`[rag] failed to index term "${term}":`, (itemErr as Error).message);
         }
-
-        insertIndex.run(term, projectId, knowledgeId, entry.score);
-        indexed++;
       }
     }
   })();

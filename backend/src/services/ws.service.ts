@@ -66,7 +66,7 @@ export function attachWebSocket(server: Server, port: number): WebSocketServer {
         // Handle incoming messages (user chat messages via WS)
         try {
           const msg = JSON.parse(data.toString());
-          if (msg.type === 'chat' && msg.content) {
+          if (msg.type === 'chat' && msg.content && typeof msg.content === 'string' && msg.content.trim().length > 0) {
             handleChatMessage(client, msg.content, msg.messageId, msg.model);
           }
         } catch {

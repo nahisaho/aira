@@ -21,6 +21,7 @@ import type { CompatDatabase } from '../db/index.js';
 import {
   type KnowledgeResponse,
   indexStructuredKnowledge,
+  indexMessageTokens,
   getRagSettings,
   isMessageIndexed,
   isFileIndexed,
@@ -292,7 +293,12 @@ export function queueMessageExtraction(
         console.log(`[rag-extractor] indexed ${indexed} terms for message ${messageId.slice(0, 8)}`);
       }
     } catch (err) {
-      console.warn(`[rag-extractor] extraction failed for message ${messageId.slice(0, 8)}:`, (err as Error).message);
+      console.warn(`[rag-extractor] extraction failed for message ${messageId.slice(0, 8)} (content ${content.length} chars):`, (err as Error).message);
+      // Index sync tokens as fallback when LLM extraction fails
+      try {
+        indexMessageTokens(db, projectId, messageId, content);
+        console.log(`[rag-extractor] fallback: indexed sync tokens for message ${messageId.slice(0, 8)}`);
+      } catch { /* best effort */ }
     } finally {
       releaseSlot();
     }

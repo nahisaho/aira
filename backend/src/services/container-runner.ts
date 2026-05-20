@@ -75,7 +75,7 @@ export interface ActiveRun {
 const projectSessions = new Map<string, string>();
 
 function getSessionName(projectId: string): string {
-  return `aira-${projectId.slice(0, 12)}`;
+  return `aira-${projectId}`;
 }
 
 /** Clear session for a project (e.g., on project delete or reset). */
@@ -136,7 +136,13 @@ function parseLine(
   cbs: Pick<RunnerCallbacks, 'onChunk' | 'onProgress' | 'onFileCreated'>,
 ): void {
   let event: { type?: string; data?: Record<string, unknown> };
-  try { event = JSON.parse(line) as typeof event; } catch { return; }
+  try { event = JSON.parse(line) as typeof event; } catch {
+    // Log non-empty parse failures for diagnostics (truncated/malformed events)
+    if (line.length > 0) {
+      console.warn(`[copilot-cli] JSON parse failed (${line.length} chars): ${line.slice(0, 120)}`);
+    }
+    return;
+  }
 
   const type = event?.type ?? '';
   const data = (event?.data ?? {}) as Record<string, unknown>;
@@ -334,6 +340,12 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
         if (!state.deltasSeen && state.finalMessage) {
           cbs.onChunk(state.finalMessage);
         }
+
+        // Surface stderr as a warning when CLI exits non-zero but produced partial output
+        if (exitCode !== null && exitCode !== 0 && stderrBuf.trim()) {
+          console.warn(`[copilot-cli] non-zero exit (${exitCode}) with partial output. stderr: ${stderrBuf.trim().slice(0, 500)}`);
+        }
+
         cbs.onDone(exitCode);
       }
     }
