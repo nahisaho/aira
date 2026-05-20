@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { skillsApi, mcpApi, type Skill, type McpConfig } from '../../api/client';
+import { skillsApi, mcpApi, ragApi, type Skill, type McpConfig, type RagSettings, type RagStats } from '../../api/client';
 import { usePreferencesStore } from '../../stores/preferences';
 import { useT } from '../../useT';
 
@@ -12,7 +12,7 @@ export function ProjectSettingsPane({ projectId, onClose }: Props) {
   const t = useT();
   const theme = usePreferencesStore((s) => s.theme);
   const light = theme === 'light';
-  const [tab, setTab] = useState<'skills' | 'mcp'>('skills');
+  const [tab, setTab] = useState<'skills' | 'mcp' | 'rag'>('skills');
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -25,14 +25,19 @@ export function ProjectSettingsPane({ projectId, onClose }: Props) {
             <TabButton active={tab === 'mcp'} onClick={() => setTab('mcp')} light={light}>
               {t('mcp.title')}
             </TabButton>
+            <TabButton active={tab === 'rag'} onClick={() => setTab('rag')} light={light}>
+              RAG
+            </TabButton>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-200">✕</button>
         </div>
 
         {tab === 'skills' ? (
           <SkillsTab projectId={projectId} />
-        ) : (
+        ) : tab === 'mcp' ? (
           <McpTab projectId={projectId} />
+        ) : (
+          <RagTab projectId={projectId} />
         )}
       </div>
     </div>
@@ -368,6 +373,195 @@ function McpTab({ projectId }: { projectId: string }) {
           + {t('mcp.add')}
         </button>
       )}
+    </div>
+  );
+}
+
+// ─── RAG Tab ───
+
+function RagTab({ projectId }: { projectId: string }) {
+  const theme = usePreferencesStore((s) => s.theme);
+  const light = theme === 'light';
+
+  const [settings, setSettings] = useState<RagSettings | null>(null);
+  const [stats, setStats] = useState<RagStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [reindexing, setReindexing] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    try {
+      const data = await ragApi.get(projectId);
+      setSettings(data.settings);
+      setStats(data.stats);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [projectId]);
+
+  const handleToggle = async () => {
+    if (!settings) return;
+    try {
+      const data = await ragApi.update(projectId, { enabled: !settings.enabled });
+      setSettings(data.settings);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleAutoIndexToggle = async () => {
+    if (!settings) return;
+    try {
+      const data = await ragApi.update(projectId, { auto_index_files: !settings.auto_index_files });
+      setSettings(data.settings);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleMaxCharsChange = async (value: number) => {
+    try {
+      const data = await ragApi.update(projectId, { max_context_chars: value });
+      setSettings(data.settings);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const handleReindex = async () => {
+    setReindexing(true);
+    try {
+      await ragApi.reindex(projectId);
+      setTimeout(() => {
+        load();
+        setReindexing(false);
+      }, 2000);
+    } catch (e) {
+      setError((e as Error).message);
+      setReindexing(false);
+    }
+  };
+
+  const handleClearIndex = async () => {
+    try {
+      await ragApi.clearIndex(projectId);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  if (loading) return <p className={`text-xs ${light ? 'text-gray-400' : 'text-gray-500'}`}>Loading...</p>;
+
+  return (
+    <div className="space-y-4">
+      {error && <p className="text-xs text-red-400">{error}</p>}
+
+      {/* Enable/Disable */}
+      <div className={`flex items-center justify-between rounded px-3 py-2 ${light ? 'bg-gray-50' : 'bg-gray-700'}`}>
+        <div>
+          <p className={`text-sm font-medium ${light ? 'text-gray-900' : 'text-gray-200'}`}>Structured RAG</p>
+          <p className={`text-xs ${light ? 'text-gray-400' : 'text-gray-500'}`}>
+            会話とファイルから知識を抽出し、コンテキストとして注入
+          </p>
+        </div>
+        <button
+          onClick={handleToggle}
+          className={`px-3 py-1 text-xs rounded ${
+            settings?.enabled
+              ? 'bg-green-600 text-white hover:bg-green-500'
+              : light ? 'bg-gray-200 text-gray-600 hover:bg-gray-300' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+          }`}
+        >
+          {settings?.enabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
+
+      {settings?.enabled && (
+        <>
+          {/* Auto-index files */}
+          <div className={`flex items-center justify-between rounded px-3 py-2 ${light ? 'bg-gray-50' : 'bg-gray-700'}`}>
+            <div>
+              <p className={`text-sm ${light ? 'text-gray-900' : 'text-gray-200'}`}>ファイル自動インデックス</p>
+              <p className={`text-xs ${light ? 'text-gray-400' : 'text-gray-500'}`}>
+                ワークスペースのテキストファイルを自動的にインデックス
+              </p>
+            </div>
+            <button
+              onClick={handleAutoIndexToggle}
+              className={`px-3 py-1 text-xs rounded ${
+                settings.auto_index_files
+                  ? 'bg-green-600 text-white hover:bg-green-500'
+                  : light ? 'bg-gray-200 text-gray-600 hover:bg-gray-300' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+              }`}
+            >
+              {settings.auto_index_files ? 'ON' : 'OFF'}
+            </button>
+          </div>
+
+          {/* Max context chars */}
+          <div className={`rounded px-3 py-2 ${light ? 'bg-gray-50' : 'bg-gray-700'}`}>
+            <p className={`text-sm mb-1 ${light ? 'text-gray-900' : 'text-gray-200'}`}>最大コンテキスト文字数</p>
+            <select
+              value={settings.max_context_chars}
+              onChange={(e) => handleMaxCharsChange(Number(e.target.value))}
+              className={`rounded px-2 py-1 text-sm ${
+                light ? 'bg-white border border-gray-300 text-gray-900' : 'bg-gray-600 text-gray-100'
+              }`}
+            >
+              <option value={2000}>2,000</option>
+              <option value={4000}>4,000</option>
+              <option value={8000}>8,000</option>
+              <option value={16000}>16,000</option>
+            </select>
+          </div>
+
+          {/* Stats */}
+          {stats && (
+            <div className={`rounded px-3 py-2 ${light ? 'bg-gray-50' : 'bg-gray-700'}`}>
+              <p className={`text-sm font-medium mb-2 ${light ? 'text-gray-900' : 'text-gray-200'}`}>インデックス統計</p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <StatBox label="エンティティ" value={stats.entity_count} light={light} />
+                <StatBox label="アクション" value={stats.action_count} light={light} />
+                <StatBox label="トピック" value={stats.topic_count} light={light} />
+              </div>
+              <p className={`text-xs mt-2 ${light ? 'text-gray-400' : 'text-gray-500'}`}>
+                知識レコード: {stats.knowledge_count} / インデックス項目: {stats.index_count}
+              </p>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleReindex}
+              disabled={reindexing}
+              className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-white"
+            >
+              {reindexing ? '再インデックス中...' : '再インデックス'}
+            </button>
+            <button
+              onClick={handleClearIndex}
+              className="px-3 py-1 text-xs text-red-400 hover:text-red-300"
+            >
+              インデックスをクリア
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function StatBox({ label, value, light }: { label: string; value: number; light: boolean }) {
+  return (
+    <div className={`rounded px-2 py-1 ${light ? 'bg-white' : 'bg-gray-600'}`}>
+      <p className={`text-lg font-semibold ${light ? 'text-gray-900' : 'text-gray-100'}`}>{value}</p>
+      <p className={`text-[10px] ${light ? 'text-gray-400' : 'text-gray-500'}`}>{label}</p>
     </div>
   );
 }

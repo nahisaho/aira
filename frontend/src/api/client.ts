@@ -315,3 +315,35 @@ export const agentsRepoApi = {
   syncAll: () =>
     request<{ status: string; repos: AgentsRepo[] }>('/settings/agents-repos/sync-all', { method: 'POST' }),
 };
+
+// ─── RAG ───
+
+export interface RagSettings {
+  enabled: boolean;
+  max_context_chars: number;
+  auto_index_files: boolean;
+}
+
+export interface RagStats {
+  knowledge_count: number;
+  index_count: number;
+  entity_count: number;
+  action_count: number;
+  topic_count: number;
+}
+
+export const ragApi = {
+  get: (projectId: string) =>
+    request<{ settings: RagSettings; stats: RagStats }>(`/projects/${projectId}/rag`),
+  update: (projectId: string, settings: Partial<RagSettings>) =>
+    request<{ settings: RagSettings }>(`/projects/${projectId}/rag`, {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+  reindex: (projectId: string) =>
+    request<{ status: string }>(`/projects/${projectId}/rag/reindex`, { method: 'POST' }),
+  clearIndex: (projectId: string) =>
+    request<{ status: string }>(`/projects/${projectId}/rag/index`, { method: 'DELETE' }),
+  search: (projectId: string, query: string) =>
+    request<{ results: unknown[]; context: string }>(`/projects/${projectId}/rag/search?q=${encodeURIComponent(query)}`),
+};

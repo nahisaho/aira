@@ -324,6 +324,41 @@ function createSchema(db: CompatDatabase): void {
       created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(project_id, file_path)
+    )`,
+
+    // ── Structured RAG tables ──
+    `CREATE TABLE IF NOT EXISTS rag_knowledge (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      message_id  TEXT REFERENCES messages(id) ON DELETE CASCADE,
+      file_path   TEXT,
+      source_hash TEXT,
+      type        TEXT NOT NULL CHECK(type IN ('entity','action','topic')),
+      data_json   TEXT NOT NULL,
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_rag_knowledge_project ON rag_knowledge(project_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_rag_knowledge_message ON rag_knowledge(message_id)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_rag_knowledge_msg_uniq
+      ON rag_knowledge(project_id, message_id, type, data_json) WHERE message_id IS NOT NULL`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_rag_knowledge_file_uniq
+      ON rag_knowledge(project_id, file_path, type, data_json) WHERE file_path IS NOT NULL`,
+
+    `CREATE TABLE IF NOT EXISTS rag_index (
+      term          TEXT NOT NULL COLLATE NOCASE,
+      project_id    TEXT NOT NULL,
+      knowledge_id  INTEGER NOT NULL REFERENCES rag_knowledge(id) ON DELETE CASCADE,
+      score         REAL NOT NULL DEFAULT 1.0,
+      PRIMARY KEY (term, project_id, knowledge_id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_rag_index_lookup ON rag_index(project_id, term)`,
+
+    `CREATE TABLE IF NOT EXISTS rag_settings (
+      project_id        TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+      enabled           INTEGER NOT NULL DEFAULT 0,
+      max_context_chars INTEGER NOT NULL DEFAULT 4000,
+      auto_index_files  INTEGER NOT NULL DEFAULT 1,
+      created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`
   ];
 

@@ -4,6 +4,12 @@ import { McpService } from './mcp.service.js';
 import { createRedactorWithFlush } from './agent.service.js';
 import { startRun, stopRun, clearSession } from './container-runner.js';
 import { reconcileProjectFiles } from './file.service.js';
+import {
+  getRagSettings,
+  indexMessageTokens,
+  retrieveContext,
+} from './rag.service.js';
+import { queueMessageExtraction } from './rag-extractor.js';
 import { getDatabase } from '../db/index.js';
 import * as pathConfig from '../config/paths.js';
 import path from 'node:path';
@@ -182,6 +188,51 @@ export function syncSkillFiles(projectId: string): void {
 }
 
 /**
+ * Write RAG context to the workspace so the CLI can discover it.
+ * Creates .github/rag-context.md and appends a reference to copilot-instructions.md.
+ * Called before each CLI invocation with fresh context based on the current query.
+ */
+function injectRagContext(projectId: string, userMessage: string): void {
+  const db = getDatabase();
+  const settings = getRagSettings(db, projectId);
+  if (!settings.enabled) return;
+
+  const workspaceDir = pathConfig.getWorkspaceDir(projectId);
+  const githubDir = path.join(workspaceDir, '.github');
+  const ragContextPath = path.join(githubDir, 'rag-context.md');
+
+  // Step 1: Sync token extraction (lightweight, no LLM)
+  // Index the current user message tokens for future queries
+  // Use a temporary message ID — will be updated when actual message is created
+  indexMessageTokens(db, projectId, `pending-${Date.now()}`, userMessage);
+
+  // Step 2: RAG search — retrieve relevant context
+  const contextStr = retrieveContext(db, projectId, userMessage);
+  if (!contextStr) {
+    // No relevant context found — remove stale rag-context.md
+    try { fs.unlinkSync(ragContextPath); } catch { /* ok */ }
+    return;
+  }
+
+  // Step 3: Write rag-context.md
+  fs.mkdirSync(githubDir, { recursive: true });
+  fs.writeFileSync(ragContextPath, contextStr, 'utf8');
+
+  // Step 4: Ensure copilot-instructions.md references rag-context.md
+  const ciPath = path.join(githubDir, 'copilot-instructions.md');
+  const ragRef = '\n\n## Project Knowledge\nRefer to `.github/rag-context.md` for relevant project context and knowledge.\n';
+
+  let ciContent = '';
+  try { ciContent = fs.readFileSync(ciPath, 'utf8'); } catch { /* doesn't exist yet */ }
+
+  if (!ciContent.includes('rag-context.md')) {
+    fs.writeFileSync(ciPath, ciContent + ragRef, 'utf8');
+  }
+
+  console.log(`[rag] injected ${contextStr.length} chars context for project ${projectId}`);
+}
+
+/**
  * Assemble execution context for an agent run.
  * Gathers token, skills, MCP config, and sets up redaction.
  */
@@ -244,6 +295,13 @@ export function executeChat(
 ): string {
   const db = getDatabase();
   const ctx = assembleExecContext(projectId);
+
+  // RAG: inject context before CLI invocation
+  try {
+    injectRagContext(projectId, userMessage);
+  } catch (err) {
+    console.warn('[exec-context] RAG context injection failed:', (err as Error).message);
+  }
 
   // Check if this project has existing messages (for cold-start detection).
   // Note: the current user message was already created via REST before executeChat,
@@ -392,6 +450,27 @@ export function executeChat(
 
         if (ctx.mcpConfigFile) {
           try { fs.unlinkSync(ctx.mcpConfigFile); } catch { /* ignore */ }
+        }
+
+        // RAG: Queue async LLM extraction for user + assistant messages
+        try {
+          const ragSettings = getRagSettings(db, projectId);
+          if (ragSettings.enabled) {
+            const assistantContent = (db.prepare('SELECT content FROM messages WHERE id = ?').get(assistantMsgId) as { content: string } | undefined)?.content ?? '';
+            // Index user message tokens synchronously (lightweight)
+            const userMsgRow = db.prepare(
+              `SELECT id FROM messages WHERE project_id = ? AND role = 'user' ORDER BY created_at DESC LIMIT 1`,
+            ).get(projectId) as { id: string } | undefined;
+            if (userMsgRow) {
+              indexMessageTokens(db, projectId, userMsgRow.id, userMessage);
+            }
+            // Queue async LLM extraction for assistant response
+            if (assistantContent.length > 20) {
+              queueMessageExtraction(db, projectId, assistantMsgId, assistantContent, ctx.token, ctx.workspaceDir);
+            }
+          }
+        } catch (err) {
+          console.warn('[exec-context] RAG extraction queue failed:', (err as Error).message);
         }
 
         callbacks.onStatus(runId, finalRow?.status ?? status);
