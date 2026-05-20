@@ -419,8 +419,11 @@ export function startRun(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
   if (existing) {
     console.warn(`[copilot-cli] Stopping existing run for project=${opts.projectId.slice(0, 8)}`);
     existing.stop();
-    activeRuns.delete(opts.projectId);
   }
+
+  // Reserve the slot immediately to prevent concurrent startRun race
+  const placeholder: ActiveRun = { stop: () => {} };
+  activeRuns.set(opts.projectId, placeholder);
 
   const wrapped: RunnerCallbacks = {
     onChunk:    (c) => cbs.onChunk(c),

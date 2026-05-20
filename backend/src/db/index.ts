@@ -190,7 +190,16 @@ export async function initializeDatabase(): Promise<void> {
   const dbPath = DB_PATH();
   if (fs.existsSync(dbPath)) {
     const fileBuf = fs.readFileSync(dbPath);
-    db = new SQL.Database(fileBuf);
+    try {
+      db = new SQL.Database(fileBuf);
+      // Verify integrity with a simple query
+      db.exec("SELECT 1");
+    } catch (err) {
+      const corruptPath = `${dbPath}.corrupt.${Date.now()}`;
+      console.error(`[db] Corrupted database detected, backing up to ${corruptPath}:`, (err as Error).message);
+      fs.renameSync(dbPath, corruptPath);
+      db = new SQL.Database();
+    }
   } else {
     db = new SQL.Database();
   }

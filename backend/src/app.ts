@@ -31,6 +31,23 @@ app.get('/api/csrf-token', (c) => {
   return c.json({ token });
 });
 
+// Validate project ID as UUID for all /api/projects/:id routes
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+app.use('/api/projects/:id/*', async (c, next) => {
+  const id = c.req.param('id');
+  if (!UUID_RE.test(id)) {
+    return c.json({ error: 'Invalid project ID' }, 400);
+  }
+  await next();
+});
+app.use('/api/projects/:id', async (c, next) => {
+  const id = c.req.param('id');
+  if (!UUID_RE.test(id)) {
+    return c.json({ error: 'Invalid project ID' }, 400);
+  }
+  await next();
+});
+
 // Routes
 app.route('/', healthRoutes);
 app.route('/', settingsRoutes);
