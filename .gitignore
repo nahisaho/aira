@@ -37,8 +37,6 @@ electron/dist/
 # Test
 test-results/
 coverage/
-e2e/
-playwright.config.ts
 
 # Temporary files
 *.tmp
