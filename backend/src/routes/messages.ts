@@ -13,11 +13,15 @@ const createMessageSchema = z.object({
 // GET /api/projects/:id/messages
 messageRoutes.get('/api/projects/:id/messages', (c) => {
   const projectId = c.req.param('id');
-  const limit = parseInt(c.req.query('limit') ?? '100', 10);
-  const offset = parseInt(c.req.query('offset') ?? '0', 10);
+  const limit = Math.min(Math.max(parseInt(c.req.query('limit') ?? '100', 10) || 100, 1), 1000);
+  const offset = Math.max(parseInt(c.req.query('offset') ?? '0', 10) || 0, 0);
   const since = c.req.query('since');
 
   if (since) {
+    // Validate ISO datetime format
+    if (isNaN(Date.parse(since))) {
+      return c.json({ error: 'Invalid "since" parameter: expected ISO 8601 datetime' }, 400);
+    }
     const messages = messageService.getMessagesSince(projectId, since);
     return c.json(messages);
   }

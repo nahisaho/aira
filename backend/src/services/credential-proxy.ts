@@ -33,27 +33,39 @@ export const PROXY_PORT = parseInt(process.env.CREDENTIAL_PROXY_PORT ?? '3001', 
 /** Upstream GitHub API base URL. Can be overridden for testing. */
 const UPSTREAM_URL = process.env.COPILOT_API_URL ?? 'https://api.github.com';
 
-// Headers that must not be forwarded to prevent connection reuse issues.
-const HOP_BY_HOP = new Set([
-  'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
-  'te', 'trailer', 'transfer-encoding', 'upgrade',
-]);
-
 export function startCredentialProxy(port: number, host = '127.0.0.1'): Promise<Server> {
   const upstream = new URL(UPSTREAM_URL);
   const isHttps = upstream.protocol === 'https:';
   const makeRequest = isHttps ? httpsRequest : httpRequest;
 
   const server = createServer((req, res) => {
+    // Request size limit: 10MB
+    const MAX_BODY = 10 * 1024 * 1024;
+    let bodySize = 0;
+
     const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
+    req.on('data', (c: Buffer) => {
+      bodySize += c.length;
+      if (bodySize > MAX_BODY) {
+        req.destroy();
+        if (!res.headersSent) { res.writeHead(413); res.end('Payload Too Large'); }
+        return;
+      }
+      chunks.push(c);
+    });
     req.on('end', () => {
+      if (bodySize > MAX_BODY) return;
       const body = Buffer.concat(chunks);
 
-      // Build upstream request headers
+      // Whitelist only safe headers to forward upstream
+      const ALLOWED_HEADERS = new Set([
+        'content-type', 'accept', 'accept-encoding', 'accept-language',
+        'user-agent', 'x-request-id', 'x-github-api-version',
+      ]);
       const headers: Record<string, string | number | string[]> = {};
       for (const [k, v] of Object.entries(req.headers)) {
-        if (!HOP_BY_HOP.has(k.toLowerCase()) && v !== undefined) {
+        const lower = k.toLowerCase();
+        if (ALLOWED_HEADERS.has(lower) && v !== undefined) {
           headers[k] = v as string | string[];
         }
       }
