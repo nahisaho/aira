@@ -135,7 +135,10 @@ export function scanWorkspace(
   // These mirror CoreClaw's convention and must not appear in the file panel.
   const SYSTEM_ENTRIES = new Set(['.github', '.git', 'AGENTS.md']);
 
-  function walk(dir: string): void {
+  const MAX_DEPTH = 50;
+
+  function walk(dir: string, depth = 0): void {
+    if (depth >= MAX_DEPTH) return;
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -156,7 +159,7 @@ export function scanWorkspace(
       if (entry.isSymbolicLink()) continue;
 
       if (entry.isDirectory()) {
-        walk(fullPath);
+        walk(fullPath, depth + 1);
       } else if (entry.isFile()) {
         try {
           const stat = fs.lstatSync(fullPath);

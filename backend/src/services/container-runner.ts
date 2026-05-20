@@ -137,9 +137,17 @@ function parseLine(
 ): void {
   let event: { type?: string; data?: Record<string, unknown> };
   try { event = JSON.parse(line) as typeof event; } catch {
-    // Log non-empty parse failures for diagnostics (truncated/malformed events)
+    // Rate-limit non-empty parse failure logs to avoid spam
+    if (line.length > 0 && (state as ParseState & { _parseErrors?: number })._parseErrors === undefined) {
+      (state as ParseState & { _parseErrors?: number })._parseErrors = 0;
+    }
     if (line.length > 0) {
-      console.warn(`[copilot-cli] JSON parse failed (${line.length} chars): ${line.slice(0, 120)}`);
+      const errCount = ++(state as ParseState & { _parseErrors: number })._parseErrors;
+      if (errCount <= 5) {
+        console.warn(`[copilot-cli] JSON parse failed (${line.length} chars): ${line.slice(0, 120)}`);
+      } else if (errCount === 6) {
+        console.warn(`[copilot-cli] suppressing further JSON parse warnings`);
+      }
     }
     return;
   }
@@ -224,8 +232,13 @@ function attachStreamReader(
   cbs: Pick<RunnerCallbacks, 'onChunk' | 'onProgress' | 'onFileCreated'>,
 ): void {
   let buf = '';
+  const MAX_BUF = 1024 * 1024; // 1MB line buffer cap
   proc.stdout?.on('data', (data: Buffer) => {
     buf += data.toString('utf8');
+    // Cap buffer to prevent unbounded growth from newline-less output
+    if (buf.length > MAX_BUF) {
+      buf = buf.slice(buf.length - MAX_BUF);
+    }
     let nl: number;
     while ((nl = buf.indexOf('\n')) !== -1) {
       const line = buf.slice(0, nl).trim();

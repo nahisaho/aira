@@ -101,21 +101,21 @@ fileRoutes.get('/api/projects/:id/files/:fileId/download', (c) => {
       '.bmp': 'image/bmp',
     };
     const contentType = inlineTypes[ext];
+    const safeAsciiName = filename.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_');
     if (contentType) {
       return new Response(content, {
         headers: {
           'Content-Type': contentType,
-          'Content-Disposition': `inline; filename="${filename.replace(/[^\x20-\x7E]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+          'Content-Disposition': `inline; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
           'X-Content-Type-Options': 'nosniff',
         },
       });
     }
 
-    const asciiName = filename.replace(/[^\x20-\x7E]/g, '_');
     return new Response(content, {
       headers: {
         'Content-Type': 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        'Content-Disposition': `attachment; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
         'X-Content-Type-Options': 'nosniff',
       },
     });

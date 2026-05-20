@@ -87,7 +87,7 @@ export function updateRagSettings(
 ): RagSettings {
   const current = getRagSettings(db, projectId);
   const enabled = updates.enabled ?? current.enabled;
-  const maxChars = updates.max_context_chars ?? current.max_context_chars;
+  const maxChars = Math.max(0, Math.min(updates.max_context_chars ?? current.max_context_chars, 200_000));
   const autoFiles = updates.auto_index_files ?? current.auto_index_files;
 
   db.prepare(`
