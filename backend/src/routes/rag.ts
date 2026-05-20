@@ -37,6 +37,12 @@ ragRoutes.put('/api/projects/:id/rag', async (c) => {
     auto_index_files: boolean;
   }>;
 
+  if (body.max_context_chars !== undefined) {
+    if (typeof body.max_context_chars !== 'number' || body.max_context_chars < 0 || body.max_context_chars > 200_000) {
+      return c.json({ error: 'max_context_chars must be between 0 and 200000' }, 400);
+    }
+  }
+
   const settings = updateRagSettings(db, projectId, body);
   return c.json({ settings });
 });

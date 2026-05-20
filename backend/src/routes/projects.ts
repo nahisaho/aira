@@ -56,7 +56,8 @@ projectRoutes.post('/api/projects', async (c) => {
 
     return c.json(project, 201);
   } catch (err) {
-    if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    const msg = (err as Error).message ?? '';
+    if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE' || msg.includes('UNIQUE constraint failed')) {
       return c.json({ error: 'Project name already exists' }, 409);
     }
     throw err;
@@ -91,7 +92,8 @@ projectRoutes.patch('/api/projects/:id', async (c) => {
     if (err instanceof ProjectActiveRunError) {
       return c.json({ error: err.message }, 409);
     }
-    if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    const msg = (err as Error).message ?? '';
+    if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE' || msg.includes('UNIQUE constraint failed')) {
       return c.json({ error: 'Project name already exists' }, 409);
     }
     throw err;

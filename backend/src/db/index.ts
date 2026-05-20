@@ -318,6 +318,7 @@ function createSchema(db: CompatDatabase): void {
       type        TEXT NOT NULL CHECK(type IN ('stdio', 'sse', 'preset')),
       config_json TEXT NOT NULL,
       enabled     INTEGER NOT NULL DEFAULT 1,
+      preset_id   TEXT,
       created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS project_files (
