@@ -168,19 +168,27 @@ export function syncSkillFiles(projectId: string): void {
   }
 
   if (ciSections.length > 0) {
-    fs.writeFileSync(
-      path.join(githubDir, 'copilot-instructions.md'),
-      ciSections.join('\n\n'),
-      'utf8',
-    );
+    try {
+      fs.writeFileSync(
+        path.join(githubDir, 'copilot-instructions.md'),
+        ciSections.join('\n\n'),
+        'utf8',
+      );
+    } catch (err) {
+      console.warn(`[syncSkillFiles] failed to write copilot-instructions.md: ${(err as Error).message}`);
+    }
   }
 
   if (agentsSections.length > 0) {
-    fs.writeFileSync(
-      path.join(workspaceDir, 'AGENTS.md'),
-      agentsSections.join('\n\n'),
-      'utf8',
-    );
+    try {
+      fs.writeFileSync(
+        path.join(workspaceDir, 'AGENTS.md'),
+        agentsSections.join('\n\n'),
+        'utf8',
+      );
+    } catch (err) {
+      console.warn(`[syncSkillFiles] failed to write AGENTS.md: ${(err as Error).message}`);
+    }
   }
 
   // Log final workspace layout for debugging
@@ -522,9 +530,12 @@ export function executeChat(
         db.prepare('UPDATE messages SET content = content || ? WHERE id = ?').run(userFacingMsg, assistantMsgId);
         callbacks.onChunk(userFacingMsg);
 
+        const isTimeout = errMsg === 'Run timed out';
+        const runStatus = isTimeout ? 'timeout' : 'failed';
+        const errorType = isTimeout ? 'timeout' : (isAuthError ? 'auth_failure' : 'unknown');
         db.prepare(
-          "UPDATE agent_runs SET status = 'failed', finished_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('running', 'queued')",
-        ).run(runId);
+          "UPDATE agent_runs SET status = ?, error_type = ?, finished_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN ('running', 'queued')",
+        ).run(runStatus, errorType, runId);
 
         // Reconcile files even on error — CLI may have created files before failing
         try {

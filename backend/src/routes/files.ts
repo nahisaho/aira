@@ -52,6 +52,11 @@ fileRoutes.get('/api/projects/:id/files/:fileId/view', (c) => {
 
   try {
     const resolved = resolveFilePath(workspaceDir, file.file_path);
+    const stat = fs.statSync(resolved);
+    const MAX_VIEW_SIZE = 5 * 1024 * 1024; // 5MB
+    if (stat.size > MAX_VIEW_SIZE) {
+      return c.json({ error: 'File too large for inline view', size: stat.size, limit: MAX_VIEW_SIZE }, 413);
+    }
     const content = fs.readFileSync(resolved, 'utf8');
     return c.json({ content, path: file.file_path });
   } catch (err) {
@@ -248,6 +253,7 @@ fileRoutes.post('/api/projects/:id/files/upload', async (c) => {
   for (const file of fileList) {
     if (!(file instanceof File)) continue;
     const filename = file.name.replace(/[\/\\:<>"|?*\x00-\x1f]/g, '_');
+    if (!filename || filename === '.' || filename === '..') continue;
     const dest = path.join(workspaceDir, filename);
     const buffer = Buffer.from(await file.arrayBuffer());
     fs.writeFileSync(dest, buffer);
