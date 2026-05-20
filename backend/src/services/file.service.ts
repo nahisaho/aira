@@ -119,6 +119,9 @@ function validateAncestorPath(workspaceDir: string, candidate: string): void {
  * Compute SHA-256 hash of a file.
  */
 export function hashFile(filePath: string): string {
+  const stat = fs.statSync(filePath);
+  // Skip hashing for files over 50MB to avoid memory spikes
+  if (stat.size > 50 * 1024 * 1024) return '';
   const content = fs.readFileSync(filePath);
   return crypto.createHash('sha256').update(content).digest('hex');
 }

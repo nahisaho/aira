@@ -254,14 +254,22 @@ fileRoutes.post('/api/projects/:id/files/upload', async (c) => {
     if (!(file instanceof File)) continue;
     const filename = file.name.replace(/[\/\\:<>"|?*\x00-\x1f]/g, '_');
     if (!filename || filename === '.' || filename === '..') continue;
-    const dest = path.join(workspaceDir, filename);
+    // Truncate to 200 chars to stay within FS limits, preserving extension
+    const MAX_NAME = 200;
+    let safeName = filename;
+    if (Buffer.byteLength(safeName) > MAX_NAME) {
+      const ext = path.extname(safeName);
+      const base = safeName.slice(0, MAX_NAME - ext.length);
+      safeName = base + ext;
+    }
+    const dest = path.join(workspaceDir, safeName);
     const buffer = Buffer.from(await file.arrayBuffer());
     fs.writeFileSync(dest, buffer);
-    uploaded.push(filename);
+    uploaded.push(safeName);
 
     const stat = fs.statSync(dest);
     const id = crypto.randomUUID();
-    upsertStmt.run(id, projectId, filename, filename, stat.size, Math.round(stat.mtimeMs));
+    upsertStmt.run(id, projectId, safeName, safeName, stat.size, Math.round(stat.mtimeMs));
   }
 
   return c.json({ uploaded, count: uploaded.length });
@@ -289,7 +297,10 @@ fileRoutes.get('/api/projects/:id/files/download-all', (c) => {
 
   archive.on('data', (chunk: Buffer) => writer.write(chunk));
   archive.on('end', () => writer.close());
-  archive.on('error', () => writer.close());
+  archive.on('error', (err) => {
+    console.error('[files] archive error:', (err as Error).message);
+    writer.abort(err);
+  });
 
   return new Response(readable, {
     headers: {

@@ -243,12 +243,18 @@ function attachStreamReader(
     while ((nl = buf.indexOf('\n')) !== -1) {
       const line = buf.slice(0, nl).trim();
       buf = buf.slice(nl + 1);
-      if (line) parseLine(line, state, cbs);
+      if (line) {
+        try { parseLine(line, state, cbs); }
+        catch (err) { console.warn(`[copilot-cli] parseLine error: ${(err as Error).message}`); }
+      }
     }
   });
   proc.stdout?.on('end', () => {
     const remaining = buf.trim();
-    if (remaining) parseLine(remaining, state, cbs);
+    if (remaining) {
+      try { parseLine(remaining, state, cbs); }
+      catch (err) { console.warn(`[copilot-cli] parseLine error: ${(err as Error).message}`); }
+    }
     buf = '';
   });
   proc.stdout?.on('error', () => { /* ignore stream errors */ });
