@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createRedactor, createRedactorWithFlush } from './agent.service.js';
-import Database from 'better-sqlite3';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
+import { createTestDatabase, type CompatDatabase } from '../db/test-helper.js';
 import crypto from 'node:crypto';
 
 describe('Secret Redaction', () => {
@@ -76,13 +73,10 @@ describe('Secret Redaction', () => {
 });
 
 describe('Orphan Run Recovery', () => {
-  let tmpDir: string;
-  let db: Database.Database;
+  let db: CompatDatabase;
 
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aira-agent-'));
-    db = new Database(path.join(tmpDir, 'test.db'));
-    db.pragma('foreign_keys = ON');
+  beforeEach(async () => {
+    db = await createTestDatabase();
 
     db.exec(`
       CREATE TABLE projects (
@@ -111,7 +105,6 @@ describe('Orphan Run Recovery', () => {
 
   afterEach(() => {
     db.close();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it('should mark running and queued runs as failed with server_crash', () => {
@@ -138,14 +131,11 @@ describe('Orphan Run Recovery', () => {
 });
 
 describe('Queue Control', () => {
-  let tmpDir: string;
-  let db: Database.Database;
+  let db: CompatDatabase;
   let projectId: string;
 
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aira-queue-'));
-    db = new Database(path.join(tmpDir, 'test.db'));
-    db.pragma('foreign_keys = ON');
+  beforeEach(async () => {
+    db = await createTestDatabase();
 
     db.exec(`
       CREATE TABLE projects (
@@ -177,7 +167,6 @@ describe('Queue Control', () => {
 
   afterEach(() => {
     db.close();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it('should enforce one running run per project via partial unique index', () => {

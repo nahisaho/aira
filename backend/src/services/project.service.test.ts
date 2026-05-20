@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import Database from 'better-sqlite3';
+import { createTestDatabase, type CompatDatabase } from '../db/test-helper.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -9,12 +9,11 @@ import crypto from 'node:crypto';
 
 describe('ProjectService logic', () => {
   let tmpDir: string;
-  let db: Database.Database;
+  let db: CompatDatabase;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aira-project-'));
-    db = new Database(path.join(tmpDir, 'test.db'));
-    db.pragma('foreign_keys = ON');
+    db = await createTestDatabase();
 
     db.exec(`
       CREATE TABLE projects (

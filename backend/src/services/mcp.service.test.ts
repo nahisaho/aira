@@ -1,19 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import Database from 'better-sqlite3';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
+import { createTestDatabase, type CompatDatabase } from '../db/test-helper.js';
 import crypto from 'node:crypto';
 
 describe('McpService logic', () => {
-  let tmpDir: string;
-  let db: Database.Database;
+  let db: CompatDatabase;
   let projectId: string;
 
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aira-mcp-'));
-    db = new Database(path.join(tmpDir, 'test.db'));
-    db.pragma('foreign_keys = ON');
+  beforeEach(async () => {
+    db = await createTestDatabase();
 
     db.exec(`
       CREATE TABLE projects (
@@ -39,7 +33,6 @@ describe('McpService logic', () => {
 
   afterEach(() => {
     db.close();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   describe('Secret masking', () => {

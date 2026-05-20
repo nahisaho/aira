@@ -3,18 +3,20 @@
  * Tests system behavior under load conditions.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import Database from 'better-sqlite3';
+import { createTestDatabase, type CompatDatabase } from '../../db/test-helper.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 
-function createTestDb(dir: string): InstanceType<typeof Database> {
-  const dbPath = path.join(dir, 'test.db');
-  const db = new Database(dbPath);
-  db.pragma('foreign_keys = ON');
-  db.pragma('journal_mode = WAL');
-  db.exec(`
+describe('Performance validation', () => {
+  let tmpDir: string;
+  let db: CompatDatabase;
+
+  beforeEach(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aira-perf-'));
+    db = await createTestDatabase();
+    db.exec(`
     CREATE TABLE projects (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
@@ -32,16 +34,6 @@ function createTestDb(dir: string): InstanceType<typeof Database> {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
-  return db;
-}
-
-describe('Performance validation', () => {
-  let tmpDir: string;
-  let db: InstanceType<typeof Database>;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aira-perf-'));
-    db = createTestDb(tmpDir);
   });
 
   afterEach(() => {

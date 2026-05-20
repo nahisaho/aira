@@ -1,18 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import Database from 'better-sqlite3';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
+import { createTestDatabase, type CompatDatabase } from './test-helper.js';
 
-function createTestDb(dir: string): Database.Database {
-  const dbPath = path.join(dir, 'test.db');
-  const db = new Database(dbPath);
-  db.pragma('foreign_keys = ON');
-  return db;
-}
+describe('SQLite Schema', () => {
+  let db: CompatDatabase;
 
-function applySchema(db: Database.Database): void {
-  db.exec(`
+  beforeEach(async () => {
+    db = await createTestDatabase();
+    db.exec(`
     CREATE TABLE projects (
       id            TEXT PRIMARY KEY,
       name          TEXT NOT NULL UNIQUE,
@@ -93,21 +87,10 @@ function applySchema(db: Database.Database): void {
       UNIQUE(project_id, file_path)
     );
   `);
-}
-
-describe('SQLite Schema', () => {
-  let tmpDir: string;
-  let db: Database.Database;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aira-test-'));
-    db = createTestDb(tmpDir);
-    applySchema(db);
   });
 
   afterEach(() => {
     db.close();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   describe('PRAGMA foreign_keys', () => {
