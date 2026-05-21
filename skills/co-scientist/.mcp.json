@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "tooluniverse": {
-      "command": "tooluniverse-stdio",
-      "args": ["--compact-mode", "--transport", "stdio"],
+      "command": "tooluniverse-smcp-stdio",
+      "args": ["--compact-mode"],
       "env": {},
       "description": "ToolUniverse MCP server providing access to 100+ scientific database APIs including PubMed, ChEMBL, Ensembl, UniProt, STRING, Reactome, GDC, DepMap, and more.",
       "url": "https://github.com/mims-harvard/ToolUniverse"
