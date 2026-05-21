@@ -386,6 +386,12 @@ function createSchema(db: CompatDatabase): void {
     db.exec("ALTER TABLE agent_runs ADD COLUMN prompt TEXT");
   }
 
+  // Migrate project_mcp_configs: add preset_id column
+  const mcpCols = db.pragma('table_info(project_mcp_configs)') as Array<{ name: string }>;
+  if (Array.isArray(mcpCols) && !mcpCols.some(c => c.name === 'preset_id')) {
+    db.exec("ALTER TABLE project_mcp_configs ADD COLUMN preset_id TEXT");
+  }
+
   // Migrate skills table: add 'github-agents' to source_type constraint
   try {
     db.exec("INSERT INTO skills (id, name, source_type, skill_path) VALUES ('__constraint_test__', '__test__', 'github-agents', '__test__')");
