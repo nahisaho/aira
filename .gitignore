@@ -47,3 +47,4 @@ agents-cache/
 
 # Windows Zone.Identifier metadata
 *:Zone.Identifier
+*:sec.endpointdlp
