@@ -22,8 +22,10 @@ interface RunRow {
 // GET /api/projects/:id/runs — paginated run history
 runRoutes.get('/api/projects/:id/runs', (c) => {
   const projectId = c.req.param('id');
-  const limit = Math.min(parseInt(c.req.query('limit') ?? '20', 10), 100);
-  const offset = parseInt(c.req.query('offset') ?? '0', 10);
+  const rawLimit = parseInt(c.req.query('limit') ?? '20', 10);
+  const rawOffset = parseInt(c.req.query('offset') ?? '0', 10);
+  const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 20, 1), 100);
+  const offset = Math.max(Number.isFinite(rawOffset) ? rawOffset : 0, 0);
 
   const db = getDatabase();
   const runs = db.prepare(

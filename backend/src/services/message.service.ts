@@ -78,11 +78,14 @@ export class MessageService {
    */
   getMessagesSince(projectId: string, since: string): Message[] {
     const db = getDatabase();
+    // Normalize ISO 8601 input (e.g., "2026-05-21T00:33:22.494Z") to SQLite's
+    // CURRENT_TIMESTAMP format ("2026-05-21 00:33:22") for consistent comparison.
+    const normalized = since.replace('T', ' ').replace(/\.\d+Z$/, '').replace(/Z$/, '');
     return db
       .prepare(
         'SELECT * FROM messages WHERE project_id = ? AND created_at > ? ORDER BY created_at ASC',
       )
-      .all(projectId, since) as Message[];
+      .all(projectId, normalized) as Message[];
   }
 }
 
