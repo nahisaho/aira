@@ -14,7 +14,8 @@ describe('FileService', () => {
   let workspaceDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aira-file-'));
+    // Use realpathSync to resolve macOS /tmp → /private/tmp symlink
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'aira-file-')));
     workspaceDir = path.join(tmpDir, 'workspace');
     fs.mkdirSync(workspaceDir, { recursive: true });
   });
