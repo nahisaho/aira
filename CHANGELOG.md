@@ -2,6 +2,11 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.1.1] — 2026-05-22
+
+### Fixed
+- **SVG ファイル表示**: ファイルビューアで SVG ファイルをインライン表示可能に（CSP ヘッダーによる XSS 防止付き）
+
 ## [v2.1.0] — 2026-05-21
 
 ### Added
