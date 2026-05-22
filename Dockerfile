@@ -20,6 +20,11 @@ RUN npm run build --workspace=backend
 
 # ── Stage 3: Production ──
 FROM node:22-slim AS production
+
+LABEL org.opencontainers.image.source="https://github.com/nahisaho/aira"
+LABEL org.opencontainers.image.description="AIRA – AI Research Assistant"
+LABEL org.opencontainers.image.licenses="MIT"
+
 WORKDIR /app
 
 # System dependencies for MCP servers and Copilot CLI
