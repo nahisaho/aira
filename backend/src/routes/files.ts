@@ -90,7 +90,6 @@ fileRoutes.get('/api/projects/:id/files/:fileId/download', (c) => {
     const ext = path.extname(filename).toLowerCase();
 
     // Serve PDFs and images inline so the browser's built-in viewer can render them
-    // SVG is served as attachment to prevent XSS via scriptable SVG content
     const inlineTypes: Record<string, string> = {
       '.pdf': 'application/pdf',
       '.png': 'image/png',
@@ -99,17 +98,22 @@ fileRoutes.get('/api/projects/:id/files/:fileId/download', (c) => {
       '.gif': 'image/gif',
       '.webp': 'image/webp',
       '.bmp': 'image/bmp',
+      '.svg': 'image/svg+xml',
     };
     const contentType = inlineTypes[ext];
     const safeAsciiName = filename.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_');
     if (contentType) {
-      return new Response(content, {
-        headers: {
-          'Content-Type': contentType,
-          'Content-Disposition': `inline; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-          'X-Content-Type-Options': 'nosniff',
-        },
-      });
+      const headers: Record<string, string> = {
+        'Content-Type': contentType,
+        'Content-Disposition': `inline; filename="${safeAsciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        'X-Content-Type-Options': 'nosniff',
+      };
+      // SVG can contain scripts; restrict with CSP so scripts won't run
+      // even if the URL is opened directly in the browser
+      if (ext === '.svg') {
+        headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'";
+      }
+      return new Response(content, { headers });
     }
 
     return new Response(content, {
