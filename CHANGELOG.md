@@ -2,6 +2,22 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.1.2] — 2026-05-24
+
+### Changed
+- **Co-Scientist スキル v3.0 品質改善**: v2.0 の 100 本実験分析に基づく 9 問題の系統的修正
+  - Limitations and Future Work セクションの必須化（問題 1）
+  - Hard Quality Gates による統計的不確実性の強制チェック（問題 2）
+  - Claim Calibration の Automated Filter 化 — 禁止語スキャン + 主張-証拠整合性チェック（問題 3）
+  - Validation Strategy Template（Tier 1-3）の追加（問題 4）
+  - DOI ベース書誌情報検証 + メタデータ正規化ワークフロー（問題 5）
+  - Ablation Study Design テンプレートの追加（問題 6）
+  - Reproducibility Checklist の追加（問題 7）
+  - report.md 構造化テンプレート（最低 1,200 語）の追加（問題 8）
+  - 🦆 Phase Gate Reviews（5 段階）+ Deep Review ワークフローの組み込み（問題 9）
+  - Mandatory Skill Chain による統計検定・不確実性定量化のスキップ防止
+  - IMRaD テンプレートの更新（Limitations セクション、再現性情報、Ablation study）
+
 ## [v2.1.1] — 2026-05-22
 
 ### Fixed
