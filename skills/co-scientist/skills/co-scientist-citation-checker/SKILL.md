@@ -48,12 +48,30 @@ Citation checking skill. Reference validation, DOI verification, retraction dete
    - 検証不能な引用には ⚠️ マーク
    - 検証不能率が 20% を超えたら Quality Gate FAIL
 
-4. レポート生成:
+4. DOI 付与・書誌情報検証:
+   - 参考文献リストの各エントリに対し:
+     1. Crossref API (`https://api.crossref.org/works?query=TITLE`) でタイトル検索
+     2. 一致する論文が見つかった場合: DOI を付与し、巻号・ページ番号を正確な値に更新
+     3. 一致しない場合: Semantic Scholar API でフォールバック検索
+     4. どちらでも見つからない場合: ⚠️ マークを付与
+
+5. メタデータ正規化:
+   - 著者名: "Last, F.M." 形式に統一
+   - 年: 括弧内に統一 "(2020)"
+   - ジャーナル: イタリック体 "*Journal Name*"
+   - DOI: 末尾に `https://doi.org/...` を追加
+
+6. 検証不能率チェック:
+   - 検証不能率 > 20%: Quality Gate FAIL
+   - 検証不能率 > 10%: WARNING（手動確認推奨）
+
+7. レポート生成:
    - 各引用の検証ステータス（verified / unverified / suspicious）
    - 意味的対応の問題箇所リスト
+   - DOI 付与率と書誌情報修正箇所
    - `results/citation-report.md` に保存
 
-5. Append citation check results to `logs/process-log.jsonl`.
+8. Append citation check results to `logs/process-log.jsonl`.
 
 ## Deliverables
 
@@ -75,11 +93,15 @@ Citation checking skill. Reference validation, DOI verification, retraction dete
 
 ## Quality Gates
 
-- [ ] The selected method matches the scientific question and stated assumptions.
-- [ ] Outputs are reproducible, saved to files, and traceable from inputs to conclusions.
-- [ ] Missing data, uncertainty, bias, and hard limits are made explicit.
-- [ ] `report.md` and `logs/process-log.jsonl` reference the generated artifacts.
-- [ ] No essential result remains chat-only.
+- [ ] 本文中の全 [N] が References に対応している
+- [ ] References の全エントリが本文中で引用されている
+- [ ] バルク引用 [N-M] がない（各引用に個別の説明がある）
+- [ ] 検証不能率が 20% 以下である
+- [ ] DOI が付与可能な全参考文献に DOI が付与されている
+- [ ] 書誌メタデータ（著者名、年、巻号）が正規化されている
+- [ ] Outputs are reproducible, saved to files, and traceable from inputs to conclusions
+- [ ] `report.md` and `logs/process-log.jsonl` reference the generated artifacts
+- [ ] No essential result remains chat-only
 
 If any gate fails: identify the specific failing check, fix the issue, and re-validate before proceeding.
 
@@ -88,6 +110,8 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 - Citation style varies by journal (author-year vs numbered). Confirm target format before writing
 - Claims in Discussion must trace back to specific Results. Do not introduce new data in Discussion
 - Supplementary materials must be self-contained with their own figure/table numbering
+- **DOI が不明な場合は巻号・ページ番号を省略し、タイトルと著者のみ記載すること。不正確なメタデータを推測して記載するより、省略する方が望ましい**
+- **Crossref API はレート制限あり（polite pool: mailto ヘッダー付きで50req/s）。バッチ処理時は適切な間隔を設けること**
 
 ## Validation Loop
 

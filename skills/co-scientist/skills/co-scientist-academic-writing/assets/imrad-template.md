@@ -19,20 +19,27 @@
 - Participants/Materials
 - Procedures
 - Statistical analysis
+- Reproducibility info (hyperparameters, random seeds, compute environment)
 
 ## 3. Results
 - Primary findings (with figures/tables)
 - Secondary findings
 - Statistical summaries (effect sizes + CIs)
+- Ablation study (if ≥ 2 components)
 
 ## 4. Discussion
 - Interpretation of results
 - Comparison with prior work
-- Limitations
-- Future directions
 
-## 5. Conclusion
+## 5. Limitations and Future Work
+- Data limitations (synthetic-only, sample size, bias, domain constraints)
+- Methodological limitations (assumptions, scalability, computational cost)
+- Evaluation limitations (metric choice, baseline count, external validation)
+- Generalizability (applicability to other domains/datasets)
+- Future research directions (concrete improvement roadmap)
+
+## 6. Conclusion
 [1 paragraph summary]
 
 ## References
-[Numbered or author-year per journal style]
+[Numbered or author-year per journal style; include DOI when available]

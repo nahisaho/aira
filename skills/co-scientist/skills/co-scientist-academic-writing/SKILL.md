@@ -47,7 +47,7 @@ Research paper drafting, journal formatting, and citation management.
    - Ensure claims are supported by results
 
 5. 自己査読（Self-Review）:
-   - Claim Calibration Rules を適用し過大主張を検出・修正
+   - Claim Calibration — Automated Filter を適用し過大主張を検出・修正
    - `co-scientist-citation-checker` の意味的対応チェックを実施
    - 全ての定量的結果に不確実性指標（CI, SD, p値）が付与されているか確認
    - 問題があれば修正してから最終版を保存
@@ -55,6 +55,27 @@ Research paper drafting, journal formatting, and citation management.
 6. 最終品質確認:
    - 全 Quality Gates の通過を確認
    - `results/quality-check.md` に検証結果を保存
+
+## Paper Structure Template (Mandatory Sections)
+
+1. Abstract
+2. Introduction
+3. Methods / Proposed Approach
+4. Results
+5. Discussion
+6. **Limitations and Future Work** ← 必須セクション
+7. Conclusion
+8. References
+
+### Limitations and Future Work セクションの要件
+
+以下の5カテゴリから該当するものを全て記述すること（最低3カテゴリ、200語以上）:
+
+1. **データの限界**: 合成データのみ、サンプルサイズ、バイアス、ドメイン制約
+2. **手法の限界**: 仮定の妥当性、スケーラビリティ、計算コスト
+3. **評価の限界**: 評価指標の選択、ベースライン数、外部検証の有無
+4. **一般化可能性**: 他のドメイン/データセットへの適用可能性
+5. **今後の研究方向**: 具体的な改善策とそのロードマップ
 
 ## Deliverables
 
@@ -75,6 +96,29 @@ Research paper drafting, journal formatting, and citation management.
 
 - Reuse `assets/imrad-template.md` when writing IMRaD-format papers.
 
+## Hard Quality Gates (MUST PASS — 論文完成前に自動チェック)
+
+### 不確実性チェック (Uncertainty Gate)
+
+論文内の全ての定量的結果に対し、以下のいずれかが付与されていることを検証:
+- 95% 信頼区間: "X (95% CI: [a, b])"
+- 標準偏差: "X ± σ"
+- 四分位範囲: "median X (IQR: a–b)"
+- ベイズ的事後分布: "posterior mean X, 95% HDI: [a, b]"
+
+違反パターン:
+- ❌ "accuracy was 0.93" → ✅ "accuracy was 0.93 ± 0.02 (5-fold CV)"
+- ❌ "AUC of 0.87" → ✅ "AUC of 0.87 (95% CI: 0.83–0.91, n=500)"
+- ❌ "RMSE decreased by 15%" → ✅ "RMSE decreased by 15% (p < 0.01, paired t-test)"
+
+このゲートを通過しない論文は完成とみなさない。
+
+### Limitations チェック
+
+- [ ] **Limitations and Future Work セクションが存在し、200語以上である**
+- [ ] **合成データのみの場合: 「実データでの検証が必要」が明記されている**
+- [ ] **単一ベンチマークの場合: 一般化可能性の限界が議論されている**
+
 ## Quality Gates
 
 - [ ] Manuscript follows target journal's structure and guidelines.
@@ -90,6 +134,54 @@ Research paper drafting, journal formatting, and citation management.
 
 If any gate fails: identify the specific failing check, fix the issue, and re-validate before proceeding.
 
+## Reproducibility Checklist (Methods セクション完成時に検証)
+
+### 必須項目
+- [ ] **全モデルのハイパーパラメータが表形式で記載されている**
+  - 学習率、バッチサイズ、エポック数、オプティマイザ
+  - モデル固有のパラメータ（層数、隠れ層次元、ドロップアウト率等）
+- [ ] **ランダムシードが記載されている**（または「5 シードの平均 ± 標準偏差」形式）
+- [ ] **データセット分割が明記されている**（例: "80/10/10 train/val/test split"）
+- [ ] **計算環境が記載されている**（GPU型番、メモリ、学習時間）
+
+### 推奨項目
+- [ ] コードの利用可能性に関する記述がある
+  - 理想: "Code is available at [URL]"
+  - 最低限: "Implementation details are provided in the supplementary material"
+- [ ] データの利用可能性に関する記述がある
+- [ ] 主要な前処理ステップが記載されている
+
+## Experimental Report Template (report.md)
+
+### 必須セクション
+
+1. **実験目的と背景** (200語以上)
+   - 研究課題の定義
+   - 仮説または検証したい主張
+
+2. **手法・アルゴリズムの概要** (300語以上)
+   - 使用した手法の説明
+   - 実装の詳細（パラメータ、ライブラリ）
+
+3. **実験設計** (200語以上)
+   - データセット/シミュレーション設定
+   - 評価指標
+   - ベースライン手法
+
+4. **結果と分析** (300語以上)
+   - 定量的結果（表・図を含む）
+   - 主要な発見の解釈
+
+5. **考察と限界** (200語以上)
+   - 結果の解釈
+   - 手法の限界
+   - 改善の方向性
+
+### 品質基準
+- 最低語数: 1,200 語
+- 定量的結果を含むこと（数値・表・図のいずれか）
+- paper.md と内容が整合していること
+
 ## Gotchas
 
 - Methods セクションを最初に書くこと。最も客観的で、他セクションの基盤になる
@@ -98,20 +190,29 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 - 引用は「著者名+年」形式と「番号」形式でジャーナルごとに異なる。投稿先を確認してから書式を決定
 - 図表の説明文（caption）は図を見ただけで内容が分かる自己完結型にすること
 
-## Claim Calibration Rules
+## Claim Calibration — Automated Filter
 
-論文中の主張は以下のルールに従って校正すること:
+### Phase 1: 禁止語スキャン（論文完成直後に自動実行）
 
-### 禁止表現と代替
+以下の表現が検出された場合、条件を満たさない限り自動的に代替表現へ置換:
 
-| 禁止表現 | 条件 | 代替表現 |
-|---------|------|---------|
-| "state-of-the-art" | 公開ベンチマークの全SOTAと比較していない場合 | "competitive performance" |
-| "novel" | 先行研究との差分が構成要素の組み合わせの場合 | "we propose" / "we introduce" |
-| "guarantees" | 数学的証明がない場合 | "is designed to" / "aims to" |
-| "outperforms all" | 3手法以下との比較の場合 | "outperforms the compared baselines" |
-| "significant improvement" | 統計検定なしの場合 | "improvement" / "higher accuracy" |
+| 検出表現 | 条件チェック | 条件不成立時の自動置換 |
+|---------|------------|-------------------|
+| "novel" | Methods に先行研究との差分が3点以上明記 | "proposed" |
+| "state-of-the-art" | Results に3+の最新SOTAとの定量比較あり | "competitive" |
+| "guarantees" | Methods に数学的証明（定理+証明）あり | "is designed to" |
+| "significant" (統計文脈外) | 近傍にp値 or 統計検定結果あり | "notable" or "substantial" |
+| "outperforms all" | 5+手法との比較 + 有意差検定あり | "outperforms the compared baselines" |
+| "superior" | 統計検定で有意差確認済み | "competitive with" |
+| "optimal" | 最適性の証明あり | "effective" or "well-performing" |
 | "solves the problem" | 全ケースで検証していない場合 | "addresses" / "mitigates" |
+
+### Phase 2: 主張-証拠整合性チェック
+
+Discussion/Conclusion の各文を以下で分類:
+- **Strong claim** → Results に統計的有意差の裏付けが必要
+- **Moderate claim** → Results に定量的比較の裏付けが必要
+- **Weak claim / Observation** → 定性的な裏付けで可
 
 ### 主張レベルの階層
 
@@ -121,6 +222,12 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 | Moderate claim | 3+データセット + 有意差あり | "consistently outperforms baselines" |
 | Weak claim | 1-2データセット OR 合成データのみ | "shows promise" / "preliminary results suggest" |
 | Observation | 統計検定なし | "we observe that" / "results indicate" |
+
+## 参考文献生成ルール
+
+参考文献を記載する際は、可能な限り DOI を付与すること。
+DOI が不明な場合は巻号・ページ番号を省略し、タイトルと著者のみ記載すること。
+不正確なメタデータを推測して記載するより、省略する方が望ましい。
 
 ## Validation Loop
 

@@ -45,6 +45,11 @@ Data simulation skill. Synthetic data generation, Monte Carlo simulation, bootst
 - [ ] Missing data, uncertainty, bias, and hard limits are made explicit.
 - [ ] `report.md` and `logs/process-log.jsonl` reference the generated artifacts.
 - [ ] No essential result remains chat-only.
+- [ ] **合成データ生成の仮定（分布、パラメータ）が明示されている**
+- [ ] **実データとの既知の乖離点が列挙されている**
+- [ ] **「合成→実」転移のための検証計画が記載されている**
+- [ ] **"validates the approach" ではなく "demonstrates feasibility under simulated conditions" が使用されている**
+- [ ] **合成データのパラメータが実世界の統計量に基づくことが参考文献付きで示されている**
 
 If any gate fails: identify the specific failing check, fix the issue, and re-validate before proceeding.
 

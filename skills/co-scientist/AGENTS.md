@@ -101,14 +101,30 @@ DO: → `co-scientist-presentation`
    - YES → `co-scientist-peer-review`
    - NO → `co-scientist-research-planning` で要件整理から開始
 
+### Mandatory Skill Chain
+
+Results セクション執筆時は以下のスキルを順次呼び出すこと:
+1. `co-scientist-data-analysis`: 結果の算出
+2. `co-scientist-statistical-testing`: 有意差検定の実施
+3. `co-scientist-uncertainty-quantification`: 不確実性の定量化
+4. `co-scientist-academic-writing`: 上記結果を含む論文執筆
+
+いかなる場合も Step 2, 3 をスキップしてはならない。
+
 ### Full Lifecycle Workflow
 
 Phase 0 → `co-scientist-research-planning`: 研究計画 ⏸️ ユーザー承認
+  → 🦆 `co-scientist-critical-review` (Mode: Phase Gate, Checklist: Plan)
 Phase 1 → `co-scientist-literature-review`: 文献調査
 Phase 2 → `co-scientist-experimental-design`: 実験計画 ⏸️ ユーザー承認
-Phase 3 → `co-scientist-data-analysis`: データ分析
+  → 🦆 `co-scientist-critical-review` (Mode: Phase Gate, Checklist: Design)
+Phase 3 → `co-scientist-data-analysis` + `co-scientist-statistical-testing`: 実験実行
+  → 🦆 `co-scientist-critical-review` (Mode: Phase Gate, Checklist: Results)
 Phase 4 → `co-scientist-academic-writing`: 論文執筆
+  → 🦆 `co-scientist-critical-review` (Mode: Deep Review) ← 最重要
+  → 修正ループ（最大2回）
 Phase 4.5 → `co-scientist-citation-checker`: 引用検証（意味的対応 + ハルシネーション検出）
+  → 🦆 `co-scientist-critical-review` (Mode: Phase Gate, Checklist: Final)
 Phase 5 → `co-scientist-peer-review`: 査読対応
 Phase 6 → `co-scientist-reproducibility`: 再現性確保
 Phase 7 → `co-scientist-presentation`: 発表準備 ⏸️ ユーザー承認
@@ -124,13 +140,32 @@ Phase 7 → `co-scientist-presentation`: 発表準備 ⏸️ ユーザー承認
 2. **Design phase** (内部): 実験設計を策定し `results/experimental-design.md` に保存
 3. **Execution phase**: データ分析/シミュレーション実施
 4. **Writing phase**: 論文執筆
-5. **Self-review phase** (内部): `co-scientist-critical-review` による自己査読
-6. **Revision phase**: 自己査読の指摘に基づく修正
+5. **Self-review phase** (内部): `co-scientist-critical-review` による自己査読（Deep Review）
+6. **Revision phase**: 自己査読の指摘に基づく修正（最大2回リトライ）
+7. **Citation-check phase** (内部): `co-scientist-citation-checker` による引用検証
+8. **Final-review phase** (内部): `co-scientist-critical-review` による最終レビュー
+
+### Single-Turn Mode with Reviews
+
+単一ターンでも全 Review を内部的に実行する。
+ただし実行時間の制約を考慮し、以下の優先度で実施:
+
+必須 (常に実行):
+  - 🦆 Review 4: 論文レビュー（Deep Review — 最重要）
+  
+推奨 (時間が許す場合):
+  - 🦆 Review 3: 結果レビュー
+  - 🦆 Review 5: 最終レビュー
+
+省略可 (バッチ実行時):
+  - 🦆 Review 1: 計画レビュー
+  - 🦆 Review 2: 設計レビュー
 
 ### 注意事項
 - Single-Turn Mode でも Quality Gates は全て適用される
 - ⏸️ ユーザー承認ポイントはスキップ可能だが、自己査読(Phase 5)はスキップ不可
 - 各 Phase の出力は個別ファイルとして保存すること（コンパクション対策）
+- 🦆 Review 4（論文レビュー）は Single-Turn Mode でもスキップ不可
 
 ## Required Output Layout
 
