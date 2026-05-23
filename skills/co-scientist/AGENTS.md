@@ -8,7 +8,7 @@ description: |
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v1.0.0
+# Co-Scientist v1.1.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
