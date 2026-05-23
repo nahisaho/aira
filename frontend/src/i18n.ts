@@ -4,7 +4,7 @@ const translations = {
   ja: {
     // Sidebar
     'sidebar.title': 'AIRA-β',
-    'sidebar.subtitle': 'AI Research Administrator',
+    'sidebar.subtitle': 'AI Research Assistant',
     'sidebar.newProject': '+ 新規',
     'sidebar.settings': '⚙ 設定',
     'sidebar.deleteProject': 'プロジェクトを削除',
@@ -119,7 +119,7 @@ const translations = {
   en: {
     // Sidebar
     'sidebar.title': 'AIRA-β',
-    'sidebar.subtitle': 'AI Research Administrator',
+    'sidebar.subtitle': 'AI Research Assistant',
     'sidebar.newProject': '+ New',
     'sidebar.settings': '⚙ Settings',
     'sidebar.deleteProject': 'Delete project',
