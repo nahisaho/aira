@@ -30,11 +30,30 @@ Citation checking skill. Reference validation, DOI verification, retraction dete
 
 ## Workflow
 
-1. Confirm scope, assumptions, and the exact artifact set to save.
-2. Apply the narrowest domain method that answers the request with defensible evidence.
-3. Save code, tables, figures, and intermediate outputs to files instead of chat-only output.
-4. State limitations, uncertainty, and any validation or sensitivity checks performed.
-5. Append skill selection, handoff I/O, and file writes to `logs/process-log.jsonl`.
+1. 形式チェック:
+   - 本文中の全 [N] が References に対応するか
+   - References の全エントリが本文中で引用されているか
+   - DOI があれば Crossref API で存在確認
+
+2. 意味的対応チェック:
+   - 各引用箇所で、引用が主張を裏付けているか検証
+   - パターン検出:
+     - ❌ "[1-5] have studied X" → 各文献の具体的貢献を記述すべき
+     - ❌ "As shown in [3]" → 何が示されているか明記すべき
+     - ✅ "Smith et al. [3] demonstrated that Y achieves Z% on dataset W"
+   - 引用密度チェック: Introduction に引用が集中し Methods/Results に皆無は警告
+
+3. ハルシネーション検出:
+   - 著者名 + タイトル + 年 の組み合わせを Crossref/Semantic Scholar で検証
+   - 検証不能な引用には ⚠️ マーク
+   - 検証不能率が 20% を超えたら Quality Gate FAIL
+
+4. レポート生成:
+   - 各引用の検証ステータス（verified / unverified / suspicious）
+   - 意味的対応の問題箇所リスト
+   - `results/citation-report.md` に保存
+
+5. Append citation check results to `logs/process-log.jsonl`.
 
 ## Deliverables
 

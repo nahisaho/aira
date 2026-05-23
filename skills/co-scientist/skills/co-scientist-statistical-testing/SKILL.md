@@ -52,6 +52,9 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 - Statistical assumptions (normality, independence, homoscedasticity) must be tested before parametric methods
 - Multiple testing correction is required when running 3+ tests. Use Bonferroni or FDR as appropriate
 - Missing data mechanisms (MCAR, MAR, MNAR) must be assessed before choosing imputation strategy
+- **結果報告時は必ず効果量（Cohen's d, η², r²等）と信頼区間を併記すること。p値のみの報告は不十分**
+- **k-fold CV の結果には fold 間の標準偏差を必ず報告すること**
+- **合成データでの性能評価は「上界推定」であることを明記し、実データとの乖離可能性を注記すること**
 
 ## Validation Loop
 

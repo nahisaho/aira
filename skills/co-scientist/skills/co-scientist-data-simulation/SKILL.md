@@ -53,6 +53,12 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 - Statistical assumptions (normality, independence, homoscedasticity) must be tested before parametric methods
 - Multiple testing correction is required when running 3+ tests. Use Bonferroni or FDR as appropriate
 - Missing data mechanisms (MCAR, MAR, MNAR) must be assessed before choosing imputation strategy
+- **合成データでの好結果は「手法の正当性の必要条件」であり「十分条件」ではない。report.md に必ず以下を明記すること:**
+  1. データ生成の仮定（分布、パラメータ）
+  2. 実データとの既知の乖離点
+  3. 実データ検証の推奨ステップ
+- **合成データのパラメータが実世界の統計量に基づくことを示すこと**（例: "平均値と分散は [Reference] の報告値に基づく"）
+- **シミュレーション結果のみで "validates the approach" と主張してはならない。"demonstrates feasibility under simulated conditions" が適切**
 
 ## Validation Loop
 

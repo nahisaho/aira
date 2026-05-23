@@ -24,11 +24,31 @@ Critical review skill. Systematic assessment of research quality, experimental r
 
 ## Workflow
 
-1. Confirm scope, assumptions, and the exact artifact set to save.
-2. Apply the narrowest domain method that answers the request with defensible evidence.
-3. Save code, tables, figures, and intermediate outputs to files instead of chat-only output.
-4. State limitations, uncertainty, and any validation or sensitivity checks performed.
-5. Append skill selection, handoff I/O, and file writes to `logs/process-log.jsonl`.
+1. 主張-証拠マッピング:
+   - Discussion/Conclusionの各主張を抽出
+   - 各主張に対応するResults内の証拠を特定
+   - 証拠の強度を評価（統計検定あり/なし、効果量、サンプルサイズ）
+
+2. 過大主張チェック:
+   - Claim Calibration Rules（`co-scientist-academic-writing` 参照）に照らして表現を検証
+   - 実験条件の限定性と主張の一般性の不一致を検出
+   - "our method" vs "the proposed approach" — 客観性の確認
+
+3. 論理的整合性:
+   - Introduction の問題設定 → Methods の解決策 → Results の証拠 → Conclusion の主張
+   - この鎖が途切れていないか検証
+
+4. 限界の適切な記述:
+   - Limitations セクションが「形式的」でないか（実質的な限界を述べているか）
+   - 合成データのみの場合: 外的妥当性の限界が明記されているか
+   - 単一ドメインの場合: 一般化可能性への注意が記載されているか
+
+5. 統計的妥当性:
+   - 全ての定量的結果に不確実性指標があるか
+   - 性能比較に統計検定が伴っているか
+   - 効果量が報告されているか
+
+6. Save review findings to `results/critical-review.md` and append to `logs/process-log.jsonl`.
 
 ## Deliverables
 

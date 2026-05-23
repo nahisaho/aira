@@ -46,6 +46,16 @@ Research paper drafting, journal formatting, and citation management.
    - Verify figures and tables are referenced
    - Ensure claims are supported by results
 
+5. 自己査読（Self-Review）:
+   - Claim Calibration Rules を適用し過大主張を検出・修正
+   - `co-scientist-citation-checker` の意味的対応チェックを実施
+   - 全ての定量的結果に不確実性指標（CI, SD, p値）が付与されているか確認
+   - 問題があれば修正してから最終版を保存
+
+6. 最終品質確認:
+   - 全 Quality Gates の通過を確認
+   - `results/quality-check.md` に検証結果を保存
+
 ## Deliverables
 
 - `report.md`: writing progress summary.
@@ -72,6 +82,11 @@ Research paper drafting, journal formatting, and citation management.
 - [ ] Every figure and table is referenced in text.
 - [ ] Abstract contains objective, methods, key results, and conclusion.
 - [ ] Word count is within journal limits.
+- [ ] **全ての定量的結果に不確実性指標が付与されている**（95%CI, ±SD, p値のいずれか）
+- [ ] **性能比較には統計的有意差検定が含まれている**（paired t-test, Wilcoxon, McNemar等）
+- [ ] **合成データの場合、データ生成過程のパラメータと感度分析が記載されている**
+- [ ] **合成データのみの場合、Limitations に「External validation with real-world data is needed」が含まれている**
+- [ ] **検証戦略が Internal validation のみの場合、Discussion に一般化可能性の限界が議論されている**
 
 If any gate fails: identify the specific failing check, fix the issue, and re-validate before proceeding.
 
@@ -82,6 +97,30 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 - Abstract は全セクション完成後に書くこと。先に書くと内容との乖離が生じる
 - 引用は「著者名+年」形式と「番号」形式でジャーナルごとに異なる。投稿先を確認してから書式を決定
 - 図表の説明文（caption）は図を見ただけで内容が分かる自己完結型にすること
+
+## Claim Calibration Rules
+
+論文中の主張は以下のルールに従って校正すること:
+
+### 禁止表現と代替
+
+| 禁止表現 | 条件 | 代替表現 |
+|---------|------|---------|
+| "state-of-the-art" | 公開ベンチマークの全SOTAと比較していない場合 | "competitive performance" |
+| "novel" | 先行研究との差分が構成要素の組み合わせの場合 | "we propose" / "we introduce" |
+| "guarantees" | 数学的証明がない場合 | "is designed to" / "aims to" |
+| "outperforms all" | 3手法以下との比較の場合 | "outperforms the compared baselines" |
+| "significant improvement" | 統計検定なしの場合 | "improvement" / "higher accuracy" |
+| "solves the problem" | 全ケースで検証していない場合 | "addresses" / "mitigates" |
+
+### 主張レベルの階層
+
+| レベル | 使用条件 | 例 |
+|--------|---------|-----|
+| Strong claim | 数学的証明 OR 5+データセット+統計検定 | "provably converges" |
+| Moderate claim | 3+データセット + 有意差あり | "consistently outperforms baselines" |
+| Weak claim | 1-2データセット OR 合成データのみ | "shows promise" / "preliminary results suggest" |
+| Observation | 統計検定なし | "we observe that" / "results indicate" |
 
 ## Validation Loop
 

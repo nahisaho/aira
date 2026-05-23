@@ -44,6 +44,17 @@ DOE, power analysis, sample size calculation, and protocol design.
 
 5. Save design matrix and protocol to files
 
+6. 検証戦略の設計:
+   - **内部検証**: k-fold CV, hold-out test set (最低20%)
+   - **外部検証計画**: 独立データセットの特定（公開データ or 将来取得予定）
+   - **ドメインシフト評価**: 学習データと異なる条件での性能評価計画
+   - **消融実験（Ablation study）**: 各コンポーネントの寄与度検証
+
+7. 合成データ使用時の制約文書化:
+   - データ生成の仮定を明示（分布、ノイズモデル、相関構造）
+   - 実データとの乖離可能性を列挙
+   - 「合成→実」転移のための検証計画を記載
+
 ## Deliverables
 
 - `report.md`: design summary and rationale.
@@ -67,6 +78,8 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 - 完全実施要因計画は因子数が多いと実験数が爆発する。因子4つ以上では部分実施要因を提案すること
 - 対照群なしの実験計画を提案してはならない。最低限、陽性対照または陰性対照を含めること
 - サンプルサイズが小さすぎる場合は、効果量の再検討を促すこと（「データが足りない」ではなく「検出したい差を明確に」）
+- **提案手法が3つ以上のコンポーネントを含む場合、ablation study を必須とすること**。各コンポーネントを1つずつ除外した実験で、全コンポーネントの寄与を検証する
+- **「統合」が目的化していないか確認すること**。統合することで性能が向上する実験的証拠がなければ、最も性能の高い単一手法を推奨する
 
 ## Validation Loop
 

@@ -19,6 +19,10 @@ Collaborative research partner with 202 specialized sub-skills. Route work to th
 - Save every artifact to files. Do not leave analysis, code, tables, or figures only in chat.
 - Prefer the narrowest matching sub-skill instead of loading broad context.
 - Final chat output should summarize saved files, not reproduce the full analysis.
+- **深さ優先原則**: 1つの核心的手法を深く検証することを、複数手法の表面的統合より優先する。
+  - 手法が3つ以上の場合: 必ず ablation study で各手法の個別寄与を定量化
+  - "unified framework" を提案する場合: フレームワークなしの単独手法ベースラインとの比較が必須
+  - 各コンポーネントの必要性を実験的に示せない場合、そのコンポーネントを削除すること
 
 ## Context Sufficiency Check
 
@@ -104,9 +108,29 @@ Phase 1 → `co-scientist-literature-review`: 文献調査
 Phase 2 → `co-scientist-experimental-design`: 実験計画 ⏸️ ユーザー承認
 Phase 3 → `co-scientist-data-analysis`: データ分析
 Phase 4 → `co-scientist-academic-writing`: 論文執筆
+Phase 4.5 → `co-scientist-citation-checker`: 引用検証（意味的対応 + ハルシネーション検出）
 Phase 5 → `co-scientist-peer-review`: 査読対応
 Phase 6 → `co-scientist-reproducibility`: 再現性確保
 Phase 7 → `co-scientist-presentation`: 発表準備 ⏸️ ユーザー承認
+
+## Single-Turn Execution Mode
+
+ユーザーが単一プロンプトで研究の全工程（計画→実験→論文）を依頼した場合でも、
+内部的にPhaseを順次実行し、各Phase の Quality Gates を通過すること。
+
+### Single-Turn での Phase 実行順序
+
+1. **Planning phase** (内部): 研究計画を策定し `results/research-plan.md` に保存
+2. **Design phase** (内部): 実験設計を策定し `results/experimental-design.md` に保存
+3. **Execution phase**: データ分析/シミュレーション実施
+4. **Writing phase**: 論文執筆
+5. **Self-review phase** (内部): `co-scientist-critical-review` による自己査読
+6. **Revision phase**: 自己査読の指摘に基づく修正
+
+### 注意事項
+- Single-Turn Mode でも Quality Gates は全て適用される
+- ⏸️ ユーザー承認ポイントはスキップ可能だが、自己査読(Phase 5)はスキップ不可
+- 各 Phase の出力は個別ファイルとして保存すること（コンパクション対策）
 
 ## Required Output Layout
 

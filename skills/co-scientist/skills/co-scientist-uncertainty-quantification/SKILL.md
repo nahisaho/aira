@@ -25,11 +25,28 @@ Uncertainty quantification skill. Aleatory/epistemic uncertainty estimation, ens
 
 ## Workflow
 
-1. Confirm scope, assumptions, and the exact artifact set to save.
-2. Apply the narrowest domain method that answers the request with defensible evidence.
-3. Save code, tables, figures, and intermediate outputs to files instead of chat-only output.
-4. State limitations, uncertainty, and any validation or sensitivity checks performed.
-5. Append skill selection, handoff I/O, and file writes to `logs/process-log.jsonl`.
+1. 不確実性の種類を特定:
+   - Aleatoric（データ固有のノイズ）→ データ拡張、ノイズモデリング
+   - Epistemic（モデルの知識不足）→ アンサンブル、MC Dropout、ベイズ推論
+   - 両方 → Conformal Prediction（分布フリー）
+
+2. 定量化手法を選択:
+   - 分類: 予測確率の校正（Platt Scaling, Temperature Scaling）
+   - 回帰: 予測区間（Quantile Regression, Conformal）
+   - 比較: Bootstrap信頼区間（n≥1000回リサンプリング）
+
+3. 報告形式:
+   - 表: "metric ± std" or "metric [95% CI: lower, upper]"
+   - 図: error bar, confidence band, violin plot
+   - テキスト: "achieved X (95% CI: [a, b], n=N)"
+
+4. 感度分析:
+   - ハイパーパラメータ摂動に対するロバスト性
+   - データサイズに対する学習曲線
+   - ランダムシード変動（5+シード）
+
+5. Save code, tables, figures, and intermediate outputs to files instead of chat-only output.
+6. Append skill selection, handoff I/O, and file writes to `logs/process-log.jsonl`.
 
 ## Deliverables
 
