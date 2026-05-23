@@ -3,6 +3,7 @@ import { filesApi } from '../../api/client';
 import { renderMarkdown } from '../chat/markdown';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { usePreferencesStore } from '../../stores/preferences';
+import { wsClient } from '../../api/ws';
 import * as XLSX from 'xlsx';
 
 interface FileViewerModalProps {
@@ -32,37 +33,49 @@ export function FileViewerModal({ projectId, fileId, filePath, onClose }: FileVi
       return;
     }
 
-    if (isExcel) {
+    const loadContent = () => {
+      if (isExcel) {
+        setLoading(true);
+        fetch(filesApi.downloadUrl(projectId, fileId))
+          .then((res) => res.arrayBuffer())
+          .then((buf) => {
+            const wb = XLSX.read(buf, { type: 'array' });
+            const parsed = wb.SheetNames.map((name) => ({
+              name,
+              html: XLSX.utils.sheet_to_html(wb.Sheets[name], { editable: false }),
+            }));
+            setSheets(parsed);
+            setLoading(false);
+          })
+          .catch((err) => {
+            setError((err as Error).message);
+            setLoading(false);
+          });
+        return;
+      }
+
       setLoading(true);
-      fetch(filesApi.downloadUrl(projectId, fileId))
-        .then((res) => res.arrayBuffer())
-        .then((buf) => {
-          const wb = XLSX.read(buf, { type: 'array' });
-          const parsed = wb.SheetNames.map((name) => ({
-            name,
-            html: XLSX.utils.sheet_to_html(wb.Sheets[name], { editable: false }),
-          }));
-          setSheets(parsed);
+      filesApi
+        .view(projectId, fileId)
+        .then((data) => {
+          setContent(data.content);
           setLoading(false);
         })
         .catch((err) => {
           setError((err as Error).message);
           setLoading(false);
         });
-      return;
-    }
+    };
 
-    setLoading(true);
-    filesApi
-      .view(projectId, fileId)
-      .then((data) => {
-        setContent(data.content);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError((err as Error).message);
-        setLoading(false);
-      });
+    loadContent();
+
+    // Auto-refresh when this file is modified via WS
+    const unsub = wsClient.onEvent((event) => {
+      if (event.type === 'file_modified' && event.file.id === fileId) {
+        loadContent();
+      }
+    });
+    return unsub;
   }, [projectId, fileId, isImage, isExcel]);
 
   return (

@@ -4,9 +4,11 @@ import { Sidebar } from './components/project/Sidebar';
 import { ChatPane } from './components/chat/ChatPane';
 import { RightPanel } from './components/files/RightPanel';
 import { usePreferencesStore } from './stores/preferences';
+import { useAutoRefresh } from './hooks/useAutoRefresh';
 
 export function App() {
   const theme = usePreferencesStore((s) => s.theme);
+  useAutoRefresh();
 
   const [leftCollapsed, setLeftCollapsed] = useState(() =>
     localStorage.getItem('aira-left-collapsed') === 'true',

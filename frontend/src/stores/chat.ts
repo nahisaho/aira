@@ -162,7 +162,7 @@ wsClient.onEvent((event) => {
         store.setRunStatus('idle');
         store.setProgressMessage(null);
         useChatStore.setState({ sending: false }); // safety: clear if still pending
-        // Trigger files & runs refresh
+        // Trigger files, runs & messages refresh
         import('./files').then(({ useFilesStore }) => {
           import('./project').then(({ useProjectStore }) => {
             const projectId = useProjectStore.getState().activeProjectId;
@@ -170,6 +170,8 @@ wsClient.onEvent((event) => {
               useFilesStore.getState().fetchFiles(projectId);
               useFilesStore.getState().fetchRunHistory(projectId);
               useFilesStore.getState().fetchCurrentRun(projectId);
+              // Re-fetch messages from DB to get the final persisted version
+              useChatStore.getState().fetchMessages(projectId);
             }
           });
         });
