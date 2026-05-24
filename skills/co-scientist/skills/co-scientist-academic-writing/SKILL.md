@@ -89,6 +89,11 @@ tu_tools:
 DOI が不明な場合は巻号・ページ番号を省略し、タイトルと著者のみ記載すること。
 不正確なメタデータを推測して記載するより、省略する方が望ましい。
 
+### Reference Quality Standards
+- 文献調査を伴う論文では **≥10 件** の参考文献を目標とする。
+- DOI 形式の検証: `10.XXXX/XXXXX` 形式であることを確認。形式が不正な DOI は削除する。
+- 各参考文献は本文中で個別に引用すること。バルク引用 `[1-5]` は禁止。
+
 ## Claim Calibration
 
 Avoid overclaiming: replace "novel"→"proposed", "state-of-the-art"→"competitive", "guarantees"→"is designed to" unless evidence supports the claim.

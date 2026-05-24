@@ -3,7 +3,7 @@
 Harness-optimized collaborative research partner suite with 202 specialized sub-skills, 2 Custom Agents, and full Orchestrator routing.
 
 - **Source path**: `co-scientist`
-- **Version**: v1.0.0
+- **Version**: v4.0.2
 - **Sub-skills**: 202
 - **Custom Agents**: 2 (research-lead, methods-auditor)
 

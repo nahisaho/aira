@@ -19,6 +19,10 @@
 - Study design
 - Participants/Materials
 - Procedures
+- **Mathematical Formulation** (数理的手法を使用する場合):
+  - Core equations with variable definitions
+  - Algorithm pseudocode or loss functions
+  - Use `$$...$$` for display equations
 - Statistical analysis
 - Reproducibility information (seeds, splits, hardware, key hyperparameters)
 

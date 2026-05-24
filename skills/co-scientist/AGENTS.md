@@ -1,16 +1,18 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v3.0.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.0.2 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v3.0.0
+# Co-Scientist v4.0.2
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
+
+**Global applicability**: Time budget, code quality, file hygiene, and final-response rules below apply to all sub-skills unless the user explicitly overrides them.
 
 ## Core Rules
 
@@ -23,6 +25,63 @@ Collaborative research partner with 202 specialized sub-skills. Route work to th
   - 手法が3つ以上の場合: 必ず ablation study で各手法の個別寄与を定量化
   - "unified framework" を提案する場合: フレームワークなしの単独手法ベースラインとの比較が必須
   - 各コンポーネントの必要性を実験的に示せない場合、そのコンポーネントを削除すること
+
+## Time Budget
+
+Target total runtime: **15 minutes**. If likely to exceed, downsample data, simplify computation, or inform the user before continuing.
+
+| Phase | Target |
+|-------|--------|
+| Code generation | 5 min |
+| Code execution | 5 min (lightweight sample data) |
+| Figure generation | 3 min |
+| Report writing | 3 min |
+| Paper writing | 3 min |
+
+- Use **lightweight sample data** for training, simulation, and heavy computation. Full-scale runs are the user's responsibility.
+- After **3 failed retries** of the same step, simplify the approach and proceed. Do not loop indefinitely.
+- Prefer quick representative runs that demonstrate correctness over exhaustive computation.
+
+## Code Quality Standards
+
+- **Minimum 3 modules** for non-trivial experiments. Single-file is acceptable only for genuinely simple analyses (≤500 lines) with brief justification.
+- **Import validation**: Run `python -c "import module"` for each generated module before proceeding.
+- **Docstrings**: Required for all public functions.
+- **Type hints**: Recommended.
+
+### File Hygiene
+
+- Exclude from outputs: `*.pyc`, `__pycache__/`, `.DS_Store`, `*.egg-info/`
+- Generate `.gitignore` in every project workspace with the above patterns.
+
+## Final Response Template
+
+When the experiment completes, the final chat response must follow this structure:
+
+```markdown
+## 実験完了: {title}
+
+### 主要な科学的知見
+1. {finding_1} — {quantitative_result}
+2. {finding_2} — {quantitative_result}
+3. {finding_3} — {quantitative_result}
+
+### 最重要図表
+![{caption}](figures/{filename}.png)
+
+### 生成物
+- ソースコード: {n}モジュール ({total_lines}行)
+- レポート: report.md ({report_lines}行)
+- 論文: paper.md ({paper_lines}行)
+- 図表: {n}枚
+
+### 制限事項と今後の課題
+- {limitation_1}
+- {limitation_2}
+```
+
+- Do **not** emit filler status messages ("Still running…", "Waiting for completion…").
+- Do **not** reproduce the full report in chat — summarize and reference files.
 
 ## Context Sufficiency Check
 
@@ -133,15 +192,22 @@ Deep Review は Phase 4 の後に1回だけ実施し、問題があれば1回だ
 - [ ] `report.md` に `## Limitations and Future Work` が存在し、200語以上ある。
 - [ ] `report.md` は 1,000語以上である。
 - [ ] 主要な定量結果に CI / ± / p値などの不確実性指標が含まれる。
+- [ ] `report.md` の手法セクションに LaTeX 数式（`$$...$$`）が ≥3 個含まれる（数理的手法を使用する場合。該当しない場合は "N/A" と明記）。
+- [ ] 参考文献が ≥10 件含まれる（文献調査を伴う場合。該当しない場合は理由を明記）。
+- [ ] 生成コードが ≥3 モジュールに分割されている（≤500行の単純な解析を除く）。
+- [ ] `*.pyc`, `__pycache__/` が出力に含まれていない。
 
 ## Required Output Layout
 
 ```text
 workspace/
 ├── report.md
+├── src/              # Source code (≥3 modules for non-trivial experiments)
+├── tests/            # Minimal validation tests
 ├── figures/
 ├── results/
 ├── data/
+├── .gitignore
 └── logs/
     └── process-log.jsonl
 ```
@@ -152,7 +218,7 @@ Every execution follows: PLAN → EXECUTE → VERIFY → REPORT → LOG.
 
 1. **PLAN**: define objective, constraints, and target outputs.
 2. **EXECUTE**: run the selected sub-skill pipeline and save artifacts.
-3. **VERIFY**: check the three quality gates.
+3. **VERIFY**: check all applicable quality gates.
 4. **REPORT**: write `report.md` in the user's language.
 5. **LOG**: finalize `logs/process-log.jsonl`.
 
