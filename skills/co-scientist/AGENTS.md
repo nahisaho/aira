@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v3.0.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v2.0.0
+# Co-Scientist v3.0.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -29,12 +29,12 @@ Collaborative research partner with 202 specialized sub-skills. Route work to th
 Before starting any work, assess whether the user's request provides enough context:
 
 - **Insufficient context** (research topic unclear, scope undefined, key parameters missing):
-  - Do NOT proceed with execution
-  - Output a numbered list of specific clarifying questions in the user's language
-  - End with: "上記の質問にお答えください。回答をいただければ作業を開始します。" (or equivalent in user's language)
-  - Do NOT create any files or run any tools
+  - Do NOT proceed with execution.
+  - Output a numbered list of specific clarifying questions in the user's language.
+  - End with: "上記の質問にお答えください。回答をいただければ作業を開始します。" (or equivalent in user's language).
+  - Do NOT create any files or run any tools.
 - **Sufficient context** (topic clear, scope defined, enough to begin):
-  - State any assumptions explicitly, then proceed with the appropriate sub-skill
+  - State any assumptions explicitly, then proceed with the appropriate sub-skill.
 
 ## Data Acquisition (MCP / ToolUniverse)
 
@@ -49,38 +49,38 @@ Command: `tooluniverse-smcp --compact-mode` (stdio transport, compact mode loads
 
 - Use MCP tools when available for database queries (PubMed, ChEMBL, Ensembl, UniProt, etc.).
 - Fall back to Python `requests` + public REST APIs when MCP server is unavailable.
-- Fall back to `web_search` tool (GitHub MCP) as a secondary option.
+- Fall back to `web_search` as a secondary option.
 - Each sub-skill's `tu_tools` frontmatter lists its available MCP tools.
 - Each sub-skill's "Available Tools (MCP)" section documents tool names and sources.
-- Do not enable more than 10 MCP servers simultaneously (Context Efficiency).
+- Do not enable more than 10 MCP servers simultaneously.
 - Record all tool invocations in `logs/process-log.jsonl`.
 
 ## Routing Rules
 
 ### WHEN/DO Dispatch
 
-WHEN: ユーザーが研究テーマの設定、スコープ定義、方法論選択を依頼
+WHEN: ユーザーが研究テーマの設定、スコープ定義、方法論選択を依頼  
 DO: → `co-scientist-research-planning`
 
-WHEN: ユーザーが文献調査、先行研究レビュー、システマティックレビューを依頼
+WHEN: ユーザーが文献調査、先行研究レビュー、システマティックレビューを依頼  
 DO: → `co-scientist-literature-review`
 
-WHEN: ユーザーが実験計画、サンプルサイズ、検出力分析、プロトコル設計を依頼
+WHEN: ユーザーが実験計画、サンプルサイズ、検出力分析、プロトコル設計を依頼  
 DO: → `co-scientist-experimental-design`
 
-WHEN: ユーザーがデータ分析、統計解析、可視化、結果解釈を依頼
+WHEN: ユーザーがデータ分析、統計解析、可視化、結果解釈を依頼  
 DO: → `co-scientist-data-analysis`
 
-WHEN: ユーザーが論文執筆、IMRaD構成、ジャーナル投稿準備を依頼
+WHEN: ユーザーが論文執筆、IMRaD構成、ジャーナル投稿準備を依頼  
 DO: → `co-scientist-academic-writing`
 
-WHEN: ユーザーが査読対応、リバイズ、査読コメントへの回答を依頼
+WHEN: ユーザーが査読対応、リバイズ、査読コメントへの回答を依頼  
 DO: → `co-scientist-peer-review`
 
-WHEN: ユーザーが再現性確保、データ管理、コード整備、アーカイブを依頼
+WHEN: ユーザーが再現性確保、データ管理、コード整備、アーカイブを依頼  
 DO: → `co-scientist-reproducibility`
 
-WHEN: ユーザーが学会発表、ポスター作成、プレゼン準備を依頼
+WHEN: ユーザーが学会発表、ポスター作成、プレゼン準備を依頼  
 DO: → `co-scientist-presentation`
 
 ### Task Classification
@@ -101,123 +101,38 @@ DO: → `co-scientist-presentation`
    - YES → `co-scientist-peer-review`
    - NO → `co-scientist-research-planning` で要件整理から開始
 
-### Mandatory Skill Chain
+## Research Lifecycle
 
-Results セクション執筆時は以下のスキルを順次呼び出すこと:
-1. `co-scientist-data-analysis`: 結果の算出
-2. `co-scientist-statistical-testing`: 有意差検定の実施
-3. `co-scientist-uncertainty-quantification`: 不確実性の定量化
-4. `co-scientist-academic-writing`: 上記結果を含む論文執筆
+Phase 0 → `co-scientist-research-planning`: 研究計画
 
-いかなる場合も Step 2, 3 をスキップしてはならない。
-
-### Reproducibility Artifact Propagation
-
-Phase 間で以下のアーティファクトを自動伝播すること:
-
-| 生成元 Phase | アーティファクト | 消費先 Phase |
-|-------------|----------------|-------------|
-| Phase 2 (experimental-design) | `results/seed-config.md` (シード値、分割比率) | Phase 3, 4 |
-| Phase 2 (experimental-design) | `results/ablation-variants.md` (Ablation 実験一覧) | Phase 3 |
-| Phase 2 (experimental-design) | `results/validation-plan.md` (検証戦略) | Phase 3, 4 |
-| Phase 3 (data-analysis) | `results/statistical-summary.md` (CI付き結果) | Phase 4 |
-| Phase 3 (data-analysis) | `results/ablation-results.md` (Ablation 結果) | Phase 4 |
-
-Phase 4 (academic-writing) は上記アーティファクトを読み込み、論文に反映すること。
-アーティファクトが存在しない場合は WARNING を発行し、該当セクションを "Data not available" と記載する。
-
-### Full Lifecycle Workflow
-
-Phase 0 → `co-scientist-research-planning`: 研究計画 ⏸️ ユーザー承認
-  → 🦆 `co-scientist-critical-review` (Mode: Phase Gate, Checklist: Plan)
 Phase 1 → `co-scientist-literature-review`: 文献調査
-Phase 2 → `co-scientist-experimental-design`: 実験計画 ⏸️ ユーザー承認
-  → 🦆 `co-scientist-critical-review` (Mode: Phase Gate, Checklist: Design)
-Phase 3 → `co-scientist-data-analysis` + `co-scientist-statistical-testing`: 実験実行
-  → 🦆 `co-scientist-critical-review` (Mode: Phase Gate, Checklist: Results)
+
+Phase 2 → `co-scientist-experimental-design`: 実験計画
+
+Phase 3 → `co-scientist-data-analysis`: 実行・解析
+
 Phase 4 → `co-scientist-academic-writing`: 論文執筆
-  → **Paper Quality Lint** (`co-scientist-critical-review`, Mode: Lint) ← NEW
-  → 🦆 `co-scientist-critical-review` (Mode: Deep Review) ← 最重要
-  → Closed-Loop: FAIL → Repair → Re-Review（最大2回）
-Phase 4.5 → `co-scientist-citation-checker`: 引用検証（意味的対応 + ハルシネーション検出）
-  → 🦆 `co-scientist-critical-review` (Mode: Phase Gate, Checklist: Final)
+  → 🦆 `co-scientist-critical-review` (Mode: Deep Review, 1回のみ)
+  → 問題があれば1回だけ修正して反映
+
+Phase 4.5 → `co-scientist-citation-checker`: 引用検証
+
 Phase 5 → `co-scientist-peer-review`: 査読対応
+
 Phase 6 → `co-scientist-reproducibility`: 再現性確保
-Phase 7 → `co-scientist-presentation`: 発表準備 ⏸️ ユーザー承認
 
-## Closed-Loop Review Protocol
+Phase 7 → `co-scientist-presentation`: 発表準備
 
-### Severity Classification
+### Single-Turn Execution Mode
 
-Each Review finding is classified by severity:
+単一プロンプトで全工程を依頼された場合でも、内部では上記 Phase を順に実行すること。
+Deep Review は Phase 4 の後に1回だけ実施し、問題があれば1回だけ修正すること。
 
-| Severity | 定義 | 対応 |
-|----------|------|------|
-| **Critical** | 論文の科学的妥当性を損なう欠陥 | 即座に修正。修正完了まで次フェーズ進行禁止 |
-| **Major** | 査読で reject の原因となり得る問題 | 修正を試みる。2回リトライ後は WARNING 付きで進行 |
-| **Minor** | 品質向上に寄与するが致命的ではない指摘 | コメントとして記録し、可能なら修正 |
+## Quality Gates
 
-Critical に分類される項目:
-- `## Limitations` セクションの欠如
-- 主要定量結果に CI/±/p値 が皆無
-- 合成データのみで外部検証への言及なし
-
-### PASS / FAIL / RETRY State Machine
-
-各 Phase Gate Review は以下の状態を持つ:
-
-```
-REVIEW → 全項目 PASS → PASS → 次フェーズへ
-       → Critical/Major FAIL あり → FAIL → Repair Prompt 自動発行
-                                          → 修正実行
-                                          → RETRY (再レビュー, 最大2回)
-                                          → 2回目も FAIL → WARNING 付き PASS
-```
-
-Repair Prompt テンプレート:
-- Limitations 欠如 → "Add a '## Limitations and Future Work' section covering: data limitations, methodological limitations, evaluation limitations, generalizability, and future directions. Minimum 200 words."
-- CI 欠如 → "Add 95% CI or ± std to all quantitative results in the Results section. Format: 'metric = X.XX ± σ (95% CI: [a, b])'"
-- 過大主張 → "Replace overclaiming phrases: 'novel' → 'proposed', 'state-of-the-art' → 'competitive', 'guarantees' → 'is designed to'. Only retain strong claims with statistical evidence."
-- report.md 短文 → "Expand report.md to at least 1,000 words following the Experimental Report Template."
-
-## Single-Turn Execution Mode
-
-ユーザーが単一プロンプトで研究の全工程（計画→実験→論文）を依頼した場合でも、
-内部的にPhaseを順次実行し、各Phase の Quality Gates を通過すること。
-
-### Single-Turn での Phase 実行順序
-
-1. **Planning phase** (内部): 研究計画を策定し `results/research-plan.md` に保存
-2. **Design phase** (内部): 実験設計を策定し `results/experimental-design.md` に保存
-3. **Execution phase**: データ分析/シミュレーション実施
-4. **Writing phase**: 論文執筆
-5. **Lint phase** (内部): `co-scientist-critical-review` による Paper Quality Lint
-6. **Self-review phase** (内部): `co-scientist-critical-review` による自己査読（Deep Review）
-7. **Repair phase**: Lint/Review の FAIL 項目を自動修正（Closed-Loop、最大2回）
-8. **Citation-check phase** (内部): `co-scientist-citation-checker` による引用検証
-9. **Final-review phase** (内部): `co-scientist-critical-review` による最終レビュー
-
-### Single-Turn Mode with Reviews
-
-単一ターンでも全 Review を内部的に実行する。
-ただし実行時間の制約を考慮し、以下の優先度で実施:
-
-必須 (常に実行):
-  - 🦆 Review 4: 論文レビュー（Deep Review — 最重要）
-  
-推奨 (時間が許す場合):
-  - 🦆 Review 3: 結果レビュー
-  - 🦆 Review 5: 最終レビュー
-
-省略可 (バッチ実行時):
-  - 🦆 Review 1: 計画レビュー
-  - 🦆 Review 2: 設計レビュー
-
-### 注意事項
-- Single-Turn Mode でも Quality Gates は全て適用される
-- ⏸️ ユーザー承認ポイントはスキップ可能だが、自己査読(Phase 6)はスキップ不可
-- 各 Phase の出力は個別ファイルとして保存すること（コンパクション対策）
-- 🦆 Review 4（論文レビュー）は Single-Turn Mode でもスキップ不可
+- [ ] `report.md` に `## Limitations and Future Work` が存在し、200語以上ある。
+- [ ] `report.md` は 1,000語以上である。
+- [ ] 主要な定量結果に CI / ± / p値などの不確実性指標が含まれる。
 
 ## Required Output Layout
 
@@ -233,51 +148,31 @@ workspace/
 
 ## Verification Loop
 
-Every execution follows: PLAN → EXECUTE → VERIFY → REPORT → LOG
+Every execution follows: PLAN → EXECUTE → VERIFY → REPORT → LOG.
 
-1. **PLAN**: define objective, constraints, target outputs, candidate sub-skills.
-2. **EXECUTE**: run selected pipeline, save intermediate artifacts.
-3. **VERIFY**: check outputs against quality gates.
-4. **REPORT**: write `report.md` in user's language.
+1. **PLAN**: define objective, constraints, and target outputs.
+2. **EXECUTE**: run the selected sub-skill pipeline and save artifacts.
+3. **VERIFY**: check the three quality gates.
+4. **REPORT**: write `report.md` in the user's language.
 5. **LOG**: finalize `logs/process-log.jsonl`.
-
-## Quality Gates
-
-- [ ] Sub-skill routing matches the user's actual request.
-- [ ] Figures saved to `figures/` and referenced from `report.md`.
-- [ ] Numeric outputs saved under `results/`.
-- [ ] `report.md` includes timestamp, methods, results, discussion, file inventory.
-- [ ] `logs/process-log.jsonl` records sub-skill usage, handoff I/O, files written.
-- [ ] No essential result remains chat-only.
-- [ ] 合成データのみの実験で、外部検証（実データ検証）への言及が Limitations に含まれている
-- [ ] Phase Gate Review の全 Critical 項目が PASS になっている
-- [ ] Reproducibility artifacts (seed-config, validation-plan) が Phase 2 で生成されている
-
-## Prohibited Operations
-
-- Phase をスキップしてはならない（Phase 0 → Phase 3 への直接遷移は禁止）
-- ⏸️ 承認ポイントをスキップしてはならない
-- 生データを加工せずに最終レポートに含めてはならない
-- 単一ソースのみに基づく結論を断定的に述べてはならない
 
 ## Data Handling & Confidentiality
 
 - Research data containing patient info, proprietary datasets, or unpublished results is confidential.
-- Use "[Subject A]", "[Dataset X]" placeholders. Do not include real identifiers.
-- Do not store credentials or access keys in generated files.
-- Mark draft manuscripts as "DRAFT — NOT FOR DISTRIBUTION".
+- Use placeholders such as "[Subject A]" and "[Dataset X]" instead of real identifiers.
+- Do not store credentials, tokens, or access keys in generated files.
+- Mark draft manuscripts as "DRAFT — NOT FOR DISTRIBUTION" when appropriate.
 - Cite only published or authorized sources for claims.
 
 ## Cost Efficiency Rules
 
 - Do not enable more than 10 MCP servers simultaneously.
-- Default to Python requests for API calls; use ToolUniverse MCP only when it adds material value.
+- Default to Python `requests` for API calls; use ToolUniverse MCP only when it adds material value.
 - Prefer the narrowest sub-skill. Do not load broad context.
 
 ## Gotchas
 
-- 複数 Phase にまたがるタスクでは、Phase 間の引き継ぎ情報を必ずファイルに保存すること。コンパクションで中間結果が消失する
-- `co-scientist-literature-review` と `co-scientist-research-planning` は起動条件が近い。研究テーマが未定なら planning、テーマ決定済みで先行研究を調べるなら literature-review
-- process-log.jsonl への記録を忘れると、後続 Phase でどのスキルが何を行ったか追跡不能になる
-- Closed-Loop Review は最大2回リトライ。3回以上のリトライは無限ループのリスクがあるため禁止。2回目も FAIL の場合は WARNING 付きで次フェーズに進む
-- Paper Quality Lint は Deep Review より前に実行すること。Lint で形式的欠陥を修正してから、Deep Review で内容的品質を評価する
+- 複数 Phase にまたがるタスクでは、Phase 間の引き継ぎ情報を必ずファイルに保存すること。
+- `co-scientist-literature-review` と `co-scientist-research-planning` は起動条件が近い。テーマ未定なら planning、テーマ決定済みで先行研究探索なら literature-review。
+- `logs/process-log.jsonl` への記録を忘れると、後続 Phase で追跡不能になる。
+- Deep Review は Phase 4 の後に1回だけ実施し、修正も1回だけに留めること。
