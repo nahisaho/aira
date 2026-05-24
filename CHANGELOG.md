@@ -2,6 +2,21 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.3.0] — 2026-05-24
+
+### Changed
+- **Co-Scientist スキル v5.0「引き算の改善」（v3.0.0）**: v4.0 の過剰設計を是正し v3.0 品質水準への回復を目指す
+  - **スキル総行数 60%削減**: ~2,250行 → ~900行（コンテキストウィンドウ圧迫の解消）
+  - **カスタムエージェント全削除**: research-lead, methods-auditor, statistician, data-steward, writing-coach の5体を削除
+  - **Review 5段階→1回**: Deep Review（Phase 4 後）のみ残し、問題があれば1回修正
+  - **Mandatory Skill Chain 削除**: 4スキル順次呼び出しを自然なフローに変更
+  - **テンプレート大幅削減**: Reproducibility Table, Seed Propagation, Validation Plan, Ablation Variants, Report 5セクション強制を削除
+  - **Claim Calibration 簡素化**: 8行テーブル → 1行の置換ルール
+  - **Paper Quality Lint 簡素化**: 8チェック → 3チェック（Limitations, 語数, バルク引用）
+  - **Repair Prompt 簡素化**: 6テンプレート → 1テンプレート（Limitations 補完のみ）
+  - **Quality Gates 厳選**: 各スキル3項目のみ（Limitations 200語以上, report.md 1,000語以上, 不確実性指標）
+  - **効果実証済み機能は維持**: Limitations リテラルスケルトン（100%維持）, バルク引用 Lint（2%達成）, 深さ優先原則
+
 ## [v2.2.0] — 2026-05-24
 
 ### Changed
