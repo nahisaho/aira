@@ -2,6 +2,29 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.2.0] — 2026-05-24
+
+### Changed
+- **Co-Scientist スキル v4.0 品質改善（v2.0.0）**: 3 層アプローチによる論文品質の抜本的改善
+  - **Layer 1 — プロンプト直接注入**:
+    - CI/± 必須フォーマット + few-shot 例（statistical-testing, academic-writing）
+    - Phrase blacklist を HARD CONSTRAINT に強化（advisory → 強制）
+    - Limitations リテラルスケルトン（自由記述 → 穴埋め方式）
+    - report.md 最低 1,000 語、External Validation Statement 必須化
+  - **Layer 2 — Post-processing Lint + Repair**:
+    - Paper Quality Lint（Mode 3）: 8 項目の regex ベース形式チェック（L1–L8）
+    - Repair Prompt Templates（RP-1〜RP-6）: Limitations / CI / 過大主張 / report 拡張 / 外部検証 / バルク引用分解
+    - Severity 分類: Critical（進行禁止）/ Major（修正試行）/ Minor（記録のみ）
+    - バルク引用 `[N-M]` 分解 linter + DOI-conditional metadata 戦略
+  - **Layer 3 — ワークフロー再設計**:
+    - Closed-loop review: PASS/FAIL/RETRY state machine（最大 2 回リトライ）
+    - Reproducibility artifact propagation（seed-config.md → analysis → writing）
+    - Ablation variant 自動生成 + Sensitivity analysis 必須化
+    - Multi-seed execution protocol（5+ シード + Bootstrap CI）
+
+### Added
+- **フロントエンド自動リロード**: タブ復帰時のデータ自動更新、実行完了後のメッセージ再取得、WS file_modified イベントによるファイルビューア自動更新
+
 ## [v2.1.2] — 2026-05-24
 
 ### Changed
