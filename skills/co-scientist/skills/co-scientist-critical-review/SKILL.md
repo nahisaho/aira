@@ -38,6 +38,97 @@ Systematic assessment of research quality, experimental rigor evaluation, statis
 学術査読者の視点で問題を指摘。
 結果を `results/review-paper.md` に保存。
 
+### Mode 3: Paper Quality Lint (Phase 4 → Review 4 間、自動)
+
+論文ドラフトに対する機械的な形式チェック。
+Deep Review（Mode 2）より前に実行し、形式的欠陥を先に修正する。
+結果を `results/lint-report.md` に保存。
+
+#### Lint チェック項目（Regex / Parser ベース）
+
+| # | チェック対象 | 検出方法 | 判定 |
+|---|------------|---------|------|
+| L1 | `## Limitations` ヘッダーの存在 | `^#{1,3}\s*(Limitations|Limitations and Future Work)` を検索 | Critical |
+| L2 | Limitations セクションの語数 | ヘッダー以下〜次のヘッダーまでの語数 ≥ 200 | Critical |
+| L3 | 主要数値に CI/± がある | Results セクション内の数値行に `±`, `CI`, `confidence interval`, `p\s*[<=<]` を検索 | Critical |
+| L4 | 禁止語の検出 | `novel`, `state-of-the-art`, `guarantee[sd]?`, `optimal` を検索（条件未充足時） | Major |
+| L5 | バルク引用の検出 | `\[\d+[-–]\d+\]` を検索 | Major |
+| L6 | report.md の語数 | report.md の総語数 ≥ 1,000 | Major |
+| L7 | Reproducibility Table の存在 | Methods 内に `Random seed` AND `split` を含むテーブルの存在 | Major |
+| L8 | 外部検証への言及 | 合成データの場合: `external validation`, `real-world`, `independent dataset` のいずれかが存在 | Critical |
+
+#### Lint 結果のフォーマット
+
+```text
+# Paper Quality Lint Report
+
+| # | Check | Status | Severity | Details |
+|---|-------|--------|----------|---------|
+| L1 | Limitations header | ❌ FAIL | Critical | No ## Limitations section found |
+| L2 | Limitations length | — | — | Skipped (L1 failed) |
+| L3 | CI/± in results | ✅ PASS | — | 8/12 numeric claims have CI |
+| L4 | Banned phrases | ❌ FAIL | Major | "novel" found at L.45, L.167 |
+| L5 | Bulk citations | ✅ PASS | — | No [N-M] patterns found |
+| L6 | Report word count | ❌ FAIL | Major | 743 words (minimum: 1000) |
+| L7 | Reproducibility table | ✅ PASS | — | Table found in Methods |
+| L8 | External validation | ❌ FAIL | Critical | Synthetic data, no validation mention |
+
+Critical FAILs: 3 → AUTO-REPAIR REQUIRED
+Major FAILs: 2 → REPAIR RECOMMENDED
+```
+
+## Repair Prompt Templates
+
+Lint または Deep Review で FAIL が検出された場合、以下の Repair Prompt を自動発行する。
+
+### RP-1: Limitations セクション補完
+
+> Read the current paper.md. Add a '## Limitations and Future Work' section before '## Conclusion' with the following subsections:
+> - Data Limitations: [describe data constraints]
+> - Methodological Limitations: [describe method constraints]  
+> - Evaluation Limitations: [describe evaluation constraints]
+> - Generalizability: [discuss applicability to other domains]
+> - Future Directions: [concrete improvement roadmap]
+> Minimum 200 words total. If synthetic data only, include: "External validation with independent real-world datasets is essential."
+
+### RP-2: CI/± 補完
+
+> Read the current paper.md Results section. For each quantitative result that lacks uncertainty:
+> - Add ± std from the experimental data (use 5-fold CV or bootstrap if needed)
+> - Add 95% CI where appropriate  
+> - Add statistical test results (p-value) for all comparisons
+> Format: "metric = X.XX ± σ (95% CI: [a, b], test, p = X.XX)"
+
+### RP-3: 過大主張の修正
+
+> Read the current paper.md. Find and replace overclaiming phrases:
+> - "novel" → "proposed" (unless 3+ differences from prior work are documented)
+> - "state-of-the-art" → "competitive" (unless 3+ SOTA comparisons with significance tests)
+> - "guarantees" → "is designed to" (unless mathematical proof exists)
+> - "optimal" → "effective" (unless optimality proof exists)
+> - "significant" (non-statistical) → "notable" or "substantial"
+
+### RP-4: report.md 拡張
+
+> Read the current report.md. Expand it to at least 1,000 words following the Experimental Report Template:
+> 1. 実験目的と背景 (200語以上)
+> 2. 手法・アルゴリズムの概要 (300語以上)
+> 3. 実験設計 (200語以上)
+> 4. 結果と分析 (300語以上)
+> 5. 考察と限界 (200語以上)
+> Ensure numerical consistency with paper.md.
+
+### RP-5: 外部検証言及の追加
+
+> Read the current paper.md. Add external validation statements:
+> 1. In Discussion: "While our synthetic experiments demonstrate feasibility, validation on real-world datasets is necessary to establish practical utility."
+> 2. In Limitations: "The synthetic nature of our experimental data represents a key limitation. Future work should prioritize obtaining representative real-world datasets for independent validation."
+
+### RP-6: バルク引用の分解
+
+> Read the current paper.md. Find all bulk citations [N-M] (e.g., [1-5]) and replace each with individual citations that describe each reference's specific contribution.
+> Example: [1-5] → "[1] proposed X, [2] extended this to Y, [3] demonstrated Z, [4] showed W, and [5] provided V"
+
 ### Review 結果のフォーマット
 
 | チェック項目 | 結果 | 指摘 | 修正案 |
@@ -51,6 +142,14 @@ Systematic assessment of research quality, experimental rigor evaluation, statis
 1. Review Mode の判定:
    - AGENTS.md から呼び出された場合: 指定された Mode と Checklist を使用
    - 直接呼び出された場合: 対象ファイルに基づき自動判定
+
+1.5. Severity 分類:
+   - **Critical**: 科学的妥当性に関わる欠陥（Limitations 欠如、CI 皆無、外部検証言及なし）
+   - **Major**: 査読 reject の原因となり得る問題（過大主張、バルク引用、report 短文）
+   - **Minor**: 品質向上に寄与するが致命的ではない指摘
+   
+   Critical FAIL は Closed-Loop で自動修正を試みる（最大2回リトライ）。
+   2回リトライ後も FAIL の場合は WARNING 付きで進行。
 
 2. 主張-証拠マッピング:
    - Discussion/Conclusionの各主張を抽出
@@ -162,9 +261,11 @@ Systematic assessment of research quality, experimental rigor evaluation, statis
 - [ ] 全 References が本文で引用されている
 
 発見した問題への対応:
-- 全項目を PASS/FAIL で判定
-- FAIL 項目がある場合: 具体的な修正指示を生成し、論文を修正
-- 修正後、再度 Review 4 を実行（最大2回リトライ）
+- 全項目を PASS/FAIL/severity で判定
+- **Critical FAIL**: Repair Prompt を自動発行 → 修正 → 再 Review（最大2回）
+- **Major FAIL**: Repair Prompt を発行 → 修正を試みる → 修正不能なら WARNING 付き PASS
+- **Minor FAIL**: コメントとして記録、修正は任意
+- 修正ループの状態: REVIEW → FAIL → REPAIR → RETRY → (PASS | FAIL+WARNING)
 
 ### 🦆 Review 5: 最終レビュー（Phase 4.5 → 5 間）
 
@@ -185,6 +286,7 @@ Systematic assessment of research quality, experimental rigor evaluation, statis
 - `report.md`: concise method, results, interpretation, and file inventory in the user's language.
 - `results/review-{phase}.md`: Phase Gate review results (Review 1-3, 5).
 - `results/review-paper.md`: Deep Review results (Review 4).
+- `results/lint-report.md`: Paper Quality Lint results (Mode 3).
 - `figures/`: English-only charts, diagrams, or panels when visual output is needed.
 
 ## Quality Gates
@@ -192,6 +294,9 @@ Systematic assessment of research quality, experimental rigor evaluation, statis
 - [ ] The selected review mode matches the phase and stated purpose.
 - [ ] All checklist items are evaluated as PASS or FAIL with justification.
 - [ ] FAIL items include specific, actionable modification instructions.
+- [ ] Lint Mode (Mode 3) の全 Critical 項目が PASS である
+- [ ] Critical FAIL に対する Repair Prompt が発行され、修正が試みられている
+- [ ] Repair 結果が `results/repair-log.md` に記録されている
 - [ ] Review results are saved to files and traceable.
 - [ ] `report.md` and `logs/process-log.jsonl` reference the generated artifacts.
 - [ ] No essential result remains chat-only.
@@ -201,6 +306,9 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 ## Gotchas
 
 - Phase Gate Review は機械的チェックであり、Deep Review ほど深い分析は行わない。Phase 4 後は必ず Deep Review を使用すること
+- Paper Quality Lint (Mode 3) は Deep Review (Mode 2) より前に実行すること。形式的欠陥を先に修正してから内容的品質を評価する
+- Repair Prompt は修正対象のセクションだけを書き直す。論文全体の再生成は禁止（トークン浪費防止）
+- Closed-Loop の最大リトライは2回。3回以上は無限ループのリスクがあるため禁止
 - Review 4 の修正ループは最大2回。3回目以降は WARNING 付きで完了とする
 - Citation style varies by journal (author-year vs numbered). Confirm target format before writing
 - Claims in Discussion must trace back to specific Results. Do not introduce new data in Discussion
@@ -209,9 +317,15 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 
 1. Review Mode に基づきチェックリストを選択
 2. 対象ファイルを読み込み、各チェック項目を評価
-3. 結果を PASS/FAIL で判定:
+3. Severity を分類（Critical / Major / Minor）
+4. 結果を PASS/FAIL で判定:
    - 全 PASS: 次フェーズに進行を許可
-   - FAIL あり (MINOR): 指摘をコメントとして付与し、次フェーズに進行
-   - FAIL あり (MAJOR): 修正指示を生成し、修正完了まで次フェーズに進行しない
-4. Review 結果を `results/review-*.md` に保存
-5. `logs/process-log.jsonl` に Review 実行ログを記録
+   - Critical FAIL: Repair Prompt 自動発行 → 修正 → RETRY（最大2回）
+   - Major FAIL: Repair Prompt 発行 → 修正試行 → 修正不能なら WARNING 付き PASS
+   - Minor FAIL: コメント記録、次フェーズに進行
+5. Repair 実行時:
+   - 対応する Repair Prompt Template (RP-1〜RP-6) を選択
+   - 修正を実行し、再度 Review を実行
+   - `results/repair-log.md` に修正内容と結果を記録
+6. Review 結果を `results/review-*.md` に保存
+7. `logs/process-log.jsonl` に Review 実行ログを記録

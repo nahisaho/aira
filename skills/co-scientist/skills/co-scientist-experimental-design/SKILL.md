@@ -61,6 +61,9 @@ DOE, power analysis, sample size calculation, and protocol design.
 - `results/design-matrix.csv`: experimental design matrix.
 - `results/power-analysis.md`: sample size and power calculations.
 - `results/protocol.md`: formal experimental protocol.
+- `results/seed-config.md`: reproducibility configuration (seeds, splits, hardware).
+- `results/validation-plan.md`: validation strategy with internal/external plans.
+- `results/ablation-variants.md`: ablation experiment variant list (when applicable).
 
 ## Validation Strategy Template (必須)
 
@@ -89,6 +92,37 @@ DOE, power analysis, sample size calculation, and protocol design.
 
 ## Ablation Study Design (提案手法のコンポーネント数 ≥ 2 の場合は必須)
 
+### Variant 自動生成（Phase 2 で実行）
+
+提案手法のコンポーネント数 ≥ 2 の場合、以下の手順で ablation variant を自動生成し
+`results/ablation-variants.md` に保存すること:
+
+1. 提案手法のコンポーネント一覧を列挙
+2. Leave-One-Out variant を自動生成（各コンポーネントを1つずつ除外）
+3. Baseline variant を追加（全コンポーネント除外）
+4. 各 variant の期待される実行コストを見積もる
+
+```text
+# Ablation Variants
+
+## Components
+1. Component A: [description]
+2. Component B: [description]
+3. Component C: [description]
+
+## Variants to Execute
+| Variant | A | B | C | Estimated Cost |
+|---------|---|---|---|---------------|
+| Full model | ✓ | ✓ | ✓ | baseline |
+| w/o A | ✗ | ✓ | ✓ | ~same |
+| w/o B | ✓ | ✗ | ✓ | ~same |
+| w/o C | ✓ | ✓ | ✗ | ~same |
+| Baseline | ✗ | ✗ | ✗ | lower |
+```
+
+Phase 3 (data-analysis) はこのファイルを読み込み、全 variant を実行する。
+全 variant の実行が困難な場合は、sensitivity analysis を最低ラインとして必須化する。
+
 ### 設計パターン
 
 1. **Leave-One-Out Ablation**: 
@@ -108,6 +142,81 @@ DOE, power analysis, sample size calculation, and protocol design.
    | w/o C | ✓ | ✓ | ✗ | X.XX ± σ |
    | Baseline | ✗ | ✗ | ✗ | X.XX ± σ |
 
+## Seed Propagation (必須)
+
+実験設計時に以下の再現性情報を `results/seed-config.md` に保存し、後続フェーズに伝播すること:
+
+```text
+# Seed Configuration
+
+## Random Seeds
+seeds: [42, 123, 456, 789, 1024]
+
+## Data Split
+train_ratio: 0.8
+val_ratio: 0.1
+test_ratio: 0.1
+
+## Hardware Target
+device: [e.g., GPU / CPU]
+framework: [e.g., PyTorch 2.1]
+
+## Key Hyperparameters
+| Parameter | Value | Search Range |
+|-----------|-------|-------------|
+| learning_rate | 1e-3 | [1e-4, 1e-2] |
+| batch_size | 32 | [16, 64] |
+| [add more] | ... | ... |
+```
+
+このファイルは Phase 3 (data-analysis) と Phase 4 (academic-writing) で読み込まれ、
+Methods セクションの Reproducibility Table に反映される。
+
+## Validation Plan (必須 — `results/validation-plan.md` に保存)
+
+実験設計時に以下の検証計画を策定し保存すること。
+空欄のまま Phase 3 に進行した場合、Review 2 で FAIL となる。
+
+```text
+# Validation Plan
+
+## Internal Validation (必須)
+| Method | Configuration | Status |
+|--------|--------------|--------|
+| k-fold CV | k=5, stratified | Planned |
+| Bootstrap CI | n=1000 resamples | Planned |
+| Multi-seed | 5 seeds (see seed-config.md) | Planned |
+
+## Robustness Validation (推奨)
+| Method | Configuration | Status |
+|--------|--------------|--------|
+| Ablation study | See ablation-variants.md | Planned/N.A. |
+| Sensitivity analysis | ±10% parameter perturbation | Planned |
+| Learning curve | 20%, 40%, 60%, 80%, 100% data | Planned |
+
+## External Validation (合成データのみの場合は計画必須)
+| Dataset | Domain | Availability | Status |
+|---------|--------|-------------|--------|
+| [dataset name] | [domain] | [public/private/future] | Planned |
+| — | — | — | N.A. (synthetic only — note in Limitations) |
+```
+
+**重要**: External Validation の行が全て N.A. の場合:
+- Limitations に「External validation with real-world data is needed」を必須記載
+- Discussion に外部検証の必要性を議論する段落を追加
+
+## Sensitivity Analysis (Ablation 不可時の最低ライン)
+
+完全な ablation study が実行困難な場合（コンポーネントの分離が不可能、計算コストが過大等）、
+以下の sensitivity analysis を最低ラインとして必須化する:
+
+1. **パラメータ感度**: 主要ハイパーパラメータを ±10%, ±20% 変動させた結果
+2. **データ感度**: データサイズを 20%, 40%, 60%, 80%, 100% で変化させた学習曲線
+3. **シード感度**: 5+シードでの結果の分散
+
+`results/sensitivity-analysis.md` に結果を保存すること。
+ablation も sensitivity analysis も実施しない場合、Review で Critical FAIL となる。
+
 ## Quality Gates
 
 - [ ] Design type matches the research question and constraints.
@@ -119,6 +228,10 @@ DOE, power analysis, sample size calculation, and protocol design.
 - [ ] **Ablation の各行に不確実性指標 (±σ) が付与されている**
 - [ ] **コンポーネントの寄与が Discussion で議論されている**
 - [ ] **検証戦略 (Tier 1-3) が明示されている**
+- [ ] **`results/seed-config.md` が生成されている**（シード値、分割比率が空欄でない）
+- [ ] **`results/validation-plan.md` が生成されている**（Internal Validation が最低1行）
+- [ ] **合成データのみの場合: External Validation 行に「Limitations に記載」の注記がある**
+- [ ] **2+コンポーネント: `results/ablation-variants.md` が生成されている OR sensitivity analysis が計画されている**
 
 If any gate fails: identify the specific failing check, fix the issue, and re-validate before proceeding.
 
@@ -130,6 +243,9 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 - サンプルサイズが小さすぎる場合は、効果量の再検討を促すこと（「データが足りない」ではなく「検出したい差を明確に」）
 - **提案手法が3つ以上のコンポーネントを含む場合、ablation study を必須とすること**。各コンポーネントを1つずつ除外した実験で、全コンポーネントの寄与を検証する
 - **「統合」が目的化していないか確認すること**。統合することで性能が向上する実験的証拠がなければ、最も性能の高い単一手法を推奨する
+- `results/seed-config.md` のシード値は Phase 3, 4 で自動参照される。ここで定義しないと Phase 4 の Reproducibility Table が空欄になり Review FAIL となる
+- 完全な ablation が困難でも sensitivity analysis は必須。何も実施しない場合は Critical FAIL
+- Validation Plan の External Validation が全て N.A. でも FAIL にはならないが、Limitations への記載が必須となる
 
 ## Validation Loop
 

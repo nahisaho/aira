@@ -73,6 +73,87 @@ Citation checking skill. Reference validation, DOI verification, retraction dete
 
 8. Append citation check results to `logs/process-log.jsonl`.
 
+## Bulk Citation Linter
+
+### 検出対象
+
+バルク引用パターン `[N-M]`（例: `[1-5]`, `[3–7]`）を検出し、個別引用に分解する。
+
+### 検出 Regex
+
+```text
+\[(\d+)\s*[-–]\s*(\d+)\]
+```
+
+### 分解ルール
+
+1. バルク引用を検出
+2. 各引用番号に対応する参考文献を特定
+3. 各文献の具体的貢献を1文で記述
+4. 個別引用に置換
+
+### 例
+
+**Before（❌ バルク引用）**:
+> Several studies [1-5] have explored deep learning for drug discovery.
+
+**After（✅ 個別引用）**:
+> Smith et al. [1] introduced graph neural networks for molecular property prediction, 
+> while Jones et al. [2] extended this to multi-task learning. Chen et al. [3] proposed 
+> attention-based mechanisms for compound-protein interaction, Lee et al. [4] demonstrated 
+> transfer learning from large chemical databases, and Park et al. [5] provided a 
+> comprehensive benchmark of molecular representation methods.
+
+### 処理フロー
+
+1. paper.md 内の全バルク引用を検出
+2. 各引用の文脈を分析（Introduction, Methods, Discussion のどこで使われているか）
+3. 該当する参考文献の主要貢献を特定
+4. 個別引用への置換候補を生成
+5. 置換結果を `results/citation-report.md` に記録
+
+## DOI-Conditional Metadata Strategy
+
+参考文献の書誌メタデータは、DOI の有無に基づいて詳細度を変える:
+
+### DOI が取得できた場合（Full Metadata）
+
+Crossref API から正確なメタデータを取得し、以下を全て記載:
+```text
+[N] Authors. "Title." *Journal*, vol. X, no. Y, pp. A-B, Year. DOI: https://doi.org/...
+```
+
+### DOI が取得できなかった場合（Minimal Metadata）
+
+巻号・ページ番号を**推測して記載しない**。以下の最小情報のみ記載:
+```text
+[N] Authors. "Title." Year. [DOI not available]
+```
+
+### DOI 検索フロー
+
+```text
+1. タイトルで Crossref API 検索
+   → 一致 → DOI + Full Metadata を採用
+   → 不一致 → Step 2 へ
+
+2. Semantic Scholar API でフォールバック検索
+   → 一致 → DOI + Full Metadata を採用  
+   → 不一致 → Step 3 へ
+
+3. Minimal Metadata で記載 + ⚠️ マーク
+```
+
+### 検証レポート
+
+`results/citation-report.md` に以下を追記:
+
+| # | Reference | DOI Status | Metadata Level | Notes |
+|---|-----------|-----------|---------------|-------|
+| [1] | Smith et al. 2020 | ✅ Verified | Full | Crossref match |
+| [2] | Jones et al. 2019 | ✅ Verified | Full | Semantic Scholar match |
+| [3] | Chen et al. 2021 | ❌ Not found | Minimal | Title mismatch |
+
 ## Deliverables
 
 - `report.md`: concise method, results, interpretation, and file inventory in the user's language.
@@ -99,6 +180,9 @@ Citation checking skill. Reference validation, DOI verification, retraction dete
 - [ ] 検証不能率が 20% 以下である
 - [ ] DOI が付与可能な全参考文献に DOI が付与されている
 - [ ] 書誌メタデータ（著者名、年、巻号）が正規化されている
+- [ ] **バルク引用 [N-M] が全て個別引用に分解されている**
+- [ ] **DOI 付与率が 70% 以上である（検証可能な参考文献のうち）**
+- [ ] **DOI が取得できない参考文献は Minimal Metadata で記載されている（巻号推測なし）**
 - [ ] Outputs are reproducible, saved to files, and traceable from inputs to conclusions
 - [ ] `report.md` and `logs/process-log.jsonl` reference the generated artifacts
 - [ ] No essential result remains chat-only
@@ -111,6 +195,9 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 - Claims in Discussion must trace back to specific Results. Do not introduce new data in Discussion
 - Supplementary materials must be self-contained with their own figure/table numbering
 - **DOI が不明な場合は巻号・ページ番号を省略し、タイトルと著者のみ記載すること。不正確なメタデータを推測して記載するより、省略する方が望ましい**
+- **バルク引用 [N-M] は査読で指摘される典型的な問題。各文献の個別の貢献を明記すること**
+- **DOI が見つからない場合、巻号やページ番号を推測して記載してはならない。不正確なメタデータは省略より悪い**
+- **Crossref API 検索は完全一致でなくても関連性スコアで判定する。スコアが低い場合は手動確認を推奨すること**
 - **Crossref API はレート制限あり（polite pool: mailto ヘッダー付きで50req/s）。バッチ処理時は適切な間隔を設けること**
 
 ## Validation Loop

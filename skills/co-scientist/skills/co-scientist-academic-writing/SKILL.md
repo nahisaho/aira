@@ -69,13 +69,30 @@ Research paper drafting, journal formatting, and citation management.
 
 ### Limitations and Future Work セクションの要件
 
-以下の5カテゴリから該当するものを全て記述すること（最低3カテゴリ、200語以上）:
+**リテラルスケルトン方式**: LLM は以下のテンプレートの `[...]` 部分のみを自由記述する。
+見出し構造の省略は禁止。各カテゴリ最低1段落。全体で 200語以上。
 
-1. **データの限界**: 合成データのみ、サンプルサイズ、バイアス、ドメイン制約
-2. **手法の限界**: 仮定の妥当性、スケーラビリティ、計算コスト
-3. **評価の限界**: 評価指標の選択、ベースライン数、外部検証の有無
-4. **一般化可能性**: 他のドメイン/データセットへの適用可能性
-5. **今後の研究方向**: 具体的な改善策とそのロードマップ
+```text
+## Limitations and Future Work
+
+### Data Limitations
+[合成データのみか実データか。サンプルサイズ。既知のバイアス。ドメイン制約を記述]
+
+### Methodological Limitations  
+[仮定の妥当性。スケーラビリティ。計算コスト。手法固有の制約を記述]
+
+### Evaluation Limitations
+[評価指標の選択根拠と限界。ベースライン数。外部検証の有無を記述]
+
+### Generalizability
+[他のドメイン/データセットへの適用可能性。ドメインシフトの影響を記述]
+
+### Future Directions
+[具体的な改善策。短期（6ヶ月）と長期（1-2年）のロードマップを記述]
+```
+
+**合成データのみの場合の必須文**: 以下の文を Evaluation Limitations に必ず含めること:
+> "External validation with independent real-world datasets is essential to confirm the generalizability of these findings beyond simulated conditions."
 
 ## Deliverables
 
@@ -113,11 +130,41 @@ Research paper drafting, journal formatting, and citation management.
 
 このゲートを通過しない論文は完成とみなさない。
 
+### 結果報告の Few-Shot 例（CI/± 必須フォーマット）
+
+Results セクションの数値報告は以下の形式に従うこと:
+
+**良い例（参照すべき書き方）**:
+- "The proposed method achieved an accuracy of 0.934 ± 0.018 (95% CI: [0.916, 0.952], 5-fold CV, n=2000)."
+- "Compared to the baseline (AUC = 0.812 ± 0.025), our approach yielded a significantly higher AUC of 0.879 ± 0.021 (paired t-test, p = 0.003, Cohen's d = 0.67)."
+- "RMSE decreased from 2.45 ± 0.31 to 1.87 ± 0.22 (Wilcoxon signed-rank test, p < 0.01), representing a 23.7% improvement."
+
+**悪い例（禁止される書き方）**:
+- ❌ "accuracy was 0.93" → CI/± なし
+- ❌ "AUC of 0.87" → 区間なし
+- ❌ "our method outperforms the baseline" → 統計検定なし
+- ❌ "RMSE decreased by 15%" → 絶対値と不確実性なし
+
 ### Limitations チェック
 
 - [ ] **Limitations and Future Work セクションが存在し、200語以上である**
 - [ ] **合成データのみの場合: 「実データでの検証が必要」が明記されている**
 - [ ] **単一ベンチマークの場合: 一般化可能性の限界が議論されている**
+
+### 外部検証チェック (External Validation Gate)
+
+- [ ] **合成データのみの場合: Discussion AND Limitations に外部検証への言及がある**
+- [ ] **External Validation Statement が挿入されている（上記パターン A or B）**
+
+### Reproducibility Table チェック
+
+- [ ] **Methods セクションに Reproducibility Table が存在する**
+- [ ] **Random seed(s), Train/Val/Test split が空欄でない**
+
+### Report 品質チェック
+
+- [ ] **report.md が 1,000語以上である**
+- [ ] **paper.md と report.md の主要数値が一致している**
 
 ## Quality Gates
 
@@ -151,6 +198,23 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 - [ ] データの利用可能性に関する記述がある
 - [ ] 主要な前処理ステップが記載されている
 
+### Reproducibility Table Template (Methods セクションに必ず含めること)
+
+| Parameter | Value |
+|-----------|-------|
+| Random seed(s) | [e.g., 42, 123, 456, 789, 1024] |
+| Train/Val/Test split | [e.g., 80/10/10] |
+| Hardware | [e.g., NVIDIA A100 40GB × 1] |
+| Training time | [e.g., 2.5 hours] |
+| Framework | [e.g., PyTorch 2.1, scikit-learn 1.3] |
+| Learning rate | [e.g., 1e-3 with cosine annealing] |
+| Batch size | [e.g., 32] |
+| Optimizer | [e.g., AdamW (β₁=0.9, β₂=0.999)] |
+| Key hyperparameters | [model-specific parameters] |
+
+このテーブルが Methods セクションに存在しない場合、Quality Gate FAIL とする。
+`results/seed-config.md` が experimental-design Phase で生成されている場合、そこからシード値を読み込むこと。
+
 ## Experimental Report Template (report.md)
 
 ### 必須セクション
@@ -178,9 +242,10 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
    - 改善の方向性
 
 ### 品質基準
-- 最低語数: 1,200 語
+- 最低語数: 1,000 語（HARD MINIMUM — 未満の場合は自動再生成対象）
 - 定量的結果を含むこと（数値・表・図のいずれか）
 - paper.md と内容が整合していること
+- paper.md と report.md の主要数値（精度、効果量、p値等）が一致していること（数値整合性チェック）
 
 ## Gotchas
 
@@ -192,7 +257,7 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 
 ## Claim Calibration — Automated Filter
 
-### Phase 1: 禁止語スキャン（論文完成直後に自動実行）
+### Phase 1: 禁止語スキャン（論文完成直後に自動実行 — HARD CONSTRAINT）
 
 以下の表現が検出された場合、条件を満たさない限り自動的に代替表現へ置換:
 
@@ -206,6 +271,9 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 | "superior" | 統計検定で有意差確認済み | "competitive with" |
 | "optimal" | 最適性の証明あり | "effective" or "well-performing" |
 | "solves the problem" | 全ケースで検証していない場合 | "addresses" / "mitigates" |
+
+**これは HARD CONSTRAINT である**: 条件を満たさない限り、上記の表現は最終版に残してはならない。
+Critical Review (Lint) で検出された場合、自動的に Repair Prompt が発行される。
 
 ### Phase 2: 主張-証拠整合性チェック
 
@@ -222,6 +290,18 @@ Discussion/Conclusion の各文を以下で分類:
 | Moderate claim | 3+データセット + 有意差あり | "consistently outperforms baselines" |
 | Weak claim | 1-2データセット OR 合成データのみ | "shows promise" / "preliminary results suggest" |
 | Observation | 統計検定なし | "we observe that" / "results indicate" |
+
+## External Validation Statement (合成データのみの場合は必須)
+
+合成データのみで実験を行った場合、Discussion の末尾に以下のいずれかの定型文を挿入すること:
+
+**パターン A（実データが利用可能な分野）**:
+> "While our synthetic experiments demonstrate the feasibility of the proposed approach, validation on real-world datasets such as [specific datasets] is necessary to establish clinical/practical utility."
+
+**パターン B（実データが利用困難な分野）**:
+> "The synthetic nature of our experimental data represents a key limitation. Future work should prioritize collaboration with domain experts to obtain representative real-world datasets for independent validation."
+
+この定型文は Discussion/Conclusion 内 AND Limitations 内の両方に、適切な形で含めること。
 
 ## 参考文献生成ルール
 

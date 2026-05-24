@@ -8,7 +8,7 @@ description: |
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v1.1.0
+# Co-Scientist v2.0.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -111,6 +111,21 @@ Results セクション執筆時は以下のスキルを順次呼び出すこと
 
 いかなる場合も Step 2, 3 をスキップしてはならない。
 
+### Reproducibility Artifact Propagation
+
+Phase 間で以下のアーティファクトを自動伝播すること:
+
+| 生成元 Phase | アーティファクト | 消費先 Phase |
+|-------------|----------------|-------------|
+| Phase 2 (experimental-design) | `results/seed-config.md` (シード値、分割比率) | Phase 3, 4 |
+| Phase 2 (experimental-design) | `results/ablation-variants.md` (Ablation 実験一覧) | Phase 3 |
+| Phase 2 (experimental-design) | `results/validation-plan.md` (検証戦略) | Phase 3, 4 |
+| Phase 3 (data-analysis) | `results/statistical-summary.md` (CI付き結果) | Phase 4 |
+| Phase 3 (data-analysis) | `results/ablation-results.md` (Ablation 結果) | Phase 4 |
+
+Phase 4 (academic-writing) は上記アーティファクトを読み込み、論文に反映すること。
+アーティファクトが存在しない場合は WARNING を発行し、該当セクションを "Data not available" と記載する。
+
 ### Full Lifecycle Workflow
 
 Phase 0 → `co-scientist-research-planning`: 研究計画 ⏸️ ユーザー承認
@@ -121,13 +136,49 @@ Phase 2 → `co-scientist-experimental-design`: 実験計画 ⏸️ ユーザー
 Phase 3 → `co-scientist-data-analysis` + `co-scientist-statistical-testing`: 実験実行
   → 🦆 `co-scientist-critical-review` (Mode: Phase Gate, Checklist: Results)
 Phase 4 → `co-scientist-academic-writing`: 論文執筆
+  → **Paper Quality Lint** (`co-scientist-critical-review`, Mode: Lint) ← NEW
   → 🦆 `co-scientist-critical-review` (Mode: Deep Review) ← 最重要
-  → 修正ループ（最大2回）
+  → Closed-Loop: FAIL → Repair → Re-Review（最大2回）
 Phase 4.5 → `co-scientist-citation-checker`: 引用検証（意味的対応 + ハルシネーション検出）
   → 🦆 `co-scientist-critical-review` (Mode: Phase Gate, Checklist: Final)
 Phase 5 → `co-scientist-peer-review`: 査読対応
 Phase 6 → `co-scientist-reproducibility`: 再現性確保
 Phase 7 → `co-scientist-presentation`: 発表準備 ⏸️ ユーザー承認
+
+## Closed-Loop Review Protocol
+
+### Severity Classification
+
+Each Review finding is classified by severity:
+
+| Severity | 定義 | 対応 |
+|----------|------|------|
+| **Critical** | 論文の科学的妥当性を損なう欠陥 | 即座に修正。修正完了まで次フェーズ進行禁止 |
+| **Major** | 査読で reject の原因となり得る問題 | 修正を試みる。2回リトライ後は WARNING 付きで進行 |
+| **Minor** | 品質向上に寄与するが致命的ではない指摘 | コメントとして記録し、可能なら修正 |
+
+Critical に分類される項目:
+- `## Limitations` セクションの欠如
+- 主要定量結果に CI/±/p値 が皆無
+- 合成データのみで外部検証への言及なし
+
+### PASS / FAIL / RETRY State Machine
+
+各 Phase Gate Review は以下の状態を持つ:
+
+```
+REVIEW → 全項目 PASS → PASS → 次フェーズへ
+       → Critical/Major FAIL あり → FAIL → Repair Prompt 自動発行
+                                          → 修正実行
+                                          → RETRY (再レビュー, 最大2回)
+                                          → 2回目も FAIL → WARNING 付き PASS
+```
+
+Repair Prompt テンプレート:
+- Limitations 欠如 → "Add a '## Limitations and Future Work' section covering: data limitations, methodological limitations, evaluation limitations, generalizability, and future directions. Minimum 200 words."
+- CI 欠如 → "Add 95% CI or ± std to all quantitative results in the Results section. Format: 'metric = X.XX ± σ (95% CI: [a, b])'"
+- 過大主張 → "Replace overclaiming phrases: 'novel' → 'proposed', 'state-of-the-art' → 'competitive', 'guarantees' → 'is designed to'. Only retain strong claims with statistical evidence."
+- report.md 短文 → "Expand report.md to at least 1,000 words following the Experimental Report Template."
 
 ## Single-Turn Execution Mode
 
@@ -140,10 +191,11 @@ Phase 7 → `co-scientist-presentation`: 発表準備 ⏸️ ユーザー承認
 2. **Design phase** (内部): 実験設計を策定し `results/experimental-design.md` に保存
 3. **Execution phase**: データ分析/シミュレーション実施
 4. **Writing phase**: 論文執筆
-5. **Self-review phase** (内部): `co-scientist-critical-review` による自己査読（Deep Review）
-6. **Revision phase**: 自己査読の指摘に基づく修正（最大2回リトライ）
-7. **Citation-check phase** (内部): `co-scientist-citation-checker` による引用検証
-8. **Final-review phase** (内部): `co-scientist-critical-review` による最終レビュー
+5. **Lint phase** (内部): `co-scientist-critical-review` による Paper Quality Lint
+6. **Self-review phase** (内部): `co-scientist-critical-review` による自己査読（Deep Review）
+7. **Repair phase**: Lint/Review の FAIL 項目を自動修正（Closed-Loop、最大2回）
+8. **Citation-check phase** (内部): `co-scientist-citation-checker` による引用検証
+9. **Final-review phase** (内部): `co-scientist-critical-review` による最終レビュー
 
 ### Single-Turn Mode with Reviews
 
@@ -163,7 +215,7 @@ Phase 7 → `co-scientist-presentation`: 発表準備 ⏸️ ユーザー承認
 
 ### 注意事項
 - Single-Turn Mode でも Quality Gates は全て適用される
-- ⏸️ ユーザー承認ポイントはスキップ可能だが、自己査読(Phase 5)はスキップ不可
+- ⏸️ ユーザー承認ポイントはスキップ可能だが、自己査読(Phase 6)はスキップ不可
 - 各 Phase の出力は個別ファイルとして保存すること（コンパクション対策）
 - 🦆 Review 4（論文レビュー）は Single-Turn Mode でもスキップ不可
 
@@ -197,6 +249,9 @@ Every execution follows: PLAN → EXECUTE → VERIFY → REPORT → LOG
 - [ ] `report.md` includes timestamp, methods, results, discussion, file inventory.
 - [ ] `logs/process-log.jsonl` records sub-skill usage, handoff I/O, files written.
 - [ ] No essential result remains chat-only.
+- [ ] 合成データのみの実験で、外部検証（実データ検証）への言及が Limitations に含まれている
+- [ ] Phase Gate Review の全 Critical 項目が PASS になっている
+- [ ] Reproducibility artifacts (seed-config, validation-plan) が Phase 2 で生成されている
 
 ## Prohibited Operations
 
@@ -224,3 +279,5 @@ Every execution follows: PLAN → EXECUTE → VERIFY → REPORT → LOG
 - 複数 Phase にまたがるタスクでは、Phase 間の引き継ぎ情報を必ずファイルに保存すること。コンパクションで中間結果が消失する
 - `co-scientist-literature-review` と `co-scientist-research-planning` は起動条件が近い。研究テーマが未定なら planning、テーマ決定済みで先行研究を調べるなら literature-review
 - process-log.jsonl への記録を忘れると、後続 Phase でどのスキルが何を行ったか追跡不能になる
+- Closed-Loop Review は最大2回リトライ。3回以上のリトライは無限ループのリスクがあるため禁止。2回目も FAIL の場合は WARNING 付きで次フェーズに進む
+- Paper Quality Lint は Deep Review より前に実行すること。Lint で形式的欠陥を修正してから、Deep Review で内容的品質を評価する
