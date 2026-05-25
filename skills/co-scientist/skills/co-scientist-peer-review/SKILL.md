@@ -80,18 +80,18 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 
 ## Gotchas
 
-- 査読者のコメントに反論する場合も、まず感謝を述べてから根拠を示すこと。攻撃的な応答はリジェクトにつながる
-- 「修正しました」だけでは不十分。何をどう修正したか具体的に記述すること
-- 査読者間で矛盾するコメントがある場合は、両者に対して整合的な対応方針を提示すること
-- 大幅な追加実験・分析を要求された場合は、フィジビリティを確認してからコミットすること
+- Even when rebutting reviewer comments, first express appreciation and then present evidence. Aggressive responses can lead to rejection
+- "We revised it" alone is insufficient. Describe specifically what was changed and how
+- If there are conflicting comments between reviewers, present a response strategy that is consistent for both
+- If major additional experiments or analyses are requested, confirm feasibility before committing
 
 ## Validation Loop
 
-1. レスポンスレターを生成
-2. チェック:
-   - 全コメントに個別回答があるか
-   - 各回答に具体的な修正内容が含まれるか
-   - 原稿の修正箇所が明示されているか（セクション/行番号）
-   - 矛盾する対応がないか
-3. 不合格なら修正
-4. 合格後のみ投稿
+1. Generate the response letter
+2. Check:
+   - Is there an individual response to every comment?
+   - Does each response include specific changes made?
+   - Are manuscript changes identified (section/line numbers)?
+   - Are there no contradictory responses?
+3. Revise if it fails
+4. Submit only after passing

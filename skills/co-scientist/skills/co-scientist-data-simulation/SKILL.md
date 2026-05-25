@@ -45,11 +45,11 @@ Data simulation skill. Synthetic data generation, Monte Carlo simulation, bootst
 - [ ] Missing data, uncertainty, bias, and hard limits are made explicit.
 - [ ] `report.md` and `logs/process-log.jsonl` reference the generated artifacts.
 - [ ] No essential result remains chat-only.
-- [ ] **合成データ生成の仮定（分布、パラメータ）が明示されている**
-- [ ] **実データとの既知の乖離点が列挙されている**
-- [ ] **「合成→実」転移のための検証計画が記載されている**
-- [ ] **"validates the approach" ではなく "demonstrates feasibility under simulated conditions" が使用されている**
-- [ ] **合成データのパラメータが実世界の統計量に基づくことが参考文献付きで示されている**
+- [ ] **Assumptions for synthetic data generation (distributions, parameters) are explicitly stated**
+- [ ] **Known points of divergence from real data are enumerated**
+- [ ] **A validation plan for synthetic-to-real transfer is documented**
+- [ ] **"demonstrates feasibility under simulated conditions" is used instead of "validates the approach"**
+- [ ] **It is shown, with references, that synthetic data parameters are based on real-world statistics**
 
 If any gate fails: identify the specific failing check, fix the issue, and re-validate before proceeding.
 
@@ -58,12 +58,12 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 - Statistical assumptions (normality, independence, homoscedasticity) must be tested before parametric methods
 - Multiple testing correction is required when running 3+ tests. Use Bonferroni or FDR as appropriate
 - Missing data mechanisms (MCAR, MAR, MNAR) must be assessed before choosing imputation strategy
-- **合成データでの好結果は「手法の正当性の必要条件」であり「十分条件」ではない。report.md に必ず以下を明記すること:**
-  1. データ生成の仮定（分布、パラメータ）
-  2. 実データとの既知の乖離点
-  3. 実データ検証の推奨ステップ
-- **合成データのパラメータが実世界の統計量に基づくことを示すこと**（例: "平均値と分散は [Reference] の報告値に基づく"）
-- **シミュレーション結果のみで "validates the approach" と主張してはならない。"demonstrates feasibility under simulated conditions" が適切**
+- **Strong results on synthetic data are a necessary but not sufficient condition for method validity. `report.md` must explicitly state the following:**
+  1. Assumptions of data generation (distributions, parameters)
+  2. Known points of divergence from real data
+  3. Recommended steps for real-data validation
+- **Show that synthetic data parameters are based on real-world statistics** (e.g., "The mean and variance are based on values reported in [Reference]")
+- **Do not claim "validates the approach" based only on simulation results. "demonstrates feasibility under simulated conditions" is appropriate**
 
 ## Validation Loop
 

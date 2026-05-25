@@ -57,18 +57,18 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 
 ## Gotchas
 
-- 学会発表では「全部の結果を見せたい」衝動を抑えること。ストーリーに必要な結果だけを選択する
-- ポスターは 1.5m 離れた距離から読めるフォントサイズ（タイトル: 72pt以上、本文: 24pt以上）を指定すること
-- 日本語発表でも図表は英語で作成すること。国際学会で再利用できる
-- 発表時間は持ち時間の 80% を目標にすること。質疑と技術トラブルのバッファが必要
+- Resist the urge to show every result in a conference presentation. Select only the results needed for the story
+- For posters, specify font sizes readable from 1.5 m away (title: at least 72 pt, body: at least 24 pt)
+- Even for Japanese presentations, create figures in English. They can be reused for international conferences
+- Target 80% of the allotted time for the presentation. A buffer is needed for Q&A and technical issues
 
 ## Validation Loop
 
-1. プレゼン資料を生成
-2. チェック:
-   - キーメッセージが 1 文で述べられるか
-   - スライド枚数 × 平均時間 ≤ 持ち時間の 80% か
-   - 1 スライド 1 アイデアの原則を守っているか
-   - 図が高コントラスト・colorblind-friendly か
-3. 不合格なら構成を見直し
-4. 合格後にスピーカーノートを確定
+1. Generate the presentation materials
+2. Check:
+   - Can the key message be stated in one sentence?
+   - Is slide count × average time ≤ 80% of the allotted time?
+   - Does it follow the one-slide-one-idea principle?
+   - Are figures high-contrast and colorblind-friendly?
+3. If it fails, revise the structure
+4. Finalize the speaker notes only after passing

@@ -35,19 +35,19 @@ Phase 7: Presentation          → co-scientist-presentation
 Cross-cutting: Learning Capture → co-scientist-learning-capture
 ```
 
-## ディレクトリ構成（デプロイ時）
+## Directory Structure (Deployment)
 
 ```
 <project-folder>/.github/
-├── AGENTS.md              ← co-scientist/AGENTS.md をコピー
-├── copilot-instructions.md ← co-scientist/copilot-instructions.md をコピー
-├── agents/                ← co-scientist/agents/ をコピー
+├── AGENTS.md              ← copy co-scientist/AGENTS.md
+├── copilot-instructions.md ← copy co-scientist/copilot-instructions.md
+├── agents/                ← copy co-scientist/agents/
 │   ├── research-lead.md
 │   ├── methods-auditor.md
 │   ├── statistician.md
 │   ├── data-steward.md
 │   └── writing-coach.md
-└── skills/                ← co-scientist/skills/ をコピー
+└── skills/                ← copy co-scientist/skills/
     ├── co-scientist-research-planning/SKILL.md
     ├── co-scientist-literature-review/SKILL.md
     └── ...（202 sub-skills）

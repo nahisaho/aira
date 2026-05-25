@@ -41,7 +41,7 @@ Research learnings, methodological insights, and Gotchas maintenance.
 
 5. Record in `logs/learnings-log.jsonl`:
    ```json
-   {"timestamp":"...","skill":"co-scientist-data-analysis","learning":"多重比較でBonferroni補正を忘れた","action":"Gotchas追記","severity":"high"}
+   {"timestamp":"...","skill":"co-scientist-data-analysis","learning":"Forgot Bonferroni correction for multiple comparisons","action":"Added to Gotchas","severity":"high"}
    ```
 
 ## Deliverables
@@ -60,17 +60,17 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 
 ## Gotchas
 
-- 学びの記録は「ミス発生直後」に行うこと。時間が経つと詳細を忘れる
-- 汎用的な助言（「テストを書こう」）は価値が低い。プロジェクト固有の具体的な知見を書くこと
-- Gotchas が 10 項目を超えたら、カテゴリ分けを検討すること
-- 同じ学びを複数スキルに重複記載しないこと。最も関連性の高い 1 箇所に書く
+- Record learnings immediately after a mistake occurs. Details fade over time
+- Generic advice ("write tests") has low value. Write project-specific concrete insights
+- If Gotchas exceeds 10 items, consider categorizing them
+- Do not duplicate the same learning across multiple skills. Write it in the single most relevant place
 
 ## Validation Loop
 
-1. Gotcha エントリを生成
-2. チェック:
-   - 具体的なコマンド・設定値・閾値が含まれるか
-   - 既存 Gotchas と重複していないか
-   - 追記後のスキルが 500 行以内か
-3. 不合格なら修正
-4. 合格後に追記実行
+1. Generate the gotcha entry
+2. Check:
+   - Does it include specific commands, settings, or thresholds?
+   - Does it duplicate existing Gotchas?
+   - Does the skill remain within 500 lines after the addition?
+3. If it fails, revise it
+4. Append only after passing

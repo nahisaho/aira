@@ -25,25 +25,25 @@ Uncertainty quantification skill. Aleatory/epistemic uncertainty estimation, ens
 
 ## Workflow
 
-1. 不確実性の種類を特定:
-   - Aleatoric（データ固有のノイズ）→ データ拡張、ノイズモデリング
-   - Epistemic（モデルの知識不足）→ アンサンブル、MC Dropout、ベイズ推論
-   - 両方 → Conformal Prediction（分布フリー）
+1. Identify the type of uncertainty:
+   - Aleatoric (data-inherent noise) → data augmentation, noise modeling
+   - Epistemic (model knowledge gaps) → ensembles, MC Dropout, Bayesian inference
+   - Both → Conformal Prediction (distribution-free)
 
-2. 定量化手法を選択:
-   - 分類: 予測確率の校正（Platt Scaling, Temperature Scaling）
-   - 回帰: 予測区間（Quantile Regression, Conformal）
-   - 比較: Bootstrap信頼区間（n≥1000回リサンプリング）
+2. Select the quantification method:
+   - Classification: calibration of prediction probabilities (Platt Scaling, Temperature Scaling)
+   - Regression: prediction intervals (Quantile Regression, Conformal)
+   - Comparison: bootstrap confidence intervals (n≥1000 resamples)
 
-3. 報告形式:
-   - 表: "metric ± std" or "metric [95% CI: lower, upper]"
-   - 図: error bar, confidence band, violin plot
-   - テキスト: "achieved X (95% CI: [a, b], n=N)"
+3. Reporting format:
+   - Table: "metric ± std" or "metric [95% CI: lower, upper]"
+   - Figure: error bar, confidence band, violin plot
+   - Text: "achieved X (95% CI: [a, b], n=N)"
 
-4. 感度分析:
-   - ハイパーパラメータ摂動に対するロバスト性
-   - データサイズに対する学習曲線
-   - ランダムシード変動（5+シード）
+4. Sensitivity analysis:
+   - Robustness to hyperparameter perturbations
+   - Learning curves with respect to data size
+   - Random seed variation (5+ seeds)
 
 5. Save code, tables, figures, and intermediate outputs to files instead of chat-only output.
 6. Append skill selection, handoff I/O, and file writes to `logs/process-log.jsonl`.

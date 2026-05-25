@@ -44,9 +44,9 @@ tu_tools:
    - Verify figures and tables are referenced
    - Ensure claims are supported by results
 
-5. 自己査読（Self-Review）:
-   - `co-scientist-citation-checker` の意味的対応チェックを実施
-   - 全ての定量的結果に不確実性指標（CI, SD, p値）が付与されているか確認
+5. Self-Review:
+   - Perform the semantic alignment check from `co-scientist-citation-checker`
+   - Confirm that all quantitative results include uncertainty indicators (CI, SD, p-values)
 
 ## Paper Structure Template (Mandatory Sections)
 
@@ -55,7 +55,7 @@ tu_tools:
 3. Methods / Proposed Approach
 4. Results
 5. Discussion
-6. **Limitations and Future Work** ← 必須セクション
+6. **Limitations and Future Work** ← required section
 7. Conclusion
 8. References
 
@@ -65,34 +65,34 @@ tu_tools:
 ## Limitations and Future Work
 
 ### Data Limitations
-[合成データのみか実データか。サンプルサイズ。既知のバイアス。ドメイン制約を記述]
+[State whether only synthetic data or real data was used. Describe sample size, known biases, and domain constraints]
 
 ### Methodological Limitations  
-[仮定の妥当性。スケーラビリティ。計算コスト。手法固有の制約を記述]
+[Describe the validity of assumptions, scalability, computational cost, and method-specific constraints]
 
 ### Evaluation Limitations
-[評価指標の選択根拠と限界。ベースライン数。外部検証の有無を記述]
+[Describe the rationale and limits of metric selection, the number of baselines, and whether external validation was conducted]
 
 ### Generalizability
-[他のドメイン/データセットへの適用可能性。ドメインシフトの影響を記述]
+[Describe applicability to other domains/datasets and the impact of domain shift]
 
 ### Future Directions
-[具体的な改善策。短期（6ヶ月）と長期（1-2年）のロードマップを記述]
+[Describe specific improvements and a short-term (6 months) and long-term (1-2 years) roadmap]
 ```
 
-**合成データのみの場合の必須文**: 以下の文を Evaluation Limitations に必ず含めること:
+**Required sentence when using only synthetic data**: include the following sentence in Evaluation Limitations:
 > "External validation with independent real-world datasets is essential to confirm the generalizability of these findings beyond simulated conditions."
 
 ## Reference Rules
 
-参考文献を記載する際は、可能な限り DOI を付与すること。
-DOI が不明な場合は巻号・ページ番号を省略し、タイトルと著者のみ記載すること。
-不正確なメタデータを推測して記載するより、省略する方が望ましい。
+When listing references, include DOI whenever possible.
+If DOI is unknown, omit volume/issue/page numbers and list only the title and authors.
+It is better to omit details than to guess and include inaccurate metadata.
 
 ### Reference Quality Standards
-- 文献調査を伴う論文では **≥10 件** の参考文献を目標とする。
-- DOI 形式の検証: `10.XXXX/XXXXX` 形式であることを確認。形式が不正な DOI は削除する。
-- 各参考文献は本文中で個別に引用すること。バルク引用 `[1-5]` は禁止。
+- For papers involving literature review, target **≥10 references**.
+- DOI format check: confirm it matches the `10.XXXX/XXXXX` pattern. Remove invalid DOI strings.
+- Each reference must be cited individually in the main text. Bulk citations such as `[1-5]` are prohibited.
 
 ## Claim Calibration
 
@@ -107,7 +107,7 @@ Discussion and Conclusion must not make claims that Results do not support.
 - `results/abstract.md`: optimized abstract.
 - `results/references.md`: formatted reference list.
 
-`report.md` は objectives, methods, results, and discussion を含む 1,000語以上とする。
+`report.md` must be at least 1,000 words and include objectives, methods, results, and discussion.
 
 ## Available Tools (MCP)
 
@@ -129,6 +129,6 @@ Discussion and Conclusion must not make claims that Results do not support.
 
 ## Gotchas
 
-- Methods セクションを最初に書くこと。最も客観的で、他セクションの基盤になる
-- Discussion で Results に記載されていないデータを引用してはならない
-- Abstract は全セクション完成後に書くこと。先に書くと内容との乖離が生じる
+- Write the Methods section first. It is the most objective section and forms the foundation for the others
+- Do not cite data in the Discussion that are not reported in the Results
+- Write the Abstract only after all sections are complete. Writing it earlier can cause divergence from the final content

@@ -30,23 +30,23 @@ Citation checking skill. Reference validation, DOI verification, retraction dete
 
 ## Workflow
 
-1. 形式チェック:
-   - 本文中の全 [N] が References に対応するか
-   - References の全エントリが本文中で引用されているか
-   - DOI があれば Crossref API で存在確認
+1. Format checks:
+   - Does every [N] in the text correspond to References?
+   - Is every entry in References cited in the text?
+   - If a DOI exists, verify its existence via the Crossref API
 
-2. 意味的対応チェック:
-   - 各引用箇所で、引用が主張を裏付けているか検証
-   - パターン検出:
-     - ❌ "[1-5] have studied X" → 各文献の具体的貢献を記述すべき
-     - ❌ "As shown in [3]" → 何が示されているか明記すべき
+2. Semantic alignment checks:
+   - At each citation point, verify that the citation supports the claim
+   - Pattern detection:
+     - ❌ "[1-5] have studied X" → each paper's specific contribution should be described
+     - ❌ "As shown in [3]" → what is shown should be stated explicitly
      - ✅ "Smith et al. [3] demonstrated that Y achieves Z% on dataset W"
-   - 引用密度チェック: Introduction に引用が集中し Methods/Results に皆無は警告
+   - Citation density check: warn if citations are concentrated in the Introduction and absent in Methods/Results
 
-3. ハルシネーション検出:
-   - 著者名 + タイトル + 年 の組み合わせを Crossref/Semantic Scholar で検証
-   - 検証不能な引用には ⚠️ マーク
-   - 検証不能率が 20% を超えたら Quality Gate FAIL
+3. Hallucination detection:
+   - Verify the author name + title + year combination via Crossref/Semantic Scholar
+   - Mark unverifiable citations with ⚠️
+   - If the unverifiable citation rate exceeds 20%, mark the Quality Gate as FAIL
 
 ## Bulk Citation Handling
 

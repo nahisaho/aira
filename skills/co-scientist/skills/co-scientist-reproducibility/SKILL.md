@@ -62,18 +62,18 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 
 ## Gotchas
 
-- `pip freeze` の出力をそのまま使わないこと。直接依存のみを `requirements.txt` に書き、間接依存は `pip freeze > requirements-lock.txt` で分離する
-- Jupyter Notebook は再現性が低い（セル実行順序依存）。必ず `.py` スクリプトに変換するか、`nbconvert --execute` で通しテストすること
-- ランダムシードは numpy, random, torch 等のライブラリごとに個別に設定が必要
-- データサイズが大きい場合（>100MB）はリポジトリに含めず、ダウンロードスクリプトを提供すること
+- Do not use the output of `pip freeze` as-is. Put only direct dependencies in `requirements.txt`, and separate transitive dependencies with `pip freeze > requirements-lock.txt`
+- Jupyter notebooks have low reproducibility due to cell execution order. Always convert them to `.py` scripts or run an end-to-end test with `nbconvert --execute`
+- Random seeds must be set separately for each library such as numpy, random, and torch
+- If the data is large (>100MB), do not include it in the repository; provide a download script instead
 
 ## Validation Loop
 
-1. 再現性パッケージを生成
-2. チェック:
-   - 依存関係がバージョン固定されているか
-   - ランダムシードが全ライブラリで設定されているか
-   - クリーン環境からの実行手順が README に記載されているか
-   - データの出所と加工手順が文書化されているか
-3. 不合格なら修正
-4. 可能であればクリーン環境でテスト実行して検証
+1. Generate the reproducibility package
+2. Check:
+   - Are dependencies version-pinned?
+   - Are random seeds set across all libraries?
+   - Are clean-environment execution steps documented in the README?
+   - Are data provenance and preprocessing steps documented?
+3. If it fails, revise it
+4. If possible, verify by running tests in a clean environment

@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.0.2 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.4.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.0.2
+# Co-Scientist v4.4.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -21,10 +21,14 @@ Collaborative research partner with 202 specialized sub-skills. Route work to th
 - Save every artifact to files. Do not leave analysis, code, tables, or figures only in chat.
 - Prefer the narrowest matching sub-skill instead of loading broad context.
 - Final chat output should summarize saved files, not reproduce the full analysis.
-- **深さ優先原則**: 1つの核心的手法を深く検証することを、複数手法の表面的統合より優先する。
-  - 手法が3つ以上の場合: 必ず ablation study で各手法の個別寄与を定量化
-  - "unified framework" を提案する場合: フレームワークなしの単独手法ベースラインとの比較が必須
-  - 各コンポーネントの必要性を実験的に示せない場合、そのコンポーネントを削除すること
+- **Depth-First Principle**: Prioritize deep validation of one core method over superficial integration of multiple methods.
+  - When 3 or more methods are involved: always quantify each method's individual contribution via ablation study
+  - When proposing a "unified framework": comparison against single-method baselines without the framework is required
+  - If the necessity of each component cannot be demonstrated experimentally, remove that component
+- **Validity of Method Selection**: Explicitly state in Methods why the selected method is appropriate for this problem.
+  - Consider at least two candidate methods, and describe the reasons for not adopting the rejected methods.
+  - When using Deep Learning, explicitly state why simpler methods (analytical methods, classical ML, statistical models) are insufficient.
+  - Include at least one baseline comparison. The baseline may be a lightweight implementation, analytical comparison, or literature-based comparison. If implementation is infeasible due to runtime or data constraints, a comparison based on literature/theoretical justification may be used instead.
 
 ## Time Budget
 
@@ -34,9 +38,9 @@ Target total runtime: **15 minutes**. If likely to exceed, downsample data, simp
 |-------|--------|
 | Code generation | 5 min |
 | Code execution | 5 min (lightweight sample data) |
-| Figure generation | 3 min |
-| Report writing | 3 min |
-| Paper writing | 3 min |
+| Figure generation | 2 min |
+| Report writing (incremental) | 5 min — build during execution, verify + repair at end |
+| Paper writing | 2 min |
 
 - Use **lightweight sample data** for training, simulation, and heavy computation. Full-scale runs are the user's responsibility.
 - After **3 failed retries** of the same step, simplify the approach and proceed. Do not loop indefinitely.
@@ -51,31 +55,40 @@ Target total runtime: **15 minutes**. If likely to exceed, downsample data, simp
 
 ### File Hygiene
 
-- Exclude from outputs: `*.pyc`, `__pycache__/`, `.DS_Store`, `*.egg-info/`
-- Generate `.gitignore` in every project workspace with the above patterns.
+- Generate `.gitignore` in every project workspace **as the first file created**.
+- **After all code execution** (tests, figure generation, final scripts) **and again immediately before final response**, run cleanup + verification:
+  ```bash
+  find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null
+  find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null
+  find . -name "*.pyc" -delete 2>/dev/null
+  # Verify clean:
+  find . \( -name "__pycache__" -o -name ".pytest_cache" -o -name "*.pyc" \) -print
+  ```
+  Expected verification output: empty. If not, delete and re-verify.
+- **NEVER** leave `__pycache__/`, `.pytest_cache/`, or `*.pyc` in the final workspace.
 
 ## Final Response Template
 
 When the experiment completes, the final chat response must follow this structure:
 
 ```markdown
-## 実験完了: {title}
+## Experiment Complete: {title}
 
-### 主要な科学的知見
+### Key Scientific Findings
 1. {finding_1} — {quantitative_result}
 2. {finding_2} — {quantitative_result}
 3. {finding_3} — {quantitative_result}
 
-### 最重要図表
+### Most Important Figure
 ![{caption}](figures/{filename}.png)
 
-### 生成物
-- ソースコード: {n}モジュール ({total_lines}行)
-- レポート: report.md ({report_lines}行)
-- 論文: paper.md ({paper_lines}行)
-- 図表: {n}枚
+### Deliverables
+- Source code: {n} modules ({total_lines} lines)
+- Report: report.md ({report_lines} lines)
+- Paper: paper.md ({paper_lines} lines)
+- Figures: {n}
 
-### 制限事項と今後の課題
+### Limitations and Future Work
 - {limitation_1}
 - {limitation_2}
 ```
@@ -90,7 +103,7 @@ Before starting any work, assess whether the user's request provides enough cont
 - **Insufficient context** (research topic unclear, scope undefined, key parameters missing):
   - Do NOT proceed with execution.
   - Output a numbered list of specific clarifying questions in the user's language.
-  - End with: "上記の質問にお答えください。回答をいただければ作業を開始します。" (or equivalent in user's language).
+  - End with: "Please answer the questions above. Once I receive your answers, I will begin the work." (or equivalent in user's language).
   - Do NOT create any files or run any tools.
 - **Sufficient context** (topic clear, scope defined, enough to begin):
   - State any assumptions explicitly, then proceed with the appropriate sub-skill.
@@ -118,84 +131,91 @@ Command: `tooluniverse-smcp --compact-mode` (stdio transport, compact mode loads
 
 ### WHEN/DO Dispatch
 
-WHEN: ユーザーが研究テーマの設定、スコープ定義、方法論選択を依頼  
+WHEN: The user requests research topic formulation, scope definition, or methodology selection  
 DO: → `co-scientist-research-planning`
 
-WHEN: ユーザーが文献調査、先行研究レビュー、システマティックレビューを依頼  
+WHEN: The user requests literature search, prior work review, or systematic review  
 DO: → `co-scientist-literature-review`
 
-WHEN: ユーザーが実験計画、サンプルサイズ、検出力分析、プロトコル設計を依頼  
+WHEN: The user requests experimental planning, sample size determination, power analysis, or protocol design  
 DO: → `co-scientist-experimental-design`
 
-WHEN: ユーザーがデータ分析、統計解析、可視化、結果解釈を依頼  
+WHEN: The user requests data analysis, statistical analysis, visualization, or interpretation of results  
 DO: → `co-scientist-data-analysis`
 
-WHEN: ユーザーが論文執筆、IMRaD構成、ジャーナル投稿準備を依頼  
+WHEN: The user requests paper writing, IMRaD structuring, or journal submission preparation  
 DO: → `co-scientist-academic-writing`
 
-WHEN: ユーザーが査読対応、リバイズ、査読コメントへの回答を依頼  
+WHEN: The user requests peer review response, revision, or replies to reviewer comments  
 DO: → `co-scientist-peer-review`
 
-WHEN: ユーザーが再現性確保、データ管理、コード整備、アーカイブを依頼  
+WHEN: The user requests reproducibility assurance, data management, code organization, or archiving  
 DO: → `co-scientist-reproducibility`
 
-WHEN: ユーザーが学会発表、ポスター作成、プレゼン準備を依頼  
+WHEN: The user requests conference presentation, poster creation, or presentation preparation  
 DO: → `co-scientist-presentation`
 
 ### Task Classification
 
-1. 外部文献の探索が必要か？
+1. Is external literature search required?
    - YES → `co-scientist-literature-review`
-   - NO → 次へ
-2. 実験やデータ収集の計画が必要か？
+   - NO → Next
+2. Is planning for experiments or data collection required?
    - YES → `co-scientist-experimental-design`
-   - NO → 次へ
-3. 既存データの分析が必要か？
+   - NO → Next
+3. Is analysis of existing data required?
    - YES → `co-scientist-data-analysis`
-   - NO → 次へ
-4. 文書作成が必要か？
-   - YES → 論文なら `co-scientist-academic-writing` / 発表なら `co-scientist-presentation`
-   - NO → 次へ
-5. 査読対応か？
+   - NO → Next
+4. Is document writing required?
+   - YES → For papers, `co-scientist-academic-writing` / for presentations, `co-scientist-presentation`
+   - NO → Next
+5. Is this peer review response work?
    - YES → `co-scientist-peer-review`
-   - NO → `co-scientist-research-planning` で要件整理から開始
+   - NO → Start with `co-scientist-research-planning` to organize requirements
 
 ## Research Lifecycle
 
-Phase 0 → `co-scientist-research-planning`: 研究計画
+Phase 0 → `co-scientist-research-planning`: Research planning
 
-Phase 1 → `co-scientist-literature-review`: 文献調査
+Phase 1 → `co-scientist-literature-review`: Literature review
 
-Phase 2 → `co-scientist-experimental-design`: 実験計画
+Phase 2 → `co-scientist-experimental-design`: Experimental design
 
-Phase 3 → `co-scientist-data-analysis`: 実行・解析
+Phase 3 → `co-scientist-data-analysis`: Execution and analysis
 
-Phase 4 → `co-scientist-academic-writing`: 論文執筆
-  → 🦆 `co-scientist-critical-review` (Mode: Deep Review, 1回のみ)
-  → 問題があれば1回だけ修正して反映
+Phase 4 → `co-scientist-academic-writing`: Academic writing
+  → 🦆 `co-scientist-critical-review` (Mode: Deep Review, one time only)
+  → If issues are found, revise and incorporate changes only once
 
-Phase 4.5 → `co-scientist-citation-checker`: 引用検証
+Phase 4.5 → `co-scientist-citation-checker`: Citation verification
 
-Phase 5 → `co-scientist-peer-review`: 査読対応
+Phase 5 → `co-scientist-peer-review`: Peer review response
 
-Phase 6 → `co-scientist-reproducibility`: 再現性確保
+Phase 6 → `co-scientist-reproducibility`: Reproducibility assurance
 
-Phase 7 → `co-scientist-presentation`: 発表準備
+Phase 7 → `co-scientist-presentation`: Presentation preparation
 
 ### Single-Turn Execution Mode
 
-単一プロンプトで全工程を依頼された場合でも、内部では上記 Phase を順に実行すること。
-Deep Review は Phase 4 の後に1回だけ実施し、問題があれば1回だけ修正すること。
+Even when the entire workflow is requested in a single prompt, internally execute the above phases in sequence.
+Conduct Deep Review only once after Phase 4, and if issues are found, revise only once.
 
 ## Quality Gates
 
-- [ ] `report.md` に `## Limitations and Future Work` が存在し、200語以上ある。
-- [ ] `report.md` は 1,000語以上である。
-- [ ] 主要な定量結果に CI / ± / p値などの不確実性指標が含まれる。
-- [ ] `report.md` の手法セクションに LaTeX 数式（`$$...$$`）が ≥3 個含まれる（数理的手法を使用する場合。該当しない場合は "N/A" と明記）。
-- [ ] 参考文献が ≥10 件含まれる（文献調査を伴う場合。該当しない場合は理由を明記）。
-- [ ] 生成コードが ≥3 モジュールに分割されている（≤500行の単純な解析を除く）。
-- [ ] `*.pyc`, `__pycache__/` が出力に含まれていない。
+**After completing report.md, self-check the following and fix any failing items before marking the work complete.**
+
+- [ ] `report.md` follows the required section structure (Abstract, Introduction, Methods, Results, Discussion, Limitations and Future Work, References, File Inventory).
+- [ ] Each section is written in **prose paragraphs** (sections consisting only of bullet points are unacceptable, except for File Inventory and References).
+- [ ] `report.md` contains `## Limitations and Future Work`, with at least 2 paragraphs and at least 200 words. Describe at least 3 specific limitations. **Omission is a failure.**
+- [ ] **Run `wc -w report.md` and confirm that it contains at least 850 words. If it is under 850 words, expand Methods, Results, Discussion, and Limitations, then verify again.** report.md is the primary deliverable and must not be a thin summary.
+- [ ] Major quantitative results include uncertainty indicators such as CI / ± / p-values.
+- [ ] The Methods section of `report.md` includes at least 3 LaTeX equations (`$$...$$`) when mathematical methods are used. If not applicable, explicitly state "N/A".
+- [ ] The references include **at least 10 entries**. Include only real, specific references (no fabrication). Do not add low-relevance references just to meet the count.
+- [ ] **Include DOI in references by default** (required for major journal and conference proceedings references). Omit DOI only when it cannot be determined with confidence. **Fabricating a DOI is strictly prohibited.**
+- [ ] **At least 30% of the references must be from 2020 or later** (**required**). After completing the reference list, verify the proportion from 2020 onward, and add more if it is below 30%.
+- [ ] **Validity of method selection** is described in the Methods section. Consider at least two candidate methods, and clearly state the selection rationale and rejection rationale. Include a baseline comparison (lightweight implementation, literature comparison, or theoretical comparison).
+- [ ] Generated code is split into at least 3 modules (except for simple analyses of 500 lines or fewer).
+- [ ] `__pycache__/`, `.pytest_cache/`, and `*.pyc` are not included in the output. **Always run the cleanup + verification commands.**
 
 ## Required Output Layout
 
@@ -214,12 +234,12 @@ workspace/
 
 ## Verification Loop
 
-Every execution follows: PLAN → EXECUTE → VERIFY → REPORT → LOG.
+Every execution follows: PLAN → EXECUTE (with incremental report) → VERIFY → FINALIZE → LOG.
 
 1. **PLAN**: define objective, constraints, and target outputs.
-2. **EXECUTE**: run the selected sub-skill pipeline and save artifacts.
-3. **VERIFY**: check all applicable quality gates.
-4. **REPORT**: write `report.md` in the user's language.
+2. **EXECUTE**: run the selected sub-skill pipeline. **Build `report.md` incrementally** — write each section as corresponding work completes.
+3. **VERIFY**: check all applicable quality gates. Run `wc -w report.md` — if below 850, expand and re-verify.
+4. **FINALIZE**: complete References + File Inventory. Run final cleanup + verification.
 5. **LOG**: finalize `logs/process-log.jsonl`.
 
 ## Data Handling & Confidentiality
@@ -238,7 +258,7 @@ Every execution follows: PLAN → EXECUTE → VERIFY → REPORT → LOG.
 
 ## Gotchas
 
-- 複数 Phase にまたがるタスクでは、Phase 間の引き継ぎ情報を必ずファイルに保存すること。
-- `co-scientist-literature-review` と `co-scientist-research-planning` は起動条件が近い。テーマ未定なら planning、テーマ決定済みで先行研究探索なら literature-review。
-- `logs/process-log.jsonl` への記録を忘れると、後続 Phase で追跡不能になる。
-- Deep Review は Phase 4 の後に1回だけ実施し、修正も1回だけに留めること。
+- For tasks spanning multiple phases, always save handoff information between phases to files.
+- `co-scientist-literature-review` and `co-scientist-research-planning` have similar trigger conditions. Use planning if the topic is not yet decided; use literature-review if the topic is already decided and the goal is prior work exploration.
+- If you forget to record entries in `logs/process-log.jsonl`, later phases will become untraceable.
+- Conduct Deep Review only once after Phase 4, and limit revisions to one round as well.

@@ -53,16 +53,16 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 
 ## Gotchas
 
-- 研究テーマが曖昧な場合、1回の質問で明確化しようとせず、1問ずつ段階的にヒアリングする
-- 方法論の選択では、データ入手可能性を最初に確認すること。理想的な手法でもデータがなければ実行不可能
-- スコープを広げすぎると実行不能になる。最小限の検証可能なスコープから始めることを推奨する
+- If the research topic is ambiguous, do not try to clarify it with a single question; gather information step by step, one question at a time
+- When selecting methodology, check data availability first. Even an ideal method is infeasible without data
+- If the scope is too broad, execution becomes infeasible. Recommend starting from the minimum verifiable scope
 
 ## Validation Loop
 
-1. 6 components plan を生成
-2. チェック:
-   - PURPOSE が意思決定に繋がる形で記述されているか
-   - SCOPE が検証可能な範囲に絞られているか
-   - CONSTRAINTS に「データ入手可能性」が含まれるか
-3. 不合格なら修正して再チェック
-4. ユーザー承認後のみ完了
+1. Generate the 6 components plan
+2. Check:
+   - Is PURPOSE written in a way that leads to decision-making?
+   - Is SCOPE narrowed to a verifiable range?
+   - Do CONSTRAINTS include "data availability"?
+3. If it fails, revise and re-check
+4. Complete only after user approval

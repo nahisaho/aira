@@ -83,18 +83,18 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 
 ## Gotchas
 
-- Google Scholar の検索結果は網羅性が低い。必ず PubMed/Scopus と併用すること
-- 単一ソースの情報は ⚠️ マークを付け、断定的な結論に使用しないこと
-- プレプリント（bioRxiv, arXiv）は査読前であることを明記すること
-- 検索語の日英バイリンガル展開を行うと、非英語圏の重要な研究を見落とさない
-- スクリーニング結果は逐次ファイルに保存すること。コンパクションで中間結果が消失する
+- Google Scholar search results have low coverage. Always use it together with PubMed/Scopus
+- Information from a single source should be marked with ⚠️ and not used for definitive conclusions
+- Preprints (bioRxiv, arXiv) must be explicitly labeled as pre-peer-review
+- Expanding search terms bilingually in Japanese and English helps avoid missing important non-English research
+- Save screening results to files incrementally; compaction can erase intermediate results
 
 ## Validation Loop
 
-1. 検索戦略とスクリーニング結果を生成
-2. チェック:
-   - 検索語が研究目的をカバーしているか
-   - 2つ以上のデータベースを使用しているか
-   - 単一ソースの主張に ⚠️ が付いているか
-3. 不合格なら検索戦略を修正して再実行
-4. 合格後のみ合成フェーズへ進む
+1. Generate the search strategy and screening results
+2. Check:
+   - Do the search terms cover the research objective?
+   - Are two or more databases used?
+   - Are single-source claims marked with ⚠️?
+3. If it fails, revise the search strategy and rerun
+4. Proceed to the synthesis phase only after passing

@@ -80,11 +80,11 @@ If any gate fails: identify the specific failing check, fix the issue, and re-va
 
 ## Validation Loop
 
-1. 分析結果を生成
-2. チェック:
-   - 仮定の検証（正規性、等分散性等）が行われているか
-   - 効果量と信頼区間が報告されているか
-   - 多重比較補正が必要な場面で適用されているか
-   - 図が英語ラベルで colorblind-friendly か
-3. 不合格なら該当箇所を修正して再分析
-4. 合格後のみレポート確定
+1. Generate the analysis results
+2. Check:
+   - Are assumptions validated (normality, homoscedasticity, etc.)?
+   - Are effect sizes and confidence intervals reported?
+   - Is multiple-comparison correction applied where needed?
+   - Are figures labeled in English and colorblind-friendly?
+3. If it fails, fix the relevant parts and re-run the analysis
+4. Finalize the report only after passing

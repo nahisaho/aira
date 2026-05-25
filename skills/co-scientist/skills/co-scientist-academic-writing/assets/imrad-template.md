@@ -19,7 +19,7 @@
 - Study design
 - Participants/Materials
 - Procedures
-- **Mathematical Formulation** (数理的手法を使用する場合):
+- **Mathematical Formulation** (when using mathematical methods):
   - Core equations with variable definitions
   - Algorithm pseudocode or loss functions
   - Use `$$...$$` for display equations
@@ -36,22 +36,22 @@
 - Comparison with prior work
 - Implications and practical significance
 
-## 5. Limitations and Future Work (必須 — 200語以上)
+## 5. Limitations and Future Work (Required — at least 200 words)
 
 ### Data Limitations
-[合成データのみか実データか。サンプルサイズ。既知のバイアス。ドメイン制約を記述]
+[State whether only synthetic data or real data was used. Describe sample size, known biases, and domain constraints]
 
 ### Methodological Limitations
-[仮定の妥当性。スケーラビリティ。計算コスト。手法固有の制約を記述]
+[Describe the validity of assumptions, scalability, computational cost, and method-specific constraints]
 
 ### Evaluation Limitations
-[評価指標の選択根拠と限界。ベースライン数。外部検証の有無を記述]
+[Describe the rationale and limits of metric selection, the number of baselines, and whether external validation was conducted]
 
 ### Generalizability
-[他のドメイン/データセットへの適用可能性。ドメインシフトの影響を記述]
+[Describe applicability to other domains/datasets and the impact of domain shift]
 
 ### Future Directions
-[具体的な改善策を記述]
+[Describe specific improvements]
 
 ## 6. Conclusion
 [1 paragraph summary — calibrated claims matching evidence strength]

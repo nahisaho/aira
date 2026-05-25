@@ -1,4 +1,4 @@
-# Co-Scientist — Copilot Instructions (v4.0.2)
+# Co-Scientist — Copilot Instructions (v4.4.0)
 
 ## Identity
 
@@ -48,8 +48,27 @@ Target total runtime: **15 minutes**. If likely to exceed, downsample, simplify,
 - **Minimum 3 modules** for non-trivial experiments (≤500 lines single-file is acceptable with justification).
 - Run `python -c "import module"` for each generated module before proceeding.
 - Docstrings required for public functions. Type hints recommended.
-- Exclude from outputs: `*.pyc`, `__pycache__/`, `.DS_Store`, `*.egg-info/`
-- Generate `.gitignore` in every project workspace.
+- Generate `.gitignore` in every project workspace as the **first file created**.
+
+### Mandatory Cleanup (CRITICAL)
+
+After **all code execution completes** (including tests, figure generation, and any final scripts), and again **immediately before the final response**, run:
+
+```bash
+find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null
+find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null
+find . -name "*.pyc" -delete 2>/dev/null
+```
+
+Then **verify** no artifacts remain:
+
+```bash
+find . \( -name "__pycache__" -o -name ".pytest_cache" -o -name "*.pyc" \) -print
+```
+
+Expected output: empty. If any files are listed, delete them and re-verify.
+
+**Never leave `__pycache__/`, `.pytest_cache/`, or `*.pyc` files in the workspace.** These are build artifacts that violate quality gates.
 
 ## Final Response Rules
 
@@ -76,15 +95,63 @@ Server config is in `.mcp.json`. Install ToolUniverse: `pip install tooluniverse
 
 ## Verification Loop
 
-Every task follows: **PLAN → EXECUTE → VERIFY → REPORT → LOG**
+Every task follows: **PLAN → EXECUTE (with incremental report) → VERIFY → FINALIZE → LOG**
 
 1. **PLAN**: Define objective, constraints, target outputs, candidate sub-skills.
-2. **EXECUTE**: Run the selected pipeline, save intermediate artifacts.
-3. **VERIFY**: Check outputs against Quality Gates.
-4. **REPORT**: Write `report.md` with methods, results, discussion, file inventory.
+2. **EXECUTE**: Run the selected pipeline, save intermediate artifacts. **Build `report.md` incrementally during this phase** — write each section (Abstract, Introduction, Methods, Results, Discussion, Limitations) as the corresponding work completes, not all at once at the end.
+3. **VERIFY**: Check outputs against Quality Gates. Run `wc -w report.md` and repair if below 850 words.
+4. **FINALIZE**: Complete References, File Inventory. Run final cleanup + verification. **Reference self-check**: Verify that at least 30% of references are from 2020 or later; add more if insufficient. Verify that DOIs are included.
 5. **LOG**: Finalize `logs/process-log.jsonl` with timestamps and handoff I/O.
 
+### Report-First Principle
+
+`report.md` is a **primary deliverable**, not a summary afterthought. Allocate substantial output budget to it. Write it throughout the project:
+
+- After designing methodology → write Abstract + Introduction + Methods
+- After code execution and results → write Results + Discussion
+- After review → write Limitations and Future Work + References
+
+This prevents the common failure mode of generating a thin report at the end when output budget is exhausted.
+
 ## Quality Standards
+
+### report.md Requirements (MANDATORY)
+
+`report.md` is a **primary deliverable** — not a summary. It must be independently useful to a scientist reproducing the work. Write in **flowing prose paragraphs** — do NOT use bullet-point lists for narrative sections.
+
+**Build `report.md` incrementally during execution** (see Report-First Principle above). Do NOT wait until the end to write it.
+
+Required section structure with **minimum word counts**:
+
+| Section | Min Words | Content |
+|---------|-----------|---------|
+| Abstract | 120 | Objectives, methods, key results |
+| Introduction | 180 | Background, motivation, research question |
+| Methods | 250 | Algorithms, models, experimental setup. ≥3 LaTeX equations ($$...$$) |
+| Results | 250 | Quantitative findings, tables, figures. ≥3 quantitative findings |
+| Discussion | 180 | Interpret results, compare with prior work |
+| Limitations and Future Work | 200 | ≥3 concrete limitations. **Non-negotiable.** |
+| References | — | ≥10 real references. Do not fabricate. |
+| File Inventory | — | List all generated files |
+
+**Total minimum: 1,000 words** (sum of section minimums = 1,180).
+
+### Word Count Verification (MANDATORY)
+
+After writing `report.md`, **always** run this verification:
+
+```bash
+wc -w report.md
+```
+
+**If the word count is below 850 words**, you MUST revise `report.md` before proceeding:
+1. Expand Methods with additional algorithmic detail, parameter choices, and assumptions.
+2. Expand Results with deeper interpretation of each finding.
+3. Expand Discussion with comparisons to alternative approaches.
+4. Expand Limitations with additional constraints and their implications.
+5. Re-run `wc -w report.md` to confirm ≥850 words.
+
+**Do NOT skip this step. Do NOT proceed to paper.md or final response until report.md has ≥850 words.**
 
 ### Statistical Reporting
 - Report **effect sizes and confidence intervals**, not just p-values.
@@ -97,7 +164,18 @@ Every task follows: **PLAN → EXECUTE → VERIFY → REPORT → LOG**
 - Use LaTeX notation: `$$..$$` for display equations.
 - If the experiment is purely data-driven with no mathematical model, state "N/A" explicitly.
 
-### Data Integrity
+### Method Selection Justification
+
+- **Justify why the selected method is appropriate** for the specific problem in the Methods section.
+- Discuss at least **2 candidate methods** and explain why alternatives were not adopted.
+- If deep learning is used, explicitly explain why simpler approaches (analytical, classical ML, statistical models) are insufficient.
+- Include at least **1 baseline comparison**: lightweight implementation, analytical comparison, or literature-based comparison. If runtime/data constraints prevent execution, provide a reasoned theoretical comparison.
+
+### References
+- Report **≥10 real references**. Do not fabricate citations.
+- **Include DOIs by default.** Add `DOI: 10.xxxx/...` to major journal and conference papers. Omit only when the DOI cannot be confirmed. **Fabricating DOIs is strictly prohibited.**
+- **≥30% of references must be from 2020 or later (mandatory).** After completing the reference list, check the proportion from 2020 or later; add more if it is below 30%.
+- Do not pad with weakly related citations to meet the minimum count.
 - Verify input data quality before analysis.
 - Document all preprocessing steps in `data/preprocessing-log.md`.
 - Set random seeds for **all** RNG libraries (numpy, random, torch, tf) separately.
@@ -165,8 +243,8 @@ Use `python coreclaw-skills-hub/.github/scripts/validate_skill.py <skill-dir>` f
 
 ## Gotchas
 
-- `co-scientist-literature-review` と `co-scientist-research-planning` は起動条件が近い。テーマ未定なら planning、テーマ決定済みなら literature-review。
-- process-log.jsonl への記録を忘れると後続 Phase で追跡不能になる。
-- Phase 間の引き継ぎ情報は必ずファイルに保存すること。コンパクションで消失する。
-- 図表のキャプションは図だけで内容が分かる自己完結型にすること。
-- Gotchas が 10 項目を超えたスキルはカテゴリ分けを検討すること。
+- `co-scientist-literature-review` and `co-scientist-research-planning` have similar activation conditions. Use planning when the topic is undefined; use literature-review when the topic is defined.
+- Forgetting to record entries in process-log.jsonl makes subsequent Phases untraceable.
+- Always save handoff information between Phases to files. It will be lost during compaction.
+- Make figure and table captions self-contained so the content is understandable from the figure alone.
+- Consider categorizing skills whose Gotchas section grows beyond 10 items.
