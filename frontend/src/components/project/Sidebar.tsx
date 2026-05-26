@@ -136,7 +136,7 @@ export function Sidebar() {
           className={`text-xs ${light ? 'text-gray-500 hover:text-gray-700' : 'text-gray-400 hover:text-gray-300'} disabled:opacity-50`}
           title={t('settings.cleanProjects')}
         >
-          {cleaning ? t('settings.cleaning') : '🗑'}
+          {cleaning ? t('settings.cleaning') : t('settings.cleanProjects')}
         </button>
         <button
           disabled={restarting}
@@ -152,7 +152,7 @@ export function Sidebar() {
           className={`text-xs ${light ? 'text-gray-500 hover:text-gray-700' : 'text-gray-400 hover:text-gray-300'} disabled:opacity-50`}
           title={t('settings.restart')}
         >
-          {restarting ? t('settings.restarting') : '⟳'}
+          {restarting ? t('settings.restarting') : t('settings.restart')}
         </button>
         {cleanResult && (
           <span className={`text-xs ${light ? 'text-gray-500' : 'text-gray-400'}`}>{cleanResult}</span>
