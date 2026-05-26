@@ -9,6 +9,7 @@ build/
 # Runtime data (contains DB with plaintext secrets)
 data/
 projects/
+backend/projects/
 copilot-sessions/
 
 # Environment
