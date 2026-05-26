@@ -1,7 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import fs from 'node:fs';
 import { execFile, execFileSync } from 'node:child_process';
 import { AuthService, TokenConflictError } from '../services/auth.service.js';
+import { getProjectsDir } from '../config/paths.js';
+import { getDatabase } from '../db/index.js';
 
 const settingsRoutes = new Hono();
 const authService = new AuthService();
@@ -94,6 +97,46 @@ settingsRoutes.post('/api/settings/cli-update', async (c) => {
   } catch {
     return c.json({ success: true, output, version: null });
   }
+});
+
+// POST /api/settings/clean-projects — remove orphaned project directories
+settingsRoutes.post('/api/settings/clean-projects', (c) => {
+  const projectsDir = getProjectsDir();
+  if (!fs.existsSync(projectsDir)) {
+    return c.json({ deleted: [], count: 0 });
+  }
+
+  const db = getDatabase();
+  const knownIds = (
+    db.prepare('SELECT id FROM projects').all() as Array<{ id: string }>
+  ).map((r) => r.id);
+  const knownSet = new Set(knownIds);
+
+  const deleted: string[] = [];
+  for (const entry of fs.readdirSync(projectsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (knownSet.has(entry.name)) continue;
+    // Orphan directory — not in DB
+    const dirPath = `${projectsDir}/${entry.name}`;
+    try {
+      fs.rmSync(dirPath, { recursive: true, force: true });
+      deleted.push(entry.name);
+    } catch {
+      // skip locked dirs
+    }
+  }
+
+  return c.json({ deleted, count: deleted.length });
+});
+
+// POST /api/settings/restart — graceful backend restart
+settingsRoutes.post('/api/settings/restart', (c) => {
+  // Respond before restarting
+  setTimeout(() => {
+    console.log('[AIRA] Restart requested via API');
+    process.exit(0);
+  }, 500);
+  return c.json({ status: 'restarting' });
 });
 
 export { settingsRoutes };

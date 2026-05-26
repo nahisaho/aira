@@ -213,6 +213,10 @@ export const settingsApi = {
     request<{ version: string | null; error?: string }>('/settings/cli-version'),
   updateCli: () =>
     request<{ success: boolean; output: string; version?: string | null }>('/settings/cli-update', { method: 'POST' }),
+  cleanProjects: () =>
+    request<{ deleted: string[]; count: number }>('/settings/clean-projects', { method: 'POST' }),
+  restart: () =>
+    request<{ status: string }>('/settings/restart', { method: 'POST' }),
 };
 
 // ─── Skills ───

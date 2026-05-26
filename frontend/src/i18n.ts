@@ -45,6 +45,16 @@ const translations = {
     'settings.cliUpdateSuccess': '✓ アップデート完了',
     'settings.cliUpdateFailed': '✗ アップデート失敗',
 
+    // Admin
+    'settings.cleanProjects': '🗑 不要フォルダ削除',
+    'settings.cleanProjectsConfirm': 'DBに存在しないプロジェクトフォルダを一括削除しますか？',
+    'settings.cleanProjectsDone': '件の不要フォルダを削除しました',
+    'settings.cleanProjectsNone': '不要なフォルダはありません',
+    'settings.cleaning': '削除中...',
+    'settings.restart': '⟳ 再起動',
+    'settings.restartConfirm': 'バックエンドを再起動しますか？',
+    'settings.restarting': '再起動中...',
+
     // Agents Repos
     'settings.agentsRepo': 'Agents リポジトリ',
     'settings.agentsRepoAdd': '追加',
@@ -159,6 +169,16 @@ const translations = {
     'settings.cliUpdating': 'Updating...',
     'settings.cliUpdateSuccess': '✓ Update complete',
     'settings.cliUpdateFailed': '✗ Update failed',
+
+    // Admin
+    'settings.cleanProjects': '🗑 Clean folders',
+    'settings.cleanProjectsConfirm': 'Delete all project folders not in the database?',
+    'settings.cleanProjectsDone': ' orphan folder(s) deleted',
+    'settings.cleanProjectsNone': 'No orphan folders found',
+    'settings.cleaning': 'Cleaning...',
+    'settings.restart': '⟳ Restart',
+    'settings.restartConfirm': 'Restart the backend server?',
+    'settings.restarting': 'Restarting...',
 
     // Agents Repos
     'settings.agentsRepo': 'Agents Repositories',

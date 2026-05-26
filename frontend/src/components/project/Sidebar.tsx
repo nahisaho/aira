@@ -6,6 +6,7 @@ import { NewProjectModal } from './NewProjectModal';
 import { DeleteProjectDialog } from './DeleteProjectDialog';
 import { ProjectSettingsPane } from './ProjectSettingsPane';
 import { SettingsPane } from '../settings/SettingsPane';
+import { settingsApi } from '../../api/client';
 
 export function Sidebar() {
   const { projects, activeProjectId, loading, fetchProjects, setActiveProject, projectSkills } =
@@ -16,6 +17,9 @@ export function Sidebar() {
   const [showSettings, setShowSettings] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanResult, setCleanResult] = useState<string | null>(null);
+  const [restarting, setRestarting] = useState(false);
 
   useEffect(() => {
     fetchProjects();
@@ -103,13 +107,56 @@ export function Sidebar() {
         ))}
       </div>
 
-      <div className={`mt-2 pt-2 border-t ${light ? 'border-gray-200' : 'border-gray-700'}`}>
+      <div className={`mt-2 pt-2 border-t ${light ? 'border-gray-200' : 'border-gray-700'} flex items-center gap-2`}>
         <button
           onClick={() => setShowSettings(true)}
           className={`text-xs ${light ? 'text-gray-500 hover:text-gray-700' : 'text-gray-400 hover:text-gray-300'}`}
         >
           {t('sidebar.settings')}
         </button>
+        <button
+          disabled={cleaning}
+          onClick={async () => {
+            if (!confirm(t('settings.cleanProjectsConfirm'))) return;
+            setCleaning(true);
+            setCleanResult(null);
+            try {
+              const res = await settingsApi.cleanProjects();
+              if (res.count > 0) {
+                setCleanResult(`${res.count}${t('settings.cleanProjectsDone')}`);
+              } else {
+                setCleanResult(t('settings.cleanProjectsNone'));
+              }
+            } catch {
+              setCleanResult('Error');
+            }
+            setCleaning(false);
+            setTimeout(() => setCleanResult(null), 3000);
+          }}
+          className={`text-xs ${light ? 'text-gray-500 hover:text-gray-700' : 'text-gray-400 hover:text-gray-300'} disabled:opacity-50`}
+          title={t('settings.cleanProjects')}
+        >
+          {cleaning ? t('settings.cleaning') : '🗑'}
+        </button>
+        <button
+          disabled={restarting}
+          onClick={async () => {
+            if (!confirm(t('settings.restartConfirm'))) return;
+            setRestarting(true);
+            try {
+              await settingsApi.restart();
+            } catch {
+              // Expected — server shuts down
+            }
+          }}
+          className={`text-xs ${light ? 'text-gray-500 hover:text-gray-700' : 'text-gray-400 hover:text-gray-300'} disabled:opacity-50`}
+          title={t('settings.restart')}
+        >
+          {restarting ? t('settings.restarting') : '⟳'}
+        </button>
+        {cleanResult && (
+          <span className={`text-xs ${light ? 'text-gray-500' : 'text-gray-400'}`}>{cleanResult}</span>
+        )}
       </div>
 
       {showNewModal && <NewProjectModal onClose={() => setShowNewModal(false)} />}
