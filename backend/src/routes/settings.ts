@@ -130,11 +130,12 @@ settingsRoutes.post('/api/settings/clean-projects', (c) => {
 });
 
 // POST /api/settings/restart — graceful backend restart
+// Exit code 42 signals the entrypoint wrapper to restart the process.
 settingsRoutes.post('/api/settings/restart', (c) => {
   // Respond before restarting
   setTimeout(() => {
     console.log('[AIRA] Restart requested via API');
-    process.exit(0);
+    process.exit(42);
   }, 500);
   return c.json({ status: 'restarting' });
 });

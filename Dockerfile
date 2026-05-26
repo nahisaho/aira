@@ -59,10 +59,19 @@ COPY skills/ skills/
 RUN mkdir -p data projects /home/node/.copilot/session-state && chown -R node:node /app /home/node/.copilot
 
 # Use root for entrypoint to fix volume permissions, then drop to node
+# Exit code 42 from the backend signals a restart request.
 COPY --chmod=755 <<'EOF' /entrypoint.sh
 #!/bin/sh
 chown -R node:node /home/node/.copilot 2>/dev/null
-exec su -s /bin/sh node -c "exec node backend/dist/server.js"
+while true; do
+  su -s /bin/sh node -c "exec node backend/dist/server.js"
+  rc=$?
+  if [ "$rc" -ne 42 ]; then
+    exit $rc
+  fi
+  echo "[AIRA] Restarting... (exit code 42)"
+  sleep 1
+done
 EOF
 
 ENV NODE_ENV=production
