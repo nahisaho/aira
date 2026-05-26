@@ -56,6 +56,12 @@ DO: → `spread1000-context-collector` → 承認後に再ルーティング
 WHEN: 研究テーマへのAI活用方法を知りたい、研究プランを作りたい、AI for Scienceの動向を調べたい
 DO: → `spread1000-research-planner`
 
+WHEN: 詳細な実験計画書を作りたい、実験条件を定義したい、仮説を明確化したい、評価戦略を計画したい、統計解析計画を立てたい、ハイパーパラメータ探索戦略を決めたい
+DO:
+  1. `output/{project-name}/phase0-research-plan.md` の存在を確認する
+  2. 存在しない場合 → まず `spread1000-research-planner` を実行
+  3. Phase 0 完了後 → `spread1000-experiment-planner`
+
 WHEN: Azure上の研究基盤アーキテクチャを設計したい、GPUクラスタ・MLパイプライン構成を決めたい
 DO: → `spread1000-azure-architect`
 
@@ -98,6 +104,9 @@ DO: → `spread1000-experiment-guide`
 1. ユーザーは研究テーマを持っているが AI 活用方法が不明？
    - YES → `spread1000-research-planner`
    - NO → next
+1b. 研究プランは確定済みで詳細な実験計画書（仮説・変数・実験条件・評価戦略）が必要？
+   - YES → `spread1000-experiment-planner`
+   - NO → next
 2. 研究プランは確定済みで Azure 構成が必要？
    - YES → `spread1000-azure-architect`
    - NO → next
@@ -132,8 +141,9 @@ DO: → `spread1000-experiment-guide`
 ### Full Workflow
 
 Pre   → `spread1000-context-collector`: コンテキスト充足度判定 → 不足時は1問1答で収集 → メタプロンプト生成 ⏸️ ユーザー承認
-Phase 0  → `spread1000-research-planner`: 研究テーマのヒアリング、Web調査、AI活用研究プラン策定 ⏸️ ユーザー承認
-Phase 1  → `spread1000-azure-architect`: 研究プランに基づくAzureアーキテクチャ設計 ⏸️ ユーザー承認
+Phase 0   → `spread1000-research-planner`: 研究テーマのヒアリング、Web調査、AI活用研究プラン策定 ⏸️ ユーザー承認
+Phase 0b  → `spread1000-experiment-planner`: 詳細実験計画書の作成（仮説定義・変数設計・実験条件・評価戦略・統計解析計画） ⏸️ ユーザー承認
+Phase 1   → `spread1000-azure-architect`: 研究プランに基づくAzureアーキテクチャ設計 ⏸️ ユーザー承認
 Phase 2  → `spread1000-cost-estimator`: Azure構成のコスト算出・予算計画
 Phase 3  → `spread1000-proposal-writer`: SPReAD申請書の生成 ⏸️ ユーザー承認
 Phase 3b → `proposal-reviewer` agent: 申請書の品質レビュー（6審査観点） ⏸️ ユーザー確認
@@ -169,6 +179,7 @@ PLAN → EXECUTE → VERIFY → REPORT → LOG
 ## Quality Gates
 
 - [ ] 研究プランにAI活用の具体的手法が記載されている
+- [ ] 実験計画書に仮説・変数・実験条件・評価戦略・統計解析計画が定義されている
 - [ ] Azure構成が研究プランの計算要件を満たしている
 - [ ] コスト見積もりが申請予算の範囲内に収まっている
 - [ ] 申請書がSPReADの公募要領に準拠している
