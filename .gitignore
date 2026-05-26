@@ -10,6 +10,7 @@ build/
 data/
 projects/
 backend/projects/
+co-scientist-optimization/
 copilot-sessions/
 
 # Environment
