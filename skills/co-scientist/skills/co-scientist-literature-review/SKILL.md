@@ -54,7 +54,20 @@ Systematic literature search, screening, and evidence synthesis.
 - `results/search-strategy.md`: documented search methodology.
 - `results/screening-table.csv`: inclusion/exclusion decisions.
 - `results/extraction-table.csv`: extracted data from included studies.
+- `results/reference-list.md`: structured citation list for downstream use by `co-scientist-academic-writing`.
 - `figures/prisma-flow.md`: PRISMA flow diagram data.
+
+### Reference List Format (`results/reference-list.md`)
+
+Each entry must include: Author(s), Title, Journal/Venue, Year, and DOI (if available).
+Use `(Author, Year)` citation keys consistently. Example:
+
+```markdown
+1. (Doe, 2023) Doe, J., & Smith, A. (2023). Title of the paper. *Journal Name*, 12(3), 45–67. https://doi.org/10.xxxx/xxxxx
+2. (Lee, 2022) Lee, K. et al. (2022). Another paper title. *Conference Proceedings*. https://doi.org/10.xxxx/xxxxx
+```
+
+This file is the **source of truth** for citations in subsequent paper writing. Every paper included after screening must appear here.
 
 ## Available Tools (MCP)
 

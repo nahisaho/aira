@@ -211,6 +211,8 @@ Conduct Deep Review only once after Phase 4, and if issues are found, revise onl
 - [ ] Major quantitative results include uncertainty indicators such as CI / ± / p-values.
 - [ ] The Methods section of `report.md` includes at least 3 LaTeX equations (`$$...$$`) when mathematical methods are used. If not applicable, explicitly state "N/A".
 - [ ] The references include **at least 10 entries**. Include only real, specific references (no fabrication). Do not add low-relevance references just to meet the count.
+- [ ] **Citation style: `(Author, Year)`** — all in-text citations use this format consistently. Numbered `[N]` style is not used.
+- [ ] **All references from the literature survey** (`results/reference-list.md`) are included in the final paper's References section, unless explicitly excluded with reason.
 - [ ] **Include DOI in references by default** (required for major journal and conference proceedings references). Omit DOI only when it cannot be determined with confidence. **Fabricating a DOI is strictly prohibited.**
 - [ ] **At least 30% of the references must be from 2020 or later** (**required**). After completing the reference list, verify the proportion from 2020 onward, and add more if it is below 30%.
 - [ ] **Validity of method selection** is described in the Methods section. Consider at least two candidate methods, and clearly state the selection rationale and rejection rationale. Include a baseline comparison (lightweight implementation, literature comparison, or theoretical comparison).

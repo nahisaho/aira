@@ -26,7 +26,12 @@ tu_tools:
    - Identify journal guidelines (word limit, section structure, figure limits)
    - Select appropriate template
 
-2. Draft sections in order:
+2. **Load literature survey outputs** (if available):
+   - Read `results/reference-list.md` from the literature review phase
+   - This is the **primary citation source**; all surveyed references should be cited unless explicitly irrelevant
+   - If the file does not exist, build the reference list during writing using Crossref/Semantic Scholar
+
+3. Draft sections in order:
    - Methods (most objective, draft first)
    - Results (present findings with figure references)
    - Introduction (frame the research question and significance)
@@ -34,10 +39,11 @@ tu_tools:
    - Abstract (summarize after all sections complete)
    - Title (optimize for discoverability)
 
-3. Citation integration:
-   - Insert in-text citations in required format
-   - Generate reference list
-   - Verify all citations are referenced and vice versa
+4. Citation integration:
+   - Use **`(Author, Year)` style** for all in-text citations (e.g., `(Doe, 2023)`, `Doe et al. (2023)`)
+   - Every entry from `results/reference-list.md` must appear in the References section
+   - Each citation must be individually supported — describe what the cited work contributes
+   - Generate a numbered reference list at the end, sorted alphabetically by first author
 
 4. Quality review:
    - Check logical flow across sections
@@ -85,12 +91,19 @@ tu_tools:
 
 ## Reference Rules
 
+**Citation style: `(Author, Year)`** — use this consistently throughout the paper.
+- Single author: `(Smith, 2023)`
+- Two authors: `(Smith & Lee, 2023)`
+- Three or more: `(Smith et al., 2023)`
+- Narrative form: `Smith et al. (2023) demonstrated that...`
+
 When listing references, include DOI whenever possible.
 If DOI is unknown, omit volume/issue/page numbers and list only the title and authors.
 It is better to omit details than to guess and include inaccurate metadata.
 
 ### Reference Quality Standards
 - For papers involving literature review, target **≥10 references**.
+- All references from `results/reference-list.md` (literature survey output) must be included. If any are omitted, document the reason.
 - DOI format check: confirm it matches the `10.XXXX/XXXXX` pattern. Remove invalid DOI strings.
 - Each reference must be cited individually in the main text. Bulk citations such as `[1-5]` are prohibited.
 
