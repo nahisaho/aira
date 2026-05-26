@@ -158,6 +158,21 @@ function checkProjectsDir(): PreflightCheck {
       fs.mkdirSync(projectsDir, { recursive: true });
     }
 
+    for (const entry of fs.readdirSync(projectsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+
+      const projectDir = path.join(projectsDir, entry.name);
+      const workspaceDir = path.join(projectDir, 'workspace');
+      const gitDir = path.join(workspaceDir, '.git');
+      fs.mkdirSync(path.join(workspaceDir, 'src'), { recursive: true });
+      fs.mkdirSync(path.join(workspaceDir, 'figures'), { recursive: true });
+      if (!fs.existsSync(path.join(gitDir, 'HEAD'))) {
+        fs.mkdirSync(path.join(gitDir, 'objects'), { recursive: true });
+        fs.mkdirSync(path.join(gitDir, 'refs'), { recursive: true });
+        fs.writeFileSync(path.join(gitDir, 'HEAD'), 'ref: refs/heads/main\n');
+      }
+    }
+
     // Verify writable
     const testFile = path.join(projectsDir, `.preflight-${Date.now()}.tmp`);
     fs.writeFileSync(testFile, 'test');
