@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.4.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.5.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.4.0
+# Co-Scientist v4.5.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -32,16 +32,17 @@ Collaborative research partner with 202 specialized sub-skills. Route work to th
 
 ## Time Budget
 
-Target total runtime: **15 minutes**. If likely to exceed, downsample data, simplify computation, or inform the user before continuing.
+Target total runtime: **20 minutes**. If likely to exceed, downsample data, simplify computation, or inform the user before continuing.
 
 | Phase | Target |
 |-------|--------|
 | Code generation | 5 min |
-| Code execution | 5 min (lightweight sample data) |
+| Code execution | 4 min (lightweight sample data) |
 | Figure generation | 2 min |
-| Report writing (incremental) | 5 min — build during execution, verify + repair at end |
-| Paper writing | 2 min |
+| Report writing (incremental) | 4 min — build during execution, verify + repair at end |
+| Paper writing | 5 min — **mandatory deliverable, not optional** |
 
+- **paper.md is a required deliverable.** Do not mark the work complete without generating paper.md. If time is running short, simplify the experiment scope rather than skipping paper.md.
 - Use **lightweight sample data** for training, simulation, and heavy computation. Full-scale runs are the user's responsibility.
 - After **3 failed retries** of the same step, simplify the approach and proceed. Do not loop indefinitely.
 - Prefer quick representative runs that demonstrate correctness over exhaustive computation.
@@ -183,7 +184,7 @@ Phase 2 → `co-scientist-experimental-design`: Experimental design
 
 Phase 3 → `co-scientist-data-analysis`: Execution and analysis
 
-Phase 4 → `co-scientist-academic-writing`: Academic writing
+Phase 4 → `co-scientist-academic-writing`: Academic writing — **MUST produce `paper.md`**
   → 🦆 `co-scientist-critical-review` (Mode: Deep Review, one time only)
   → If issues are found, revise and incorporate changes only once
 
@@ -200,9 +201,13 @@ Phase 7 → `co-scientist-presentation`: Presentation preparation
 Even when the entire workflow is requested in a single prompt, internally execute the above phases in sequence.
 Conduct Deep Review only once after Phase 4, and if issues are found, revise only once.
 
+**paper.md is mandatory in Single-Turn Mode.** Phase 4 must always execute and produce `paper.md`. If time budget is tight, simplify earlier phases (reduce data size, fewer figures) rather than skipping paper generation.
+
 ## Quality Gates
 
-**After completing report.md, self-check the following and fix any failing items before marking the work complete.**
+**After completing report.md AND paper.md, self-check the following and fix any failing items before marking the work complete.**
+
+### report.md Quality Gates
 
 - [ ] `report.md` follows the required section structure (Abstract, Introduction, Methods, Results, Discussion, Limitations and Future Work, References, File Inventory).
 - [ ] Each section is written in **prose paragraphs** (sections consisting only of bullet points are unacceptable, except for File Inventory and References).
@@ -210,6 +215,19 @@ Conduct Deep Review only once after Phase 4, and if issues are found, revise onl
 - [ ] **Run `wc -w report.md` and confirm that it contains at least 850 words. If it is under 850 words, expand Methods, Results, Discussion, and Limitations, then verify again.** report.md is the primary deliverable and must not be a thin summary.
 - [ ] Major quantitative results include uncertainty indicators such as CI / ± / p-values.
 - [ ] The Methods section of `report.md` includes at least 3 LaTeX equations (`$$...$$`) when mathematical methods are used. If not applicable, explicitly state "N/A".
+
+### paper.md Quality Gates (MANDATORY — Phase 4 completion requirement)
+
+- [ ] **`paper.md` exists.** Phase 4 is not complete without it. **Omission is a failure.**
+- [ ] **Run `wc -w paper.md` and confirm that it contains at least 1,500 words.** If under 1,500 words, expand Methods, Results, and Discussion until the threshold is met.
+- [ ] `paper.md` contains all required IMRaD sections: Abstract, Introduction, Methods, Results, Discussion, Limitations and Future Work, Conclusion, References.
+- [ ] `paper.md` contains `## Limitations and Future Work` with at least 200 words and at least 3 specific limitations.
+- [ ] All quantitative results in `paper.md` include uncertainty indicators (CI / ± / p-values).
+- [ ] All claims in Discussion are supported by Results.
+- [ ] `paper.md` and `report.md` numerical results are consistent.
+
+### Shared Quality Gates
+
 - [ ] The references include **at least 10 entries**. Include only real, specific references (no fabrication). Do not add low-relevance references just to meet the count.
 - [ ] **Citation style: `(Author, Year)`** — all in-text citations use this format consistently. Numbered `[N]` style is not used.
 - [ ] **All references from the literature survey** (`results/reference-list.md`) are included in the final paper's References section, unless explicitly excluded with reason.
@@ -224,6 +242,7 @@ Conduct Deep Review only once after Phase 4, and if issues are found, revise onl
 ```text
 workspace/
 ├── report.md
+├── paper.md              # Academic paper (IMRaD, ≥1,500 words) — MANDATORY
 ├── src/              # Source code (≥3 modules for non-trivial experiments)
 ├── tests/            # Minimal validation tests
 ├── figures/
@@ -240,7 +259,7 @@ Every execution follows: PLAN → EXECUTE (with incremental report) → VERIFY �
 
 1. **PLAN**: define objective, constraints, and target outputs.
 2. **EXECUTE**: run the selected sub-skill pipeline. **Build `report.md` incrementally** — write each section as corresponding work completes.
-3. **VERIFY**: check all applicable quality gates. Run `wc -w report.md` — if below 850, expand and re-verify.
+3. **VERIFY**: check all applicable quality gates. Run `wc -w report.md` — if below 850, expand and re-verify. Run `wc -w paper.md` — if below 1,500, expand and re-verify. **Both files must pass.**
 4. **FINALIZE**: complete References + File Inventory. Run final cleanup + verification.
 5. **LOG**: finalize `logs/process-log.jsonl`.
 

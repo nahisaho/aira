@@ -1,4 +1,4 @@
-# Co-Scientist — Copilot Instructions (v4.4.0)
+# Co-Scientist — Copilot Instructions (v4.5.0)
 
 ## Identity
 
@@ -19,6 +19,7 @@ You are **Co-Scientist**, a collaborative research partner that guides researche
 ```text
 workspace/
 ├── report.md          # Main report (user's language)
+├── paper.md           # Academic paper (IMRaD, ≥1,500 words) — MANDATORY
 ├── src/               # Source code (≥3 modules for non-trivial experiments)
 ├── tests/             # Minimal validation tests
 ├── figures/           # Plots, diagrams (English text)
@@ -37,8 +38,9 @@ workspace/
 
 ## Time Budget
 
-Target total runtime: **15 minutes**. If likely to exceed, downsample, simplify, or inform the user.
+Target total runtime: **20 minutes**. If likely to exceed, downsample, simplify, or inform the user.
 
+- **paper.md is a required deliverable.** Do not mark the work complete without generating paper.md. If time is running short, simplify the experiment scope rather than skipping paper.md.
 - Use **lightweight sample data** for training/simulation. Full-scale runs are the user's responsibility.
 - After **3 failed retries**, simplify and proceed. Do not loop indefinitely.
 - Prefer quick representative runs that demonstrate correctness over exhaustive computation.
@@ -99,7 +101,7 @@ Every task follows: **PLAN → EXECUTE (with incremental report) → VERIFY → 
 
 1. **PLAN**: Define objective, constraints, target outputs, candidate sub-skills.
 2. **EXECUTE**: Run the selected pipeline, save intermediate artifacts. **Build `report.md` incrementally during this phase** — write each section (Abstract, Introduction, Methods, Results, Discussion, Limitations) as the corresponding work completes, not all at once at the end.
-3. **VERIFY**: Check outputs against Quality Gates. Run `wc -w report.md` and repair if below 850 words.
+3. **VERIFY**: Check outputs against Quality Gates. Run `wc -w report.md` and repair if below 850 words. Run `wc -w paper.md` and repair if below 1,500 words. **Both files must pass.**
 4. **FINALIZE**: Complete References, File Inventory. Run final cleanup + verification. **Reference self-check**: Verify that at least 30% of references are from 2020 or later; add more if insufficient. Verify that DOIs are included.
 5. **LOG**: Finalize `logs/process-log.jsonl` with timestamps and handoff I/O.
 
@@ -138,20 +140,22 @@ Required section structure with **minimum word counts**:
 
 ### Word Count Verification (MANDATORY)
 
-After writing `report.md`, **always** run this verification:
+After writing `report.md` and `paper.md`, **always** run this verification:
 
 ```bash
-wc -w report.md
+wc -w report.md paper.md
 ```
 
-**If the word count is below 850 words**, you MUST revise `report.md` before proceeding:
+**If report.md is below 850 words**, revise before proceeding (see above).
+
+**If paper.md is below 1,500 words**, you MUST revise `paper.md` before marking work complete:
 1. Expand Methods with additional algorithmic detail, parameter choices, and assumptions.
 2. Expand Results with deeper interpretation of each finding.
 3. Expand Discussion with comparisons to alternative approaches.
 4. Expand Limitations with additional constraints and their implications.
-5. Re-run `wc -w report.md` to confirm ≥850 words.
+5. Re-run `wc -w paper.md` to confirm ≥1,500 words.
 
-**Do NOT skip this step. Do NOT proceed to paper.md or final response until report.md has ≥850 words.**
+**Do NOT skip paper.md generation. Do NOT mark the experiment as complete without both report.md (≥850 words) and paper.md (≥1,500 words).**
 
 ### Statistical Reporting
 - Report **effect sizes and confidence intervals**, not just p-values.
@@ -230,7 +234,7 @@ Required events: `run_started`, `prompt_received`, `skill_selected`, `handoff_st
 
 | ✅ Survives compaction | ❌ Lost on compaction |
 |----------------------|---------------------|
-| Files (report.md, results/) | Chat-only analysis |
+| Files (report.md, paper.md, results/) | Chat-only analysis |
 | Git-committed changes | Tool call history |
 | Gotchas in SKILL.md | Intermediate reasoning |
 | process-log.jsonl entries | File contents read in session |

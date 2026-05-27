@@ -2,6 +2,16 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.4.1] — 2026-05-28
+
+### Fixed
+- **Co-Scientist paper.md 生成強制化**: paper.md が約35%の実験で未生成だった構造的問題を修正
+  - Time Budget: 15分→20分、Paper writing 配分を2分→5分に増加
+  - Quality Gates: paper.md の存在チェック、語数チェック（≥1,500語）、IMRaD構造チェックを追加
+  - Research Lifecycle Phase 4: paper.md 生成を必須と明記（Single-Turn Mode 含む）
+  - Required Output Layout: paper.md をレイアウトに追加
+  - Co-Scientist バージョン: v4.4.0 → v4.5.0
+
 ## [v2.4.0] — 2026-05-27
 
 ### Added
