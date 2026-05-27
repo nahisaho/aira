@@ -39,13 +39,13 @@ export function attachWebSocket(server: Server, port: number): WebSocketServer {
     const url = request.url ?? '';
 
     // Origin verification
-    // In Docker mode, the host port may differ from the container port,
-    // so allow any localhost origin when serving the embedded frontend.
-    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
-    if (origin && !allowedOrigins.has(origin) && !(serveFrontend && isLocalhost)) {
-      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
-      socket.destroy();
-      return;
+    // In serve-frontend mode (Docker), skip origin check — CSRF tokens protect against cross-site attacks.
+    if (!serveFrontend) {
+      if (origin && !allowedOrigins.has(origin)) {
+        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+        socket.destroy();
+        return;
+      }
     }
 
     // Parse project ID from URL: /ws/projects/:id/chat
