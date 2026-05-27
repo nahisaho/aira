@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Hono } from 'hono';
 import {
   originMiddleware,
@@ -156,6 +156,53 @@ describe('Security Middleware', () => {
         headers: { Origin: 'http://localhost:3000' },
       });
       expect(res.status).toBe(204);
+    });
+  });
+
+  describe('Serve-frontend mode (Docker)', () => {
+    beforeEach(() => {
+      process.env.AIRA_SERVE_FRONTEND = 'true';
+    });
+    afterEach(() => {
+      delete process.env.AIRA_SERVE_FRONTEND;
+    });
+
+    it('should allow POST from LAN IP origin', async () => {
+      const token = generateCsrfToken();
+      const res = await app.request('/api/test', {
+        method: 'POST',
+        headers: {
+          Origin: 'http://192.168.1.100:3001',
+          'X-AIRA-Token': token,
+        },
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it('should allow POST without Origin header', async () => {
+      const token = generateCsrfToken();
+      const res = await app.request('/api/test', {
+        method: 'POST',
+        headers: { 'X-AIRA-Token': token },
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it('should still require CSRF token', async () => {
+      const res = await app.request('/api/test', {
+        method: 'POST',
+        headers: { Origin: 'http://192.168.1.100:3001' },
+      });
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.error).toContain('CSRF');
+    });
+
+    it('should echo CORS header for any origin', async () => {
+      const res = await app.request('/api/test', {
+        headers: { Origin: 'http://192.168.1.100:3001' },
+      });
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://192.168.1.100:3001');
     });
   });
 });

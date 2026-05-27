@@ -19,6 +19,10 @@ function getAllowedOrigins(): string[] {
   if (vitePort === 5173) {
     origins.push(`http://localhost:5174`, `http://127.0.0.1:5174`, `http://[::1]:5174`);
   }
+  // Allow LAN access for experiment automation
+  if (process.env.AIRA_ALLOWED_ORIGINS) {
+    origins.push(...process.env.AIRA_ALLOWED_ORIGINS.split(',').map(o => o.trim()));
+  }
   return origins;
 }
 
@@ -27,6 +31,8 @@ const csrfTokens = new Set<string>();
 
 /**
  * Origin validation middleware for state-changing requests.
+ * In serve-frontend mode (Docker), CSRF tokens are the primary defence
+ * so we allow any origin — users may access via LAN IP, hostname, etc.
  */
 export const originMiddleware = createMiddleware(async (c, next) => {
   const method = c.req.method;
@@ -35,24 +41,19 @@ export const originMiddleware = createMiddleware(async (c, next) => {
     return next();
   }
 
+  // In serve-frontend mode, CSRF middleware is sufficient protection.
+  // Skip origin check to allow access from any host (LAN IP, hostname, etc.)
+  if (process.env.AIRA_SERVE_FRONTEND === 'true') {
+    return next();
+  }
+
   const origin = c.req.header('origin');
   if (!origin) {
-    // No origin = same-origin request (e.g., from embedded frontend)
-    if (process.env.AIRA_SERVE_FRONTEND === 'true') {
-      return next();
-    }
     return c.json({ error: 'Missing Origin header' }, 403);
   }
 
   const allowed = getAllowedOrigins();
   if (!allowed.includes(origin)) {
-    // In serve-frontend mode, allow any localhost origin (Docker port mapping)
-    if (process.env.AIRA_SERVE_FRONTEND === 'true') {
-      const url = new URL(origin);
-      if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]') {
-        return next();
-      }
-    }
     return c.json({ error: 'Origin not allowed' }, 403);
   }
 
@@ -83,16 +84,20 @@ export const csrfMiddleware = createMiddleware(async (c, next) => {
 
 /**
  * CORS middleware with allowlist echo (no wildcard).
+ * In serve-frontend mode, echo any origin to support LAN/IP access.
  */
 export const corsMiddleware = createMiddleware(async (c, next) => {
   const origin = c.req.header('origin');
-  const allowed = getAllowedOrigins();
 
-  if (origin && allowed.includes(origin)) {
-    c.header('Access-Control-Allow-Origin', origin);
-    c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    c.header('Access-Control-Allow-Headers', 'Content-Type, X-AIRA-Token');
-    c.header('Access-Control-Max-Age', '86400');
+  if (origin) {
+    const allowed = getAllowedOrigins();
+    const isAllowed = allowed.includes(origin) || process.env.AIRA_SERVE_FRONTEND === 'true';
+    if (isAllowed) {
+      c.header('Access-Control-Allow-Origin', origin);
+      c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      c.header('Access-Control-Allow-Headers', 'Content-Type, X-AIRA-Token');
+      c.header('Access-Control-Max-Age', '86400');
+    }
   }
 
   if (c.req.method === 'OPTIONS') {
