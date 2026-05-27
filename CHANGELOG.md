@@ -2,6 +2,21 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.4.0] — 2026-05-27
+
+### Added
+- **マルチアーキテクチャ Docker イメージ**: linux/amd64 + linux/arm64 の両アーキテクチャに対応
+  - GitHub Actions で QEMU + Buildx によるマルチプラットフォームビルド
+  - `docker pull` 時にホストのアーキテクチャに合ったイメージが自動選択
+
+### Fixed
+- **設定画面のトークン管理**: 環境変数管理時のエラーハンドリング改善
+  - トークンソースの表示（「環境変数で管理」バッジ）
+  - 環境変数設定時は削除ボタン非表示
+  - 設定/削除失敗時のエラーメッセージ表示
+- **Docker ボリュームマウントパス修正**: `/app/backend/data` → `/app/data`、`/app/backend/projects` → `/app/projects`
+- **Copilot CLI 永続化**: npm グローバルプレフィックスを `/app/.npm-global` に変更し、ボリュームマウントで更新を永続化可能に
+
 ## [v2.3.0] — 2026-05-24
 
 ### Changed

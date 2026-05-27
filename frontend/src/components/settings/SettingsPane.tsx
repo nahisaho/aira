@@ -133,7 +133,7 @@ function SendKeySettings() {
 
 function AuthSettings() {
   const t = useT();
-  const { tokenConfigured, loading, checkToken, setToken, deleteToken, validateToken } =
+  const { tokenConfigured, tokenSource, tokenError, loading, checkToken, setToken, deleteToken, validateToken, clearTokenError } =
     useSettingsStore();
   const [input, setInput] = useState('');
   const [validating, setValidating] = useState(false);
@@ -143,13 +143,17 @@ function AuthSettings() {
     checkToken();
   }, [checkToken]);
 
+  const isEnvToken = tokenSource === 'environment';
+
   const handleSet = async () => {
     if (!input.trim()) return;
-    await setToken(input.trim());
-    setInput('');
+    clearTokenError();
+    const ok = await setToken(input.trim());
+    if (ok) setInput('');
   };
 
   const handleDelete = async () => {
+    clearTokenError();
     await deleteToken();
     setValidationResult(null);
   };
@@ -175,8 +179,13 @@ function AuthSettings() {
 
       {tokenConfigured === true && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-green-400">{t('settings.tokenConfigured')}</span>
+            {isEnvToken && (
+              <span className="text-xs text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded">
+                {t('settings.tokenEnvManaged')}
+              </span>
+            )}
             <button
               onClick={handleValidate}
               className="text-xs text-blue-400 hover:text-blue-300"
@@ -184,12 +193,14 @@ function AuthSettings() {
             >
               {validating ? t('settings.validating') : t('settings.validate')}
             </button>
-            <button
-              onClick={handleDelete}
-              className="text-xs text-red-400 hover:text-red-300"
-            >
-              {t('settings.remove')}
-            </button>
+            {!isEnvToken && (
+              <button
+                onClick={handleDelete}
+                className="text-xs text-red-400 hover:text-red-300"
+              >
+                {t('settings.remove')}
+              </button>
+            )}
           </div>
           {validationResult && (
             <p className={`text-xs ${validationResult.valid ? 'text-green-400' : 'text-red-400'}`}>
@@ -197,6 +208,9 @@ function AuthSettings() {
                 ? `${t('settings.tokenValid')} (${validationResult.login})`
                 : t('settings.tokenInvalid')}
             </p>
+          )}
+          {tokenError && (
+            <p className="text-xs text-red-400">{tokenError}</p>
           )}
         </div>
       )}
@@ -220,6 +234,9 @@ function AuthSettings() {
               {t('settings.save')}
             </button>
           </div>
+          {tokenError && (
+            <p className="text-xs text-red-400">{tokenError}</p>
+          )}
         </div>
       )}
     </section>

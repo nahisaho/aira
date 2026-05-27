@@ -2,7 +2,7 @@
 
 > Web ベースの AI Research Assistant
 > GitHub Copilot CLI をエージェントエンジンとして使用  
-> **v2.1.1**
+> **v2.4.0**
 
 ## 概要
 
@@ -17,8 +17,9 @@ docker pull ghcr.io/nahisaho/aira:latest (最新版)
 # コンテナの起動
 docker run -d -p 3001:3000 \
   -e GITHUB_TOKEN="<your-github-token>" \
-  -v aira-data:/app/backend/data \
-  -v aira-projects:/app/backend/projects \
+  -v aira-data:/app/data \
+  -v aira-projects:/app/projects \
+  -v aira-npm-global:/app/.npm-global \
   ghcr.io/nahisaho/aira:latest
 ```
 
@@ -137,7 +138,7 @@ your-repo/
 | DB | SQLite（sql.js / WASM） |
 | RAG | Structured RAG（LLM 知識抽出 + 転置インデックス） |
 | エージェント | GitHub Copilot CLI（@githubnext/copilot） |
-| コンテナ | Docker（マルチステージビルド） |
+| コンテナ | Docker（マルチステージビルド、linux/amd64 + linux/arm64） |
 
 ## 開発
 

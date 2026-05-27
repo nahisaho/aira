@@ -40,8 +40,12 @@ RUN pip install --break-system-packages tooluniverse
 RUN printf '#!/bin/sh\nexec tooluniverse-smcp "$@" 2>/dev/null | grep --line-buffered "^{"\n' > /usr/local/bin/tooluniverse-stdio \
     && chmod +x /usr/local/bin/tooluniverse-stdio
 
-# Install GitHub Copilot CLI globally
-RUN npm install -g @github/copilot@1.0.41-0 && npm cache clean --force
+# Install GitHub Copilot CLI into a mountable prefix so updates survive
+# container recreation when /app/.npm-global is volume-mounted.
+ENV NPM_CONFIG_PREFIX=/app/.npm-global
+ENV PATH="/app/.npm-global/bin:${PATH}"
+RUN mkdir -p /app/.npm-global \
+    && npm install -g @github/copilot && npm cache clean --force
 
 # Install only production dependencies
 COPY package.json package-lock.json ./
@@ -56,13 +60,19 @@ COPY --from=backend-build /app/backend/src/config backend/src/config
 COPY skills/ skills/
 
 # Create data directories and ensure node user owns its home (for copilot CLI config)
-RUN mkdir -p data projects /home/node/.copilot/session-state && chown -R node:node /app /home/node/.copilot
+RUN mkdir -p data projects /home/node/.copilot/session-state && chown -R node:node /app /home/node/.copilot /app/.npm-global
 
 # Use root for entrypoint to fix volume permissions, then drop to node
 # Exit code 42 from the backend signals a restart request.
 COPY --chmod=755 <<'EOF' /entrypoint.sh
 #!/bin/sh
 chown -R node:node /home/node/.copilot 2>/dev/null
+# If .npm-global is volume-mounted but empty (first run), bootstrap copilot
+if [ ! -x /app/.npm-global/bin/copilot ]; then
+  echo "[AIRA] Copilot CLI not found in .npm-global, installing..."
+  npm install -g @github/copilot 2>/dev/null && npm cache clean --force 2>/dev/null
+  chown -R node:node /app/.npm-global 2>/dev/null
+fi
 while true; do
   su -s /bin/sh node -c "exec node backend/dist/server.js"
   rc=$?
