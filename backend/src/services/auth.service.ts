@@ -11,14 +11,14 @@ interface Settings {
 
 export class AuthService {
   /**
-   * Resolve GitHub Token with precedence: env > settings.json > undefined
+   * Resolve GitHub Token with precedence: settings.json > env > undefined
    */
   resolveToken(): string | undefined {
-    const envToken = process.env.GITHUB_TOKEN;
-    if (envToken) {
-      return envToken;
+    const stored = this.readStoredToken();
+    if (stored) {
+      return stored;
     }
-    return this.readStoredToken();
+    return process.env.GITHUB_TOKEN;
   }
 
   /**
@@ -29,21 +29,16 @@ export class AuthService {
   }
 
   /**
-   * Check if token comes from environment variable
+   * Check if token comes from environment variable (and not overridden by settings.json)
    */
   isEnvToken(): boolean {
-    return !!process.env.GITHUB_TOKEN;
+    return !this.readStoredToken() && !!process.env.GITHUB_TOKEN;
   }
 
   /**
    * Store token to settings.json with atomic write and restrictive permissions.
-   * Throws if GITHUB_TOKEN env var is set (env takes precedence).
    */
   storeToken(token: string): void {
-    if (process.env.GITHUB_TOKEN) {
-      throw new TokenConflictError('Cannot store token: GITHUB_TOKEN environment variable is set');
-    }
-
     const settings: Settings = { token };
     const content = JSON.stringify(settings, null, 2);
 

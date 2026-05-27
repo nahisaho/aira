@@ -27,19 +27,28 @@ describe('AuthService logic', () => {
   });
 
   describe('Token resolution precedence', () => {
-    it('should prefer env over settings.json', () => {
+    it('should prefer settings.json over env', () => {
       process.env.GITHUB_TOKEN = 'ghp_env_token';
       fs.writeFileSync(settingsPath, JSON.stringify({ token: 'ghp_stored_token' }));
 
-      // Simulate resolution: env > file
-      const envToken = process.env.GITHUB_TOKEN;
+      // Simulate resolution: file > env
       const fileToken = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')).token;
+      const envToken = process.env.GITHUB_TOKEN;
 
-      expect(envToken).toBe('ghp_env_token');
       expect(fileToken).toBe('ghp_stored_token');
-      // env should win
-      const resolved = envToken || fileToken;
-      expect(resolved).toBe('ghp_env_token');
+      expect(envToken).toBe('ghp_env_token');
+      // settings.json should win
+      const resolved = fileToken || envToken;
+      expect(resolved).toBe('ghp_stored_token');
+    });
+
+    it('should fall back to env when settings.json not set', () => {
+      process.env.GITHUB_TOKEN = 'ghp_env_token';
+
+      const hasFile = fs.existsSync(settingsPath);
+      const envToken = process.env.GITHUB_TOKEN;
+      expect(hasFile).toBe(false);
+      expect(envToken).toBe('ghp_env_token');
     });
 
     it('should fall back to settings.json when env not set', () => {
@@ -48,7 +57,7 @@ describe('AuthService logic', () => {
 
       const envToken = process.env.GITHUB_TOKEN;
       const fileToken = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')).token;
-      const resolved = envToken || fileToken;
+      const resolved = fileToken || envToken;
       expect(resolved).toBe('ghp_stored_token');
     });
 
@@ -121,12 +130,15 @@ describe('AuthService logic', () => {
     });
   });
 
-  describe('Env conflict', () => {
-    it('should reject store when GITHUB_TOKEN env is set', () => {
+  describe('Store with env set', () => {
+    it('should allow store even when GITHUB_TOKEN env is set', () => {
       process.env.GITHUB_TOKEN = 'ghp_env_token';
 
-      // AuthService would throw TokenConflictError
-      expect(!!process.env.GITHUB_TOKEN).toBe(true);
+      // storeToken should succeed — settings.json overrides env
+      const content = JSON.stringify({ token: 'ghp_ui_token' }, null, 2);
+      fs.writeFileSync(settingsPath, content);
+      const stored = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+      expect(stored.token).toBe('ghp_ui_token');
     });
   });
 });

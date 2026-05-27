@@ -133,7 +133,7 @@ function SendKeySettings() {
 
 function AuthSettings() {
   const t = useT();
-  const { tokenConfigured, tokenSource, tokenError, loading, checkToken, setToken, deleteToken, validateToken, clearTokenError } =
+  const { tokenConfigured, tokenError, loading, checkToken, setToken, deleteToken, validateToken, clearTokenError } =
     useSettingsStore();
   const [input, setInput] = useState('');
   const [validating, setValidating] = useState(false);
@@ -142,8 +142,6 @@ function AuthSettings() {
   useEffect(() => {
     checkToken();
   }, [checkToken]);
-
-  const isEnvToken = tokenSource === 'environment';
 
   const handleSet = async () => {
     if (!input.trim()) return;
@@ -179,13 +177,8 @@ function AuthSettings() {
 
       {tokenConfigured === true && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <span className="text-xs text-green-400">{t('settings.tokenConfigured')}</span>
-            {isEnvToken && (
-              <span className="text-xs text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded">
-                {t('settings.tokenEnvManaged')}
-              </span>
-            )}
             <button
               onClick={handleValidate}
               className="text-xs text-blue-400 hover:text-blue-300"
@@ -193,14 +186,12 @@ function AuthSettings() {
             >
               {validating ? t('settings.validating') : t('settings.validate')}
             </button>
-            {!isEnvToken && (
-              <button
-                onClick={handleDelete}
-                className="text-xs text-red-400 hover:text-red-300"
-              >
-                {t('settings.remove')}
-              </button>
-            )}
+            <button
+              onClick={handleDelete}
+              className="text-xs text-red-400 hover:text-red-300"
+            >
+              {t('settings.remove')}
+            </button>
           </div>
           {validationResult && (
             <p className={`text-xs ${validationResult.valid ? 'text-green-400' : 'text-red-400'}`}>

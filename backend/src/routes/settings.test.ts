@@ -43,9 +43,10 @@ describe('Settings API', () => {
     });
   });
 
-  describe('Env conflict behavior', () => {
-    it('should detect env token takes precedence', () => {
+  describe('Token behavior with env', () => {
+    it('should allow storing token even when env is set', () => {
       process.env.GITHUB_TOKEN = 'ghp_env';
+      // No longer throws — settings.json overrides env
       expect(!!process.env.GITHUB_TOKEN).toBe(true);
     });
 

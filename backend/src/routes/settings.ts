@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import fs from 'node:fs';
 import { execFile, execFileSync } from 'node:child_process';
-import { AuthService, TokenConflictError } from '../services/auth.service.js';
+import { AuthService } from '../services/auth.service.js';
 import { getProjectsDir } from '../config/paths.js';
 import { getDatabase } from '../db/index.js';
 
@@ -32,22 +32,12 @@ settingsRoutes.put('/api/settings/token', async (c) => {
     return c.json({ error: 'Invalid request', details: parsed.error.issues }, 400);
   }
 
-  try {
-    authService.storeToken(parsed.data.token);
-    return c.body(null, 204);
-  } catch (err) {
-    if (err instanceof TokenConflictError) {
-      return c.json({ error: err.message }, 409);
-    }
-    throw err;
-  }
+  authService.storeToken(parsed.data.token);
+  return c.body(null, 204);
 });
 
 // DELETE /api/settings/token — remove stored token
 settingsRoutes.delete('/api/settings/token', (c) => {
-  if (authService.isEnvToken()) {
-    return c.json({ error: 'Cannot delete: token is set via environment variable' }, 409);
-  }
   authService.deleteToken();
   return c.body(null, 204);
 });
