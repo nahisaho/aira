@@ -9,6 +9,9 @@ All notable changes to AIRA are documented in this file.
   - Copilot CLI の `--max-autopilot-continues` をデフォルト5から200に引き上げ
   - Time Budget を20分→60分（最大90分）に拡大、フェーズ別配分を再設計
   - 「Completion over speed」ルール追加 — フェーズ・成果物のスキップを禁止
+- **ストリーミング応答の文字重複修正**: チャット応答が5重に重複表示される問題を修正
+  - チャンクをブロードキャスト→ユニキャストに変更（送信元クライアントのみに配信）
+  - WebSocket ping/pong ハートビート追加（30秒間隔）で切断済み接続を検出・除去
 
 ## [v2.4.1] — 2026-05-28
 

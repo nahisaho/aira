@@ -5,9 +5,29 @@ import type { Server } from 'node:http';
 interface WSClient {
   ws: WebSocket;
   projectId: string;
+  alive: boolean;
 }
 
 const clients = new Set<WSClient>();
+
+// Ping/pong heartbeat to detect and clean stale connections
+const PING_INTERVAL_MS = 30_000;
+let pingTimer: ReturnType<typeof setInterval> | null = null;
+
+function startHeartbeat(): void {
+  if (pingTimer) return;
+  pingTimer = setInterval(() => {
+    for (const client of clients) {
+      if (!client.alive) {
+        client.ws.terminate();
+        clients.delete(client);
+        continue;
+      }
+      client.alive = false;
+      client.ws.ping();
+    }
+  }, PING_INTERVAL_MS);
+}
 
 /**
  * Get the set of allowed origins for WS upgrade.
@@ -59,8 +79,10 @@ export function attachWebSocket(server: Server, port: number): WebSocketServer {
     const projectId = match[1]!;
 
     wss.handleUpgrade(request, socket, head, (ws) => {
-      const client: WSClient = { ws, projectId };
+      const client: WSClient = { ws, projectId, alive: true };
       clients.add(client);
+
+      ws.on('pong', () => { client.alive = true; });
 
       ws.on('message', (data) => {
         // Handle incoming messages (user chat messages via WS)
@@ -97,7 +119,18 @@ export function attachWebSocket(server: Server, port: number): WebSocketServer {
     });
   });
 
+  startHeartbeat();
+
   return wss;
+}
+
+/**
+ * Send a message to a specific WebSocket client.
+ */
+function sendToClient(ws: WebSocket, event: Record<string, unknown>): void {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(event));
+  }
 }
 
 /**
@@ -111,10 +144,11 @@ function handleChatMessage(client: WSClient, content: string, messageId?: string
         existingMessageId: messageId,
         model,
         onChunk: (chunk) => {
-          broadcastToProject(client.projectId, { type: 'chunk', content: chunk });
+          // Send only to the client that initiated the chat to prevent duplication
+          sendToClient(client.ws, { type: 'chunk', content: chunk });
         },
         onProgress: (message) => {
-          broadcastToProject(client.projectId, { type: 'progress', message });
+          sendToClient(client.ws, { type: 'progress', message });
         },
         onStatus: (runId, status) => {
           broadcastToProject(client.projectId, { type: 'status', runId, status });
@@ -136,7 +170,7 @@ function handleChatMessage(client: WSClient, content: string, messageId?: string
         ? '⚠️ GitHubトークンが未設定です。設定画面からトークンを設定してください。'
         : `⚠️ エラーが発生しました: ${errMsg}`;
 
-      broadcastToProject(client.projectId, { type: 'chunk', content: userMessage });
+      sendToClient(client.ws, { type: 'chunk', content: userMessage });
       broadcastToProject(client.projectId, { type: 'status', runId: '', status: 'failed' });
     }
   });
