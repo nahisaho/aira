@@ -38,8 +38,9 @@ workspace/
 
 ## Time Budget
 
-Target total runtime: **20 minutes**. If likely to exceed, downsample, simplify, or inform the user.
+Target total runtime: **60 minutes** (complex experiments may take up to 90 minutes). **Do NOT cut corners, skip phases, or simplify deliverables to save time.** Complete all required phases and deliverables at full quality. If a single phase exceeds its target, continue — do not abort or skip subsequent phases.
 
+- **Completion over speed.** Never skip a phase or deliverable to meet a time target. All phases (PLAN → EXECUTE → VERIFY → FINALIZE → LOG) must execute. All deliverables (report.md, paper.md, figures, tests) must be generated.
 - **paper.md is a required deliverable.** Do not mark the work complete without generating paper.md. If time is running short, simplify the experiment scope rather than skipping paper.md.
 - Use **lightweight sample data** for training/simulation. Full-scale runs are the user's responsibility.
 - After **3 failed retries**, simplify and proceed. Do not loop indefinitely.

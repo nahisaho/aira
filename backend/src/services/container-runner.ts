@@ -283,6 +283,7 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
       '--output-format', 'json',
       '--stream', 'on',
       '--add-github-mcp-tool', 'web_search',
+      '--max-autopilot-continues', '200',
       sessionArg, sessionName,
     ];
 

@@ -32,17 +32,20 @@ Collaborative research partner with 202 specialized sub-skills. Route work to th
 
 ## Time Budget
 
-Target total runtime: **20 minutes**. If likely to exceed, downsample data, simplify computation, or inform the user before continuing.
+Target total runtime: **60 minutes** (complex experiments may take up to 90 minutes). **Do NOT cut corners, skip phases, or simplify deliverables to save time.** Complete all required phases and deliverables at full quality. If a single phase exceeds its target, continue — do not abort or skip subsequent phases.
 
 | Phase | Target |
 |-------|--------|
-| Code generation | 5 min |
-| Code execution | 4 min (lightweight sample data) |
-| Figure generation | 2 min |
-| Report writing (incremental) | 4 min — build during execution, verify + repair at end |
-| Paper writing | 5 min — **mandatory deliverable, not optional** |
+| Planning & literature survey | 10 min |
+| Code generation | 10 min |
+| Code execution & data analysis | 10 min (lightweight sample data) |
+| Figure generation | 5 min |
+| Report writing (incremental) | 10 min — build during execution, verify + repair at end |
+| Paper writing | 10 min — **mandatory deliverable, not optional** |
+| Verification & cleanup | 5 min |
 
 - **paper.md is a required deliverable.** Do not mark the work complete without generating paper.md. If time is running short, simplify the experiment scope rather than skipping paper.md.
+- **Completion over speed.** Never skip a phase or deliverable to meet a time target. All phases (PLAN → EXECUTE → VERIFY → FINALIZE → LOG) must execute. All deliverables (report.md, paper.md, figures, tests) must be generated.
 - Use **lightweight sample data** for training, simulation, and heavy computation. Full-scale runs are the user's responsibility.
 - After **3 failed retries** of the same step, simplify the approach and proceed. Do not loop indefinitely.
 - Prefer quick representative runs that demonstrate correctness over exhaustive computation.
