@@ -2,6 +2,14 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.5.0] — 2026-05-29
+
+### Fixed
+- **Co-Scientist 長時間タスクのタイムアウト修正**: 30〜90分の研究タスクが途中で停止する問題を解決
+  - Copilot CLI の `--max-autopilot-continues` をデフォルト5から200に引き上げ
+  - Time Budget を20分→60分（最大90分）に拡大、フェーズ別配分を再設計
+  - 「Completion over speed」ルール追加 — フェーズ・成果物のスキップを禁止
+
 ## [v2.4.1] — 2026-05-28
 
 ### Fixed

@@ -2,7 +2,7 @@
 
 > Web ベースの AI Research Assistant
 > GitHub Copilot CLI をエージェントエンジンとして使用  
-> **v2.4.1**
+> **v2.5.0**
 
 ## 概要
 
