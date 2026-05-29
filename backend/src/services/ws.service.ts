@@ -1,6 +1,7 @@
 import { IncomingMessage } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'node:http';
+import { isOriginAllowed } from '../middleware/security.js';
 
 interface WSClient {
   ws: WebSocket;
@@ -30,42 +31,26 @@ function startHeartbeat(): void {
 }
 
 /**
- * Get the set of allowed origins for WS upgrade.
- */
-function getAllowedOrigins(port: number): Set<string> {
-  const origins = new Set<string>();
-  origins.add(`http://localhost:${port}`);
-  origins.add(`http://127.0.0.1:${port}`);
-  origins.add(`http://[::1]:${port}`);
-  // Vite dev server (5173 default; 5174 when 5173 is occupied)
-  for (const vitePort of [5173, 5174, 5175]) {
-    origins.add(`http://localhost:${vitePort}`);
-    origins.add(`http://127.0.0.1:${vitePort}`);
-    origins.add(`http://[::1]:${vitePort}`);
-  }
-  return origins;
-}
-
-/**
  * Attach WebSocket handler to an HTTP server.
  */
-export function attachWebSocket(server: Server, port: number): WebSocketServer {
+export function attachWebSocket(server: Server): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true });
-  const allowedOrigins = getAllowedOrigins(port);
-  const serveFrontend = process.env.AIRA_SERVE_FRONTEND === 'true';
 
   server.on('upgrade', (request: IncomingMessage, socket, head) => {
     const origin = request.headers.origin ?? '';
+    const host = request.headers.host ?? '';
     const url = request.url ?? '';
 
-    // Origin verification
-    // In serve-frontend mode (Docker), skip origin check — CSRF tokens protect against cross-site attacks.
-    if (!serveFrontend) {
-      if (origin && !allowedOrigins.has(origin)) {
-        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
-        socket.destroy();
-        return;
-      }
+    // Origin verification — uniform across modes. Same-origin (Origin host
+    // matches request Host header) is accepted, so LAN access works without
+    // explicit configuration. Browser-driven cross-origin attacks (CSWSH)
+    // are blocked because the attacker cannot forge the Host header.
+    // Missing Origin is allowed for non-browser tooling (Node clients);
+    // CSRF does not apply to WS upgrade so this matches CSRF semantics.
+    if (origin && !isOriginAllowed(origin, host)) {
+      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+      socket.destroy();
+      return;
     }
 
     // Parse project ID from URL: /ws/projects/:id/chat

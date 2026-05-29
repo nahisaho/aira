@@ -23,6 +23,28 @@ function AGENTS_CONFIG_PATH(): string {
   return path.join(getDataDir(), 'agents-repos.json');
 }
 
+/**
+ * Hosts trusted to receive the GITHUB_TOKEN as basic-auth credentials when
+ * cloning. Defaults to github.com; extendable via AIRA_GITHUB_HOSTS (comma-
+ * separated, e.g. for GitHub Enterprise).
+ *
+ * Public API: exported for testability.
+ */
+export function isAllowedTokenHost(hostname: string): boolean {
+  const allowed = new Set<string>(['github.com']);
+  if (process.env.AIRA_GITHUB_HOSTS) {
+    for (const h of process.env.AIRA_GITHUB_HOSTS.split(',')) {
+      const trimmed = h.trim().toLowerCase();
+      if (trimmed) allowed.add(trimmed);
+    }
+  }
+  const host = hostname.toLowerCase();
+  for (const h of allowed) {
+    if (host === h || host.endsWith(`.${h}`)) return true;
+  }
+  return false;
+}
+
 function AGENTS_CACHE_DIR(): string {
   return path.join(getBaseDir(), 'agents-cache');
 }
@@ -202,6 +224,16 @@ export class AgentsRepoService {
 
     try {
       const u = new URL(url);
+      // Defence against token exfiltration: only embed the GitHub token in URLs
+      // that target trusted GitHub hosts. For any other host, fall back to the
+      // unauthenticated URL so private clones simply fail (rather than posting
+      // the token to an attacker-controlled server as basic auth).
+      if (!isAllowedTokenHost(u.hostname)) {
+        console.warn(
+          `[agents-repo] declining to embed token for non-GitHub host: ${u.hostname}`,
+        );
+        return url;
+      }
       u.username = 'x-access-token';
       u.password = token;
       return u.toString();

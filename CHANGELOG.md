@@ -2,6 +2,22 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.5.1] — 2026-05-29
+
+### Security
+
+ベースラインセキュリティ監査で発見された High 級脆弱性 6 件をまとめて修正。
+
+- **C1+H2 — Docker (serve-frontend) モードの CSRF / CSWSH 防御を強化**: 旧実装では `AIRA_SERVE_FRONTEND=true` 時に Origin 検証と CORS の allowlist を完全にバイパスしており、cross-origin 攻撃者が `/api/csrf-token` を読み出して任意の状態変更 API を叩けたほか、WebSocket への cross-origin 接続も可能だった。Origin allowlist に加えて **Same-Origin (Origin host == request Host)** 判定を導入し、ブラウザが偽造できない Host ヘッダと一致しない限り拒否。`isOriginAllowed` は WS Upgrade と共有。
+- **H1 — Agents repo URL 経由のトークン漏洩を遮断**: 任意ホストの URL を登録すると `GITHUB_TOKEN` が basic-auth として送信されていた。`github.com` (+ サブドメイン) と `AIRA_GITHUB_HOSTS` env で明示されたホストのみ token を URL に埋め込む。
+- **H4 — Credential proxy に共有シークレット認証を導入**: `127.0.0.1:3001` に listen していた proxy をローカル任意プロセスから濫用される問題を修正。起動時に 256-bit hex シークレットを生成し、`X-AIRA-Proxy-Auth` ヘッダを timing-safe 比較。サブプロセスには `AIRA_PROXY_AUTH` env で配布。
+- **H3 — CSRF token の TTL と件数上限を導入**: 旧実装は `Set` に無期限・無上限で蓄積されていた。`Map<token, expiresAt>` に変更し TTL 24h / 最大 10,000 件、超過時は FIFO で 10% を evict。`AIRA_CSRF_TTL_MS` / `AIRA_CSRF_MAX_TOKENS` で上書き可。
+- **H5 — `GET /runs/:runId/prompt` のテナントスコープ修正**: URL の `:id` (projectId) を SQL に渡しておらず、任意プロジェクト URL から任意 runId の prompt を取得可能だった。`WHERE id = ? AND project_id = ?` に修正。
+- **H6 — Upload エンドポイントのサイズ上限**: 旧実装は無制限で `arrayBuffer()` をメモリに読み込んでおり、巨大ファイルで OOM 可能だった。`File.size` をディスク書き込み前に判定し、per-file 100MB / total 500MB を超えたら 413。`AIRA_MAX_UPLOAD_FILE_BYTES` / `AIRA_MAX_UPLOAD_TOTAL_BYTES` で調整可。
+
+### Tests
+- 新規 24 ケース追加 (security 9 + agents-repo 7 + credential-proxy 5 + runs 3 + files 4 — 後者 4 ファイルは新規 test ファイル)。合計 163 backend + 21 frontend テストすべて green。
+
 ## [v2.5.0] — 2026-05-29
 
 ### Fixed

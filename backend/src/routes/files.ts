@@ -225,6 +225,15 @@ fileRoutes.delete('/api/projects/:id/files/:fileId', (c) => {
   }
 });
 
+// Memory-safety caps so a single upload request cannot exhaust the backend.
+// Read at request time so tests can lower the limits without re-importing.
+function getUploadLimits(): { perFile: number; total: number } {
+  return {
+    perFile: parseInt(process.env.AIRA_MAX_UPLOAD_FILE_BYTES ?? String(100 * 1024 * 1024), 10),
+    total: parseInt(process.env.AIRA_MAX_UPLOAD_TOTAL_BYTES ?? String(500 * 1024 * 1024), 10),
+  };
+}
+
 // POST /api/projects/:id/files/upload — upload files to workspace
 fileRoutes.post('/api/projects/:id/files/upload', async (c) => {
   const projectId = c.req.param('id');
@@ -243,6 +252,31 @@ fileRoutes.post('/api/projects/:id/files/upload', async (c) => {
   const fileList = Array.isArray(rawFiles) ? rawFiles : [rawFiles];
   const uploaded: string[] = [];
   const db = getDatabase();
+
+  // Size-limit gate (reject before any disk write). Counted from File.size,
+  // which is set by the parseBody multipart parser, so we don't have to read
+  // the body into memory just to measure it.
+  const limits = getUploadLimits();
+  let totalBytes = 0;
+  for (const file of fileList) {
+    if (!(file instanceof File)) continue;
+    if (file.size > limits.perFile) {
+      return c.json({
+        error: 'file_too_large',
+        filename: file.name,
+        size: file.size,
+        limit: limits.perFile,
+      }, 413);
+    }
+    totalBytes += file.size;
+    if (totalBytes > limits.total) {
+      return c.json({
+        error: 'upload_total_too_large',
+        size: totalBytes,
+        limit: limits.total,
+      }, 413);
+    }
+  }
 
   const upsertStmt = db.prepare(`
     INSERT INTO project_files (id, project_id, filename, file_path, size_bytes, mtime_ms, source)

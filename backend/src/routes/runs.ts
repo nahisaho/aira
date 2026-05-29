@@ -80,10 +80,15 @@ runRoutes.post('/api/projects/:id/runs/current/stop', (c) => {
 
 // GET /api/projects/:id/runs/:runId/prompt — download run prompt as text
 runRoutes.get('/api/projects/:id/runs/:runId/prompt', (c) => {
+  const projectId = c.req.param('id');
   const runId = c.req.param('runId');
   const db = getDatabase();
 
-  const run = db.prepare('SELECT prompt FROM agent_runs WHERE id = ?').get(runId) as { prompt: string | null } | undefined;
+  // Tenant scope: require both the run id and project id to match so that a
+  // known runId from another project cannot be exfiltrated via this URL.
+  const run = db.prepare(
+    'SELECT prompt FROM agent_runs WHERE id = ? AND project_id = ?',
+  ).get(runId, projectId) as { prompt: string | null } | undefined;
 
   if (!run || !run.prompt) {
     return c.json({ error: 'Prompt not found' }, 404);

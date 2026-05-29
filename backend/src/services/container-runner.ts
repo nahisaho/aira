@@ -33,6 +33,7 @@
 import { spawn, execSync, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getProxyAuth } from './credential-proxy.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -303,7 +304,14 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
 
     const child = spawn(cli.command, args, {
       cwd: opts.workspaceDir,
-      env: { ...process.env, GITHUB_TOKEN: opts.token },
+      env: {
+        ...process.env,
+        GITHUB_TOKEN: opts.token,
+        // Subprocess can call the credential proxy with this secret if it
+        // chooses; preserves the API surface without leaking the proxy to
+        // arbitrary local processes.
+        AIRA_PROXY_AUTH: getProxyAuth(),
+      },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 

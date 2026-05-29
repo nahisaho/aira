@@ -1,4 +1,5 @@
 import { createMiddleware } from 'hono/factory';
+import type { Context } from 'hono';
 import crypto from 'node:crypto';
 
 const PORT = parseInt(process.env.AIRA_PORT ?? '3000', 10);
@@ -15,24 +16,90 @@ function getAllowedOrigins(): string[] {
     `http://127.0.0.1:${vitePort}`,
     `http://[::1]:${vitePort}`,
   ];
-  // Also allow adjacent port (Vite increments if port is occupied)
   if (vitePort === 5173) {
     origins.push(`http://localhost:5174`, `http://127.0.0.1:5174`, `http://[::1]:5174`);
   }
-  // Allow LAN access for experiment automation
   if (process.env.AIRA_ALLOWED_ORIGINS) {
-    origins.push(...process.env.AIRA_ALLOWED_ORIGINS.split(',').map(o => o.trim()));
+    origins.push(
+      ...process.env.AIRA_ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean),
+    );
   }
   return origins;
 }
 
-// In-memory CSRF token store (regenerated on restart)
-const csrfTokens = new Set<string>();
+/**
+ * Check whether an Origin is allowed.
+ * Accepts if:
+ *  - Origin is in the static allowlist (env-configurable via AIRA_ALLOWED_ORIGINS), OR
+ *  - Origin's host:port matches the request's Host header (same-origin).
+ *
+ * Same-origin matching lets users access the server via any LAN IP / hostname
+ * without explicit configuration, while still blocking browser-driven
+ * cross-origin attacks: evil.com cannot forge the Host header — it is set by
+ * the browser to the host the user actually loaded.
+ */
+export function isOriginAllowed(origin: string | undefined, host: string | undefined): boolean {
+  if (!origin) return false;
+  const allowed = getAllowedOrigins();
+  if (allowed.includes(origin)) return true;
+  if (host) {
+    try {
+      if (new URL(origin).host === host) return true;
+    } catch { /* malformed Origin */ }
+  }
+  return false;
+}
+
+/**
+ * Resolve the effective request host. Prefer the URL captured by the adapter
+ * (always set, even in test mode); fall back to the Host header.
+ */
+function effectiveHost(c: Context): string | undefined {
+  try {
+    return new URL(c.req.url).host;
+  } catch {
+    return c.req.header('host');
+  }
+}
+
+// ── CSRF token store ───────────────────────────────────────────────
+//
+// In-memory token store keyed by token, value = expiresAt (ms epoch).
+// Each token expires after TTL_MS; the store is capped at MAX_TOKENS to
+// prevent unbounded growth from token-refresh storms / CSRF endpoint abuse.
+// Eviction is FIFO: when the cap is reached, the oldest 10% are dropped.
+const CSRF_TTL_MS = parseInt(process.env.AIRA_CSRF_TTL_MS ?? String(24 * 60 * 60 * 1000), 10);
+const CSRF_MAX_TOKENS = parseInt(process.env.AIRA_CSRF_MAX_TOKENS ?? '10000', 10);
+const CSRF_EVICT_BATCH = Math.max(1, Math.floor(CSRF_MAX_TOKENS / 10));
+
+const csrfTokens = new Map<string, number>();
+
+function isValidCsrfToken(token: string): boolean {
+  const expiresAt = csrfTokens.get(token);
+  if (expiresAt === undefined) return false;
+  if (expiresAt <= Date.now()) {
+    csrfTokens.delete(token);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Sweep expired tokens. Called opportunistically on issuance — keeps the map
+ * trimmed without a background timer (which would prevent process exit in
+ * tests).
+ */
+function sweepExpired(now: number): void {
+  for (const [token, expiresAt] of csrfTokens) {
+    if (expiresAt <= now) csrfTokens.delete(token);
+  }
+}
 
 /**
  * Origin validation middleware for state-changing requests.
- * In serve-frontend mode (Docker), CSRF tokens are the primary defence
- * so we allow any origin — users may access via LAN IP, hostname, etc.
+ * Applies uniformly in dev and serve-frontend (Docker) mode — the previous
+ * blanket bypass in serve-frontend mode allowed cross-origin attackers to
+ * drive the agent via CSRF token disclosure through `*`-echoing CORS.
  */
 export const originMiddleware = createMiddleware(async (c, next) => {
   const method = c.req.method;
@@ -41,19 +108,17 @@ export const originMiddleware = createMiddleware(async (c, next) => {
     return next();
   }
 
-  // In serve-frontend mode, CSRF middleware is sufficient protection.
-  // Skip origin check to allow access from any host (LAN IP, hostname, etc.)
-  if (process.env.AIRA_SERVE_FRONTEND === 'true') {
-    return next();
-  }
-
   const origin = c.req.header('origin');
   if (!origin) {
+    // Non-browser tooling (curl, scripts) without Origin. CSRF token is still
+    // required and provides the actual defence. Allow in serve-frontend mode
+    // where local tooling is expected; reject in dev mode to keep defaults
+    // strict.
+    if (process.env.AIRA_SERVE_FRONTEND === 'true') return next();
     return c.json({ error: 'Missing Origin header' }, 403);
   }
 
-  const allowed = getAllowedOrigins();
-  if (!allowed.includes(origin)) {
+  if (!isOriginAllowed(origin, effectiveHost(c))) {
     return c.json({ error: 'Origin not allowed' }, 403);
   }
 
@@ -75,7 +140,7 @@ export const csrfMiddleware = createMiddleware(async (c, next) => {
   }
 
   const token = c.req.header('x-aira-token');
-  if (!token || !csrfTokens.has(token)) {
+  if (!token || !isValidCsrfToken(token)) {
     return c.json({ error: 'Invalid or missing CSRF token' }, 403);
   }
 
@@ -83,21 +148,19 @@ export const csrfMiddleware = createMiddleware(async (c, next) => {
 });
 
 /**
- * CORS middleware with allowlist echo (no wildcard).
- * In serve-frontend mode, echo any origin to support LAN/IP access.
+ * CORS middleware with allowlist + same-origin echo (never wildcard).
+ * Cross-origin requests from outside the allowlist receive no CORS headers,
+ * which prevents browsers from exposing the response to the attacker page —
+ * including the CSRF token endpoint.
  */
 export const corsMiddleware = createMiddleware(async (c, next) => {
   const origin = c.req.header('origin');
 
-  if (origin) {
-    const allowed = getAllowedOrigins();
-    const isAllowed = allowed.includes(origin) || process.env.AIRA_SERVE_FRONTEND === 'true';
-    if (isAllowed) {
-      c.header('Access-Control-Allow-Origin', origin);
-      c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-      c.header('Access-Control-Allow-Headers', 'Content-Type, X-AIRA-Token');
-      c.header('Access-Control-Max-Age', '86400');
-    }
+  if (origin && isOriginAllowed(origin, effectiveHost(c))) {
+    c.header('Access-Control-Allow-Origin', origin);
+    c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    c.header('Access-Control-Allow-Headers', 'Content-Type, X-AIRA-Token');
+    c.header('Access-Control-Max-Age', '86400');
   }
 
   if (c.req.method === 'OPTIONS') {
@@ -138,9 +201,24 @@ export const cspMiddleware = createMiddleware(async (c, next) => {
 });
 
 export function generateCsrfToken(): string {
+  const now = Date.now();
+
+  // Lazy GC: sweep expired entries before considering eviction.
+  sweepExpired(now);
+
+  // FIFO eviction if still over cap. Map preserves insertion order, so the
+  // first N iterated keys are the oldest.
+  if (csrfTokens.size >= CSRF_MAX_TOKENS) {
+    let dropped = 0;
+    for (const key of csrfTokens.keys()) {
+      csrfTokens.delete(key);
+      if (++dropped >= CSRF_EVICT_BATCH) break;
+    }
+  }
+
   const token = crypto.randomUUID();
-  csrfTokens.add(token);
+  csrfTokens.set(token, now + CSRF_TTL_MS);
   return token;
 }
 
-export { getAllowedOrigins, csrfTokens };
+export { getAllowedOrigins, csrfTokens, CSRF_TTL_MS, CSRF_MAX_TOKENS, isValidCsrfToken };

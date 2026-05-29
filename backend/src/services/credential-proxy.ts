@@ -6,14 +6,21 @@
  *
  * Docker containers run with:
  *   -e GITHUB_API_URL=http://host-gateway:<port>
+ *   -e AIRA_PROXY_AUTH=<shared secret>
  *
  * This way containers never hold the raw token — they just call this proxy.
  * The proxy reads the current token from AuthService on every request so
  * settings changes take effect immediately without restarting.
  *
+ * Authentication: every request must carry `X-AIRA-Proxy-Auth: <secret>`.
+ * The secret is generated at proxy start; AIRA-managed subprocesses receive
+ * it via env so they can call the proxy, while other local processes on the
+ * host cannot piggyback on the stored token.
+ *
  * Port defaults to 3001, configurable via CREDENTIAL_PROXY_PORT env var.
  */
 
+import crypto from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { request as httpRequest } from 'node:http';
@@ -30,15 +37,54 @@ export function setTokenSupplier(fn: () => string | null): void {
 /** Port the credential proxy listens on. Exported so container-runner can read it. */
 export const PROXY_PORT = parseInt(process.env.CREDENTIAL_PROXY_PORT ?? '3001', 10);
 
-/** Upstream GitHub API base URL. Can be overridden for testing. */
-const UPSTREAM_URL = process.env.COPILOT_API_URL ?? 'https://api.github.com';
+/** Upstream GitHub API base URL. Read at proxy start so tests can override. */
+function getUpstreamUrl(): string {
+  return process.env.COPILOT_API_URL ?? 'https://api.github.com';
+}
+
+// Shared-secret auth. Generated lazily on first proxy start; persists across
+// restart calls within the same process so subprocesses that captured it via
+// env stay valid through proxy restarts (rare, but covers the test path).
+let _proxyAuth: string | null = null;
+
+/** Reveal the proxy auth secret. Used by subprocess env injection. */
+export function getProxyAuth(): string {
+  if (!_proxyAuth) {
+    _proxyAuth = crypto.randomBytes(32).toString('hex');
+  }
+  return _proxyAuth;
+}
+
+/** For tests: reset the auth secret so each test gets fresh state. */
+export function resetProxyAuthForTesting(): void {
+  _proxyAuth = null;
+}
+
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a, 'utf8');
+  const bBuf = Buffer.from(b, 'utf8');
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
 
 export function startCredentialProxy(port: number, host = '127.0.0.1'): Promise<Server> {
-  const upstream = new URL(UPSTREAM_URL);
+  const upstreamUrl = getUpstreamUrl();
+  const upstream = new URL(upstreamUrl);
   const isHttps = upstream.protocol === 'https:';
   const makeRequest = isHttps ? httpsRequest : httpRequest;
+  const expectedAuth = getProxyAuth();
 
   const server = createServer((req, res) => {
+    // ── Authentication ─────────────────────────────────────────────────
+    const auth = req.headers['x-aira-proxy-auth'];
+    if (typeof auth !== 'string' || !timingSafeEqualStr(auth, expectedAuth)) {
+      res.writeHead(401, { 'Content-Type': 'text/plain' });
+      res.end('Unauthorized');
+      // Drain the body so the socket stays usable.
+      req.resume();
+      return;
+    }
+
     // Request size limit: 10MB
     const MAX_BODY = 10 * 1024 * 1024;
     let bodySize = 0;
@@ -114,7 +160,8 @@ export function startCredentialProxy(port: number, host = '127.0.0.1'): Promise<
 
   return new Promise((resolve, reject) => {
     server.listen(port, host, () => {
-      console.log(`[credential-proxy] Listening on http://${host}:${port} → ${UPSTREAM_URL}`);
+      const actualPort = (server.address() as { port: number } | null)?.port ?? port;
+      console.log(`[credential-proxy] Listening on http://${host}:${actualPort} → ${upstreamUrl} (auth required)`);
       resolve(server);
     });
     server.on('error', reject);

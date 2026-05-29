@@ -95,7 +95,7 @@ export async function startServer(portOrOpts: number | StartOptions): Promise<St
 
   try {
     server4 = serve({ fetch: app.fetch, hostname: bindHost, port });
-    attachWebSocket(server4 as unknown as Server, port);
+    attachWebSocket(server4 as unknown as Server);
     hasIpv4 = true;
     console.log(`[AIRA] Listening on http://${bindHost}:${port}`);
   } catch (err) {
@@ -105,7 +105,7 @@ export async function startServer(portOrOpts: number | StartOptions): Promise<St
   if (bindHost === '127.0.0.1') {
     try {
       server6 = serve({ fetch: app.fetch, hostname: '::1', port });
-      attachWebSocket(server6 as unknown as Server, port);
+      attachWebSocket(server6 as unknown as Server);
       hasIpv6 = true;
       console.log(`[AIRA] Listening on http://[::1]:${port}`);
     } catch (err) {
