@@ -4,30 +4,12 @@ import type { Locale } from '../i18n';
 export type Theme = 'light' | 'dark';
 export type SendKey = 'Enter' | 'Ctrl+Enter';
 
-export const LLM_MODELS = [
-  { id: 'auto',                  label: 'Auto (Copilot default)' },
-  // Anthropic via Copilot
-  { id: 'claude-sonnet-4-5',     label: 'Claude Sonnet 4.5' },
-  { id: 'claude-sonnet-4',       label: 'Claude Sonnet 4' },
-  { id: 'claude-opus-4',         label: 'Claude Opus 4' },
-  // OpenAI via Copilot
-  { id: 'gpt-4.1',               label: 'GPT-4.1' },
-  { id: 'gpt-4.1-mini',          label: 'GPT-4.1 mini' },
-  { id: 'gpt-4o',                label: 'GPT-4o' },
-  { id: 'o3',                    label: 'o3' },
-  { id: 'o4-mini',               label: 'o4-mini' },
-] as const;
-
-export type LlmModelId = (typeof LLM_MODELS)[number]['id'];
-
 interface PreferencesStore {
   locale: Locale;
   theme: Theme;
-  model: LlmModelId;
   sendKey: SendKey;
   setLocale: (locale: Locale) => void;
   setTheme: (theme: Theme) => void;
-  setModel: (model: LlmModelId) => void;
   setSendKey: (sendKey: SendKey) => void;
 }
 
@@ -53,12 +35,6 @@ function applyLocale(locale: Locale): void {
   document.documentElement.lang = locale === 'ja' ? 'ja' : 'en';
 }
 
-function loadModel(): LlmModelId {
-  const stored = localStorage.getItem('aira-model');
-  if (stored && LLM_MODELS.some((m) => m.id === stored)) return stored as LlmModelId;
-  return 'auto';
-}
-
 function loadSendKey(): SendKey {
   const stored = localStorage.getItem('aira-send-key');
   if (stored === 'Enter' || stored === 'Ctrl+Enter') return stored;
@@ -68,7 +44,6 @@ function loadSendKey(): SendKey {
 export const usePreferencesStore = create<PreferencesStore>((set) => {
   const initialLocale = loadLocale();
   const initialTheme = loadTheme();
-  const initialModel = loadModel();
   const initialSendKey = loadSendKey();
 
   // Apply on load
@@ -78,7 +53,6 @@ export const usePreferencesStore = create<PreferencesStore>((set) => {
   return {
     locale: initialLocale,
     theme: initialTheme,
-    model: initialModel,
     sendKey: initialSendKey,
 
     setLocale: (locale: Locale) => {
@@ -91,11 +65,6 @@ export const usePreferencesStore = create<PreferencesStore>((set) => {
       localStorage.setItem('aira-theme', theme);
       applyTheme(theme);
       set({ theme });
-    },
-
-    setModel: (model: LlmModelId) => {
-      localStorage.setItem('aira-model', model);
-      set({ model });
     },
 
     setSendKey: (sendKey: SendKey) => {

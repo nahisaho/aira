@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/project';
 import { useWSStore } from '../../stores/ws';
-import { usePreferencesStore, LLM_MODELS } from '../../stores/preferences';
+import { usePreferencesStore } from '../../stores/preferences';
 import { useFilesStore } from '../../stores/files';
 import { useT } from '../../useT';
 import { MessageItem } from './MessageItem';
@@ -14,8 +14,6 @@ export function ChatPane() {
   const fetchCurrentRun = useFilesStore((s) => s.fetchCurrentRun);
   const wsStatus = useWSStore((s) => s.status);
   const theme = usePreferencesStore((s) => s.theme);
-  const model = usePreferencesStore((s) => s.model);
-  const setModel = usePreferencesStore((s) => s.setModel);
   const sendKey = usePreferencesStore((s) => s.sendKey);
   const t = useT();
   const [input, setInput] = useState('');
@@ -96,22 +94,6 @@ export function ChatPane() {
             {wsStatus === 'reconnecting' ? t('chat.reconnecting') : t('chat.disconnected')}
           </div>
         )}
-        {/* Model selector */}
-        <div className="mb-2">
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value as typeof model)}
-            className={`text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-              light
-                ? 'bg-gray-100 text-gray-700 border border-gray-300'
-                : 'bg-gray-800 text-gray-300 border border-gray-600'
-            }`}
-          >
-            {LLM_MODELS.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-        </div>
         <div className="flex gap-2">
           <textarea
             value={input}

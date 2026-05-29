@@ -2,6 +2,17 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.7.0] — 2026-05-29
+
+### Removed
+- **モデル選択 UI を撤去し Copilot CLI のデフォルトルーティング(旧 "Auto")に一本化**: チャット入力欄の上にあったモデルセレクタを削除。Copilot CLI 1.0.54 にはモデル一覧を取得する公開 API が無く(`--list-models` / `models` 共に未提供)、フロントエンドが持っていた `LLM_MODELS` 配列は最新カタログから乖離していた(`o3` / `o4-mini` / `gpt-4.1-mini` は存在しない、`claude-opus-4.7` / `claude-sonnet-4.6` / `claude-haiku-4-5` / `gpt-5` 系などは欠落)。これ以降は CLI 側のプラン別ルーティングをそのまま尊重する。
+  - `frontend/src/stores/preferences.ts`: `LLM_MODELS` 定数 / `LlmModelId` 型 / `model` / `setModel` / `loadModel` を削除。
+  - `frontend/src/components/chat/ChatPane.tsx`: モデル `<select>` JSX と関連 state を削除。入力欄の縦スペースが確保される。
+  - `frontend/src/stores/chat.ts`: WS メッセージから `model` フィールドを削除(常に `undefined` = `--model` フラグ無しで CLI を起動)。
+  - 旧 localStorage キー `aira-model` は読まれなくなるだけで削除も migration も不要。
+  - 特定モデル固定で運用したい場合は `COPILOT_MODEL` 環境変数で全体一律指定が引き続き可能。
+- 正味 -50 行のリファクタ。テスト 172 backend + 21 frontend すべて green、Vite production build OK。
+
 ## [v2.6.0] — 2026-05-29
 
 ### Added

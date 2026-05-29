@@ -76,13 +76,9 @@ export const useChatStore = create<ChatStore>((set) => ({
       set((s) => ({ messages: [...s.messages, message] }));
       // Keep sending=true until run starts (WS will drive it)
 
-      // Get selected model
-      const { usePreferencesStore } = await import('./preferences');
-      const selectedModel = usePreferencesStore.getState().model;
-      const model = selectedModel === 'auto' ? undefined : selectedModel;
-
-      // Trigger agent execution via WebSocket
-      wsClient.send({ type: 'chat', content, messageId: message.id, model });
+      // Trigger agent execution via WebSocket. No model field is sent — the
+      // Copilot CLI uses its own routing (equivalent to the old "Auto" choice).
+      wsClient.send({ type: 'chat', content, messageId: message.id });
     } catch {
       set({ sending: false });
     }
