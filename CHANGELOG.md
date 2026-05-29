@@ -2,6 +2,19 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.6.0] — 2026-05-29
+
+### Added
+
+- **MCP の streamable HTTP transport (`type: "http"`) をサポート**: 既存の `stdio` / `sse` に加えて `http` を選べるようになり、Datalayer 製 jupyter-mcp-server のようなストリーマブル HTTP の MCP サーバーや HTTPS エンドポイントの外部 MCP に直接接続できる。
+  - DB: `project_mcp_configs.type` の CHECK 制約に `'http'` を追加。既存 DB は起動時に `sqlite_master.sql` を見て自動マイグレーション(テーブル再作成 + 行コピー、`builtin` カラムの有無は両対応)。
+  - Service / Route: 型ユニオンと zod enum を 3 値に拡張。MCP config の `headers` 値は引き続き `getSecretsForRedaction` の対象なのでログ漏れ防止が効く。
+  - Frontend: Settings → MCP の Add フォームに `http` 選択肢を追加。URL 入力は `sse` と共通。
+  - Copilot CLI 互換: `generateTempConfig` は `type: "http"` を素通しで MCP 設定 JSON に書き出し、CLI 側で streamable-HTTP transport として接続される。
+
+### Tests
+- 新規 9 ケース追加 (mcp.service +3 / routes/mcp +5 / db/migration +1)。マイグレーション往復(旧 DB → 新スキーマ → `http` 受理 + 旧データ保持)を含めて 172 backend + 21 frontend テストすべて green。
+
 ## [v2.5.1] — 2026-05-29
 
 ### Security

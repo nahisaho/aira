@@ -315,7 +315,7 @@ function createSchema(db: CompatDatabase): void {
       id          TEXT PRIMARY KEY,
       project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       name        TEXT NOT NULL,
-      type        TEXT NOT NULL CHECK(type IN ('stdio', 'sse', 'preset')),
+      type        TEXT NOT NULL CHECK(type IN ('stdio', 'sse', 'http', 'preset')),
       config_json TEXT NOT NULL,
       enabled     INTEGER NOT NULL DEFAULT 1,
       preset_id   TEXT,
@@ -390,6 +390,51 @@ function createSchema(db: CompatDatabase): void {
   const mcpCols = db.pragma('table_info(project_mcp_configs)') as Array<{ name: string }>;
   if (Array.isArray(mcpCols) && !mcpCols.some(c => c.name === 'preset_id')) {
     db.exec("ALTER TABLE project_mcp_configs ADD COLUMN preset_id TEXT");
+  }
+
+  // Migrate project_mcp_configs: add 'http' to the type CHECK constraint.
+  // SQLite cannot ALTER a CHECK constraint, so we read the table's stored DDL
+  // from sqlite_master and recreate the table when 'http' is missing. This is
+  // safer than a probe-INSERT, which conflates FK errors with CHECK errors.
+  const mcpTableDef = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'project_mcp_configs'",
+  ).get() as { sql: string } | undefined;
+
+  if (mcpTableDef && !mcpTableDef.sql.includes("'http'")) {
+    // Detect whether the existing table already has the builtin column so the
+    // migration works on both pre- and post-seed databases.
+    const existingCols = (db.pragma('table_info(project_mcp_configs)') as Array<{ name: string }>)
+      .map(c => c.name);
+    const hasBuiltin = existingCols.includes('builtin');
+
+    db.exec(`
+      CREATE TABLE project_mcp_configs_new (
+        id          TEXT PRIMARY KEY,
+        project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        type        TEXT NOT NULL CHECK(type IN ('stdio', 'sse', 'http', 'preset')),
+        config_json TEXT NOT NULL,
+        enabled     INTEGER NOT NULL DEFAULT 1,
+        builtin     INTEGER NOT NULL DEFAULT 0,
+        preset_id   TEXT,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    const builtinSelect = hasBuiltin ? 'COALESCE(builtin, 0)' : '0';
+    db.exec(`
+      INSERT INTO project_mcp_configs_new
+        (id, project_id, name, type, config_json, enabled, builtin, preset_id, created_at, updated_at)
+      SELECT
+        id, project_id, name, type, config_json, enabled,
+        ${builtinSelect},
+        preset_id,
+        COALESCE(created_at, CURRENT_TIMESTAMP),
+        COALESCE(created_at, CURRENT_TIMESTAMP)
+      FROM project_mcp_configs
+    `);
+    db.exec('DROP TABLE project_mcp_configs');
+    db.exec('ALTER TABLE project_mcp_configs_new RENAME TO project_mcp_configs');
   }
 
   // Migrate skills table: add 'github-agents' to source_type constraint

@@ -258,7 +258,7 @@ export interface McpConfig {
   id: string;
   project_id: string;
   name: string;
-  type: 'stdio' | 'sse';
+  type: 'stdio' | 'sse' | 'http';
   config: Record<string, unknown>;
   enabled: boolean;
   builtin: number;
@@ -269,7 +269,7 @@ export interface McpConfig {
 export const mcpApi = {
   list: (projectId: string) =>
     request<McpConfig[]>(`/projects/${projectId}/mcp`),
-  create: (projectId: string, name: string, type: 'stdio' | 'sse', config: Record<string, unknown>) =>
+  create: (projectId: string, name: string, type: 'stdio' | 'sse' | 'http', config: Record<string, unknown>) =>
     request<McpConfig>(`/projects/${projectId}/mcp`, {
       method: 'POST',
       body: JSON.stringify({ name, type, config }),

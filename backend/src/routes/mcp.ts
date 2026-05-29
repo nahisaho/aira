@@ -7,7 +7,7 @@ const mcpService = new McpService();
 
 const createSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(['stdio', 'sse']),
+  type: z.enum(['stdio', 'sse', 'http']),
   config: z.record(z.unknown()),
   preset_id: z.string().optional(),
 });

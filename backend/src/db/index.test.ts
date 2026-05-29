@@ -67,7 +67,7 @@ describe('SQLite Schema', () => {
       id          TEXT PRIMARY KEY,
       project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       name        TEXT NOT NULL,
-      type        TEXT NOT NULL CHECK(type IN ('stdio', 'sse', 'preset')),
+      type        TEXT NOT NULL CHECK(type IN ('stdio', 'sse', 'http', 'preset')),
       config_json TEXT NOT NULL,
       enabled     INTEGER NOT NULL DEFAULT 1,
       created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP

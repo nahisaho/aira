@@ -18,7 +18,7 @@ describe('McpService logic', () => {
       );
       CREATE TABLE project_mcp_configs (
         id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-        name TEXT NOT NULL, type TEXT NOT NULL CHECK(type IN ('stdio', 'sse')),
+        name TEXT NOT NULL, type TEXT NOT NULL CHECK(type IN ('stdio', 'sse', 'http', 'preset')),
         config_json TEXT NOT NULL DEFAULT '{}',
         enabled INTEGER NOT NULL DEFAULT 1,
         preset_id TEXT,
@@ -92,6 +92,60 @@ describe('McpService logic', () => {
       db.prepare('UPDATE project_mcp_configs SET enabled = 0 WHERE id = ?').run(id);
       const row = db.prepare('SELECT enabled FROM project_mcp_configs WHERE id = ?').get(id) as { enabled: number };
       expect(row.enabled).toBe(0);
+    });
+  });
+
+  describe('Streamable HTTP (type=http) transport', () => {
+    it('should accept type=http in the CHECK constraint', () => {
+      const id = crypto.randomUUID();
+      const cfg = { url: 'https://example.com/mcp', headers: { Authorization: 'Bearer abc' } };
+      expect(() => {
+        db.prepare(
+          "INSERT INTO project_mcp_configs (id, project_id, name, type, config_json) VALUES (?, ?, ?, 'http', ?)",
+        ).run(id, projectId, 'jupyter-mcp', JSON.stringify(cfg));
+      }).not.toThrow();
+
+      const row = db.prepare('SELECT type, config_json FROM project_mcp_configs WHERE id = ?').get(id) as {
+        type: string;
+        config_json: string;
+      };
+      expect(row.type).toBe('http');
+      const parsed = JSON.parse(row.config_json) as Record<string, unknown>;
+      expect(parsed.url).toBe('https://example.com/mcp');
+    });
+
+    it('should reject unknown transport types via the CHECK constraint', () => {
+      const id = crypto.randomUUID();
+      expect(() => {
+        db.prepare(
+          "INSERT INTO project_mcp_configs (id, project_id, name, type, config_json) VALUES (?, ?, ?, 'websocket', '{}')",
+        ).run(id, projectId, 'bad');
+      }).toThrow();
+    });
+
+    it('should round-trip headers from http config for redaction', () => {
+      const id = crypto.randomUUID();
+      const cfg = {
+        url: 'https://example.com/mcp',
+        headers: { Authorization: 'Bearer secret-http-token' },
+      };
+      db.prepare(
+        "INSERT INTO project_mcp_configs (id, project_id, name, type, config_json, enabled) VALUES (?, ?, 'jupyter', 'http', ?, 1)",
+      ).run(id, projectId, JSON.stringify(cfg));
+
+      const rows = db.prepare(
+        "SELECT config_json FROM project_mcp_configs WHERE project_id = ? AND enabled = 1",
+      ).all(projectId) as Array<{ config_json: string }>;
+
+      const secrets: string[] = [];
+      for (const row of rows) {
+        const config = JSON.parse(row.config_json) as Record<string, unknown>;
+        for (const key of ['env', 'headers']) {
+          const vals = config[key] as Record<string, string> | undefined;
+          if (vals) secrets.push(...Object.values(vals));
+        }
+      }
+      expect(secrets).toContain('Bearer secret-http-token');
     });
   });
 

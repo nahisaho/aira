@@ -203,7 +203,7 @@ function McpTab({ projectId }: { projectId: string }) {
   const [configs, setConfigs] = useState<McpConfig[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState('');
-  const [type, setType] = useState<'stdio' | 'sse'>('stdio');
+  const [type, setType] = useState<'stdio' | 'sse' | 'http'>('stdio');
   const [command, setCommand] = useState('');
   const [args, setArgs] = useState('');
   const [url, setUrl] = useState('');
@@ -221,7 +221,7 @@ function McpTab({ projectId }: { projectId: string }) {
     try {
       const config: Record<string, unknown> = type === 'stdio'
         ? { command: command.trim(), args: args.split(',').map((a) => a.trim()).filter(Boolean) }
-        : { url: url.trim() };
+        : { url: url.trim() };  // sse and http both use URL field
 
       await mcpApi.create(projectId, name.trim(), type, config);
       setName('');
@@ -311,13 +311,14 @@ function McpTab({ projectId }: { projectId: string }) {
           <div className="flex gap-2">
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as 'stdio' | 'sse')}
+              onChange={(e) => setType(e.target.value as 'stdio' | 'sse' | 'http')}
               className={`rounded px-2 py-1.5 text-sm ${
                 light ? 'bg-white border border-gray-300 text-gray-900' : 'bg-gray-600 text-gray-100'
               }`}
             >
               <option value="stdio">stdio</option>
               <option value="sse">sse</option>
+              <option value="http">http</option>
             </select>
           </div>
           {type === 'stdio' ? (

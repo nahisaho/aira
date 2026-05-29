@@ -8,7 +8,7 @@ export interface McpConfig {
   id: string;
   project_id: string;
   name: string;
-  type: 'stdio' | 'sse';
+  type: 'stdio' | 'sse' | 'http';
   config_json: string;
   enabled: number;
   builtin: number;
@@ -144,7 +144,7 @@ export class McpService {
     return row ? this.maskSecrets(row) : undefined;
   }
 
-  create(projectId: string, name: string, type: 'stdio' | 'sse', config: Record<string, unknown>, presetId?: string): McpConfigParsed {
+  create(projectId: string, name: string, type: 'stdio' | 'sse' | 'http', config: Record<string, unknown>, presetId?: string): McpConfigParsed {
     const db = getDatabase();
     const id = crypto.randomUUID();
 
