@@ -92,11 +92,13 @@ export class ProjectService {
       "UPDATE agent_runs SET status = 'cancelled', finished_at = CURRENT_TIMESTAMP WHERE project_id = ? AND status IN ('running', 'queued')",
     ).run(id);
 
-    // FS-first: try to delete workspace
-    const workspaceDir = this.getWorkspacePath(id);
-    if (fs.existsSync(workspaceDir)) {
+    // FS-first: remove the entire project directory (workspace + parent),
+    // not just the workspace subdir. Previously the parent `projects/<id>/`
+    // was left behind as an empty husk on every delete.
+    const projectDir = path.join(getProjectsDir(), id);
+    if (fs.existsSync(projectDir)) {
       try {
-        fs.rmSync(workspaceDir, { recursive: true, force: true });
+        fs.rmSync(projectDir, { recursive: true, force: true });
       } catch (err) {
         const code = (err as NodeJS.ErrnoException).code;
         if (code === 'EBUSY' || code === 'EPERM' || code === 'EACCES') {

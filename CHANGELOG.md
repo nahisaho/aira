@@ -2,6 +2,16 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.7.1] — 2026-05-29
+
+### Fixed
+- **プロジェクト削除時にプロジェクトフォルダ `projects/<id>/` が残る不具合を修正**: `ProjectService.delete()` が `projects/<id>/workspace/` のみ削除し親ディレクトリを残していたため、削除を繰り返すと `projects/` 以下に空の孤児ディレクトリが蓄積していた(検証環境では 635 個に達していた)。`projects/<id>/` ごと `rm -rf` するよう修正。`/api/settings/clean-projects` で既存の孤児ディレクトリを一括除去可能。
+  - `backend/src/services/project.service.ts:96-108`: 削除対象を `getWorkspacePath(id)` から `path.join(getProjectsDir(), id)` に変更。EBUSY / EPERM / EACCES → `ProjectLockedError` のエラー処理は維持。
+  - 新規統合テスト `project.service.delete.test.ts` (3 ケース): 親ディレクトリの完全消去 / ディレクトリ事前消失時の冪等性 / 兄弟プロジェクトに影響しないこと。
+
+### Tests
+- 175 backend + 21 frontend tests all green.
+
 ## [v2.7.0] — 2026-05-29
 
 ### Removed
