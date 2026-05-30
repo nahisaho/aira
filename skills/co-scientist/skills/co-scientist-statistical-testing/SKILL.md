@@ -30,6 +30,20 @@ Statistical testing skill. Frequentist hypothesis testing (t-test, ANOVA, chi-sq
 4. State limitations, uncertainty, and any validation or sensitivity checks performed.
 5. Append skill selection, handoff I/O, and file writes to `logs/process-log.jsonl`.
 
+## Stateful Compute Pattern (Jupyter MCP preferred)
+
+Statistical tests build on each other: assumption checks gate the choice of test, the test gates posthoc analysis, posthoc gates effect-size interpretation. Use the **jupyter MCP** (see top-level AGENTS.md → Stateful Python Compute) so each step's output is visible before deciding the next:
+
+1. **Load data + define groups** in a cell. Keep the variables alive for the rest of the analysis.
+2. **Assumption checks** as separate cells: normality (Shapiro–Wilk / QQ plot), variance homogeneity (Levene), independence. Decide parametric vs nonparametric **after** seeing the diagnostics.
+3. **Run the test** (one cell) — record statistic, p-value, df, effect size. Save raw `scipy` / `statsmodels` result objects with `pickle.dump` if you'll cite them again.
+4. **Apply correction** (Bonferroni / FDR) in a dedicated cell when ≥3 tests are involved. Show the corrected vs uncorrected table.
+5. **Effect size + 95% CI** as the final cell — every reported p-value must be accompanied by this.
+6. **Save** the formatted result table to `results/test_results.csv` and the assumption-check figures to `figures/`.
+7. **Refactor** the chosen test pipeline into `src/stats_pipeline.py` once the workflow is settled.
+
+Reference the notebook cell IDs from `report.md` Methods/Results so the reader can re-execute exactly the same path. Reporting format remains: `metric = X.XX ± σ (95% CI: [a, b])` with test name, statistic, p-value, and effect size.
+
 ## Reporting Requirements
 
 Report all results as: metric = X.XX ± σ (95% CI: [a, b]). Comparisons must include test name, statistic, p-value, and effect size.

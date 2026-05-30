@@ -31,6 +31,20 @@ Data preprocessing skill. Missing value imputation, outlier detection, normaliza
 4. State limitations, uncertainty, and any validation or sensitivity checks performed.
 5. Append skill selection, handoff I/O, and file writes to `logs/process-log.jsonl`.
 
+## Stateful Compute Pattern (Jupyter MCP preferred)
+
+Preprocessing is iterative: assess → transform → re-assess. Use the **jupyter MCP** (see top-level AGENTS.md → Stateful Python Compute) so each step's effect is visible before committing to the next:
+
+1. **Load raw data** in a cell. Keep the original `df_raw` alive — derive transformed views (`df_clean`, `df_norm`) without overwriting.
+2. **Profile missingness** (per-column counts + MCAR/MAR/MNAR assessment) in its own cell. Decision on imputation strategy is made **after** seeing this.
+3. **Outlier detection** (IQR / z-score / isolation forest) as a separate cell — visualize the flagged rows before dropping or capping.
+4. **Imputation** (mean / median / KNN / MICE) — show before/after distributions side-by-side. If multiple strategies are compared, keep each as a separate DataFrame (`df_mean_imp`, `df_knn_imp`).
+5. **Scaling / encoding** as the final transformation cell. Fit the scaler on training data only; persist it (`pickle.dump(scaler, ...)`) so test-time preprocessing is reproducible.
+6. **Validation**: compare summary stats / distributions of `df_raw` vs `df_clean` in a single comparison cell. Document in `data/preprocessing-log.md`.
+7. **Refactor** the settled pipeline into `src/preprocessing.py` as a single `preprocess(df) -> df` function. Re-run from the notebook to verify identical output to the cell-by-cell version.
+
+Save the final processed dataset to `data/processed.parquet` (or equivalent) and reference the notebook cell IDs from `report.md` Methods so the reader can trace every transformation back to its decision.
+
 ## Deliverables
 
 - `report.md`: concise method, results, interpretation, and file inventory in the user's language.

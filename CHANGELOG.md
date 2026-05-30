@@ -2,6 +2,32 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.0.1] — 2026-05-30
+
+Co-Scientist スキル群を v3.0.0 で追加した Jupyter MCP に合わせて notebook-first に方針転換。広範な書き換えではなく、**トップ方針 + 代表サブスキル 3 個** に絞ることで agent の自発的選択を促す方式。残りの 199 サブスキルは未変更でも、トップ方針が効くため大半のケースで jupyter MCP が選ばれる想定。
+
+### Changed
+- **Co-Scientist v4.5.0 → v4.6.0**:
+  - `skills/co-scientist/AGENTS.md`: 新規セクション **"Stateful Python Compute (Jupyter MCP)"** を Code Quality Standards 直後に追加。jupyter MCP を使うべき場面 / `python script.py` を使うべき場面の判定基準、推奨ワークフロー(EXPLORE → REFACTOR → DRIVE → KEEP)、notebook 衛生(`*.ipynb_checkpoints/` を `.gitignore`、cell outputs は finalize 前にクリアしない)、fallback 規約を明文化。
+  - `skills/co-scientist/copilot-instructions.md`: 同じ要旨を凝縮版で挿入。
+  - `skills/co-scientist/skill.json`: version v4.0.2 → v4.6.0(AGENTS.md / copilot-instructions.md の表記と整合)。
+- **代表サブスキル 3 個に "Stateful Compute Pattern" セクションを追加**:
+  - `co-scientist-eda-correlation`: load → profile → distributions → correlation → multivariate → refactor の cell-by-cell パターン
+  - `co-scientist-statistical-testing`: load + groups → assumption checks → test → correction → effect size + CI の段階パターン
+  - `co-scientist-data-preprocessing`: profile missingness → outlier → imputation → scaling → validation の iterative パターン
+- `report.md` / `paper.md` から **notebook cell ID を引用すること** を Article V (Traceability) の補強として明示。
+
+### Rationale
+- 202 サブスキル全部の書き換えは規模が大きすぎて v3.0.x の範囲を超える。トップ方針が効けば大半のサブスキルは agent の判断で自然に jupyter MCP を使う(routing は変えていない)。
+- 代表 3 個は "load once, inspect many times" の典型パターンが分かりやすく、agent への学習素材として機能する。他サブスキルの段階的書き換えは v3.1+ で対応予定。
+
+### Tests
+- バックエンドコードに変更なし。192 backend + 21 frontend tests all green(回帰確認のみ)。
+
+### Migration
+- 既存ユーザに必要なアクションなし。スキル文書を読み直すだけで効く。
+- v2.x プロジェクトで jupyter MCP を有効化していない場合は Settings → MCP → jupyter の Enabled トグル ON(v3.0.0 と同じ手順)。
+
 ## [v3.0.0] — 2026-05-30 — AIRA-γ
 
 **v3 系列の最大の柱**: Python コード実行を stateless な `python script.py` から **stateful な Jupyter カーネル** に格上げ。AIRA は Docker イメージに JupyterLab + 科学計算スタックを同梱し、エージェントが MCP 経由で同じカーネルに接続し続けることで `df = pd.read_csv(...)` の状態が複数ターンに渡って保持される。

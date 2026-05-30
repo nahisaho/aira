@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.5.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.6.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.5.0
+# Co-Scientist v4.6.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -56,6 +56,45 @@ Target total runtime: **60 minutes** (complex experiments may take up to 90 minu
 - **Import validation**: Run `python -c "import module"` for each generated module before proceeding.
 - **Docstrings**: Required for all public functions.
 - **Type hints**: Recommended.
+
+## Stateful Python Compute (Jupyter MCP)
+
+AIRA-γ ships a per-project **JupyterLab kernel** exposed through the `jupyter` MCP server. The kernel is stateful — variables, loaded DataFrames, fitted models, and figure handles persist across tool calls. Use this **as the primary compute surface for exploratory and intermediate work**.
+
+### When to use jupyter MCP
+
+- Loading datasets you'll touch more than once (`df = pd.read_csv(...)`).
+- Iterative cleaning, transformation, EDA, and correlation analysis where you want to inspect intermediates without re-running everything.
+- Plotting and quick visual sanity checks (matplotlib / seaborn output is returned directly).
+- Statistical test workflows that build on each other (fit → diagnostics → posthoc).
+- Any "explore the data interactively first" step.
+
+### When to use file-based scripts (`src/*.py` + `python ...`)
+
+- **Production / reusable code modules.** The ≥3 modules rule from Code Quality Standards still applies — final pipelines belong in `src/` so they're importable, testable, and version-controlled cleanly.
+- End-to-end runs that must be reproducible by another tool (CI, paper reviewer).
+- Anything intended to be cited from `report.md` / `paper.md` as a runnable artifact.
+
+### Recommended pattern
+
+```
+1. EXPLORE in notebook (jupyter MCP cells) — fast iteration, decisions documented as cell sequence
+2. REFACTOR settled logic into src/*.py modules
+3. DRIVE final runs from the notebook by importing the refactored modules
+4. KEEP the notebook as the human-readable trace alongside report.md / paper.md
+```
+
+### Notebook hygiene
+
+- Each project has exactly one notebook: `notebook.ipynb` in the workspace root. Do not create additional notebooks unless the user explicitly asks.
+- Use markdown cells liberally to label experiments — the notebook is a paper supplement, not a scratchpad.
+- Reference cell IDs from `report.md` / `paper.md` (Article V: Traceability) when a figure or number is the direct output of a specific cell.
+- Add `*.ipynb_checkpoints/` to `.gitignore` (the standard list).
+- Do **not** clear cell outputs before finalize — preserved outputs are part of the reproducibility trace.
+
+### Fallback
+
+If the jupyter MCP is unavailable (Jupyter Server not running, MCP disabled by the user), fall back to file-based `python script.py` execution and note in `report.md` that the stateful path was not used.
 
 ### File Hygiene
 

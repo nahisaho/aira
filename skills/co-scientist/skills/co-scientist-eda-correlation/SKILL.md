@@ -31,6 +31,19 @@ EDA and correlation analysis skill. Exploratory data analysis, correlation matri
 4. State limitations, uncertainty, and any validation or sensitivity checks performed.
 5. Append skill selection, handoff I/O, and file writes to `logs/process-log.jsonl`.
 
+## Stateful Compute Pattern (Jupyter MCP preferred)
+
+EDA is the canonical "load once, inspect many times" workflow. Use the **jupyter MCP** for the interactive phase (see top-level AGENTS.md → Stateful Python Compute):
+
+1. **Load** the dataset once in a cell (`df = pd.read_csv(...)`). Do not reload in subsequent cells.
+2. **Profile**: shape, dtypes, missingness, basic descriptives — one operation per cell so each result is preserved in the notebook.
+3. **Distributions**: histograms / boxplots per variable. Save figures to `figures/` from the cells.
+4. **Correlation**: compute the matrix once, render heatmap, and save `results/correlation_matrix.csv` plus `figures/correlation_heatmap.png`.
+5. **Multivariate**: pairplots / PCA / clustering as separate cells, each saving its output.
+6. **Refactor** any non-trivial transformation into `src/eda_utils.py` once the approach stabilizes; re-run from the notebook by importing.
+
+The notebook becomes the human-readable EDA log — reference its cell IDs from `report.md` when a finding traces back to a specific plot or table.
+
 ## Deliverables
 
 - `report.md`: concise method, results, interpretation, and file inventory in the user's language.
