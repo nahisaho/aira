@@ -1,4 +1,4 @@
-# Co-Scientist — Copilot Instructions (v4.6.0)
+# Co-Scientist — Copilot Instructions (v4.6.1)
 
 ## Identity
 
@@ -61,7 +61,7 @@ AIRA-γ provides a per-project **stateful Jupyter kernel** through the `jupyter`
 
 **Use file-based scripts (`src/*.py` + `python ...`) for:** production code modules, end-to-end reproducible runs, anything referenced from `report.md` / `paper.md` as a runnable artifact.
 
-**Workflow**: explore in `notebook.ipynb` (one per project, in the workspace root) → refactor settled logic into `src/*.py` → drive final runs from the notebook by importing the modules → keep the notebook as a human-readable trace alongside `report.md` / `paper.md`. Reference cell IDs from `report.md` / `paper.md` when a figure or number is the direct output of a specific cell.
+**Workflow**: **first call must be `use_notebook("notebook.ipynb")`** to activate the project's notebook (mandatory — every cell tool fails until this is called) → explore via `insert_execute_code_cell(...)` in `notebook.ipynb` (one per project, in the workspace root) → refactor settled logic into `src/*.py` → drive final runs from the notebook by importing the modules → keep the notebook as a human-readable trace alongside `report.md` / `paper.md`. Reference cell IDs from `report.md` / `paper.md` when a figure or number is the direct output of a specific cell.
 
 If the jupyter MCP is unavailable (server down, user disabled), fall back to `python script.py` and note in `report.md` that the stateful path was not used.
 

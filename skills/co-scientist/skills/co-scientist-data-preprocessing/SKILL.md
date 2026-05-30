@@ -35,6 +35,7 @@ Data preprocessing skill. Missing value imputation, outlier detection, normaliza
 
 Preprocessing is iterative: assess → transform → re-assess. Use the **jupyter MCP** (see top-level AGENTS.md → Stateful Python Compute) so each step's effect is visible before committing to the next:
 
+0. **Activate** the notebook first: `use_notebook("notebook.ipynb")`. Every subsequent cell tool fails until this is called.
 1. **Load raw data** in a cell. Keep the original `df_raw` alive — derive transformed views (`df_clean`, `df_norm`) without overwriting.
 2. **Profile missingness** (per-column counts + MCAR/MAR/MNAR assessment) in its own cell. Decision on imputation strategy is made **after** seeing this.
 3. **Outlier detection** (IQR / z-score / isolation forest) as a separate cell — visualize the flagged rows before dropping or capping.

@@ -392,10 +392,20 @@ export class McpService {
 }
 
 /**
- * Inject runtime-only fields into the jupyter MCP config:
- *  - JUPYTER_SERVER_URL / JUPYTER_SERVER_TOKEN env (token rotates per restart)
- *  - --notebook-path arg pointing at the project's notebook
- *  - Auto-create an empty notebook on first use
+ * Inject runtime-only fields into the jupyter MCP config so jupyter-mcp-server
+ * connects to AIRA's bundled Jupyter Server and opens the project's notebook.
+ *
+ * Env var names match jupyter-mcp-server v1.27.2's CLI envvar bindings:
+ *   RUNTIME_URL  / RUNTIME_TOKEN  — Jupyter kernel runtime (read by --runtime-*)
+ *   DOCUMENT_URL / DOCUMENT_TOKEN — Jupyter document service (same Jupyter
+ *     Server in our embedded setup, so values mirror runtime)
+ *   DOCUMENT_ID  — notebook path to auto-activate (avoids requiring
+ *     `use_notebook` on the first turn for simple cases, though the agent is
+ *     still expected to call use_notebook explicitly per the v4.6.1 skill
+ *     instructions for clarity)
+ *
+ * Auto-creates the per-project notebook file on first use so jupyter-mcp-server
+ * has a valid document to attach to.
  *
  * Returns null when the Jupyter Server is unavailable, so the caller can skip
  * the jupyter entry instead of handing jupyter-mcp-server a broken config.
@@ -418,13 +428,16 @@ function injectJupyterRuntime(
   }
 
   const env = { ...((config.env as Record<string, string>) ?? {}) };
-  env.JUPYTER_SERVER_URL = url;
-  env.JUPYTER_SERVER_TOKEN = token;
+  env.RUNTIME_URL = url;
+  env.RUNTIME_TOKEN = token;
+  env.DOCUMENT_URL = url;
+  env.DOCUMENT_TOKEN = token;
+  env.DOCUMENT_ID = notebookPath;
 
+  // args stays as ['--transport', 'stdio'] — connection details flow via env.
+  // (Earlier v3.0.0/3.0.1 implementations injected `--notebook-path <path>`
+  // here, which jupyter-mcp-server rejects as unknown.)
   const args = Array.isArray(config.args) ? [...(config.args as string[])] : [];
-  if (!args.includes('--notebook-path')) {
-    args.push('--notebook-path', notebookPath);
-  }
 
   return { ...config, env, args };
 }

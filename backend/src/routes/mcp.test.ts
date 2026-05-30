@@ -337,7 +337,7 @@ describe('generateTempConfig — jupyter runtime injection', () => {
     expect(Object.keys(json.mcpServers)).not.toContain('jupyter');
   });
 
-  it('injects JUPYTER_SERVER_URL / TOKEN env and --notebook-path when Jupyter is running, and creates an empty notebook', () => {
+  it('injects RUNTIME/DOCUMENT env vars when Jupyter is running, and creates an empty notebook', () => {
     setJupyterStateForTesting(8889, 'fake-jupyter-token');
     const notebookPath = getNotebookPath(PID);
     expect(fs.existsSync(notebookPath)).toBe(false);
@@ -347,10 +347,15 @@ describe('generateTempConfig — jupyter runtime injection', () => {
     const json = JSON.parse(fs.readFileSync(tmpFile!, 'utf-8'));
     const jp = json.mcpServers.jupyter;
     expect(jp).toBeDefined();
-    expect(jp.env.JUPYTER_SERVER_URL).toBe('http://127.0.0.1:8889');
-    expect(jp.env.JUPYTER_SERVER_TOKEN).toBe('fake-jupyter-token');
-    expect(jp.args).toContain('--notebook-path');
-    expect(jp.args).toContain(notebookPath);
+    // jupyter-mcp-server v1.27.2 env bindings
+    expect(jp.env.RUNTIME_URL).toBe('http://127.0.0.1:8889');
+    expect(jp.env.RUNTIME_TOKEN).toBe('fake-jupyter-token');
+    expect(jp.env.DOCUMENT_URL).toBe('http://127.0.0.1:8889');
+    expect(jp.env.DOCUMENT_TOKEN).toBe('fake-jupyter-token');
+    expect(jp.env.DOCUMENT_ID).toBe(notebookPath);
+    // Connection flows via env now; no --notebook-path (that arg does not exist)
+    expect(jp.args).not.toContain('--notebook-path');
+    expect(jp.args).toEqual(['--transport', 'stdio']);
 
     // Notebook file auto-created with valid structure
     expect(fs.existsSync(notebookPath)).toBe(true);
@@ -358,5 +363,15 @@ describe('generateTempConfig — jupyter runtime injection', () => {
     expect(nb.nbformat).toBe(4);
     expect(nb.cells).toEqual([]);
     expect(nb.metadata.kernelspec.name).toBe('python3');
+  });
+
+  it('does not inject the legacy --notebook-path arg or JUPYTER_SERVER_* env (regression for v3.0.2 fix)', () => {
+    setJupyterStateForTesting(8890, 'token-2');
+    const tmpFile = new McpService().generateTempConfig(PID);
+    const json = JSON.parse(fs.readFileSync(tmpFile!, 'utf-8'));
+    const jp = json.mcpServers.jupyter;
+    expect(jp.env.JUPYTER_SERVER_URL).toBeUndefined();
+    expect(jp.env.JUPYTER_SERVER_TOKEN).toBeUndefined();
+    expect(JSON.stringify(jp.args)).not.toContain('--notebook-path');
   });
 });

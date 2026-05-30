@@ -34,6 +34,7 @@ Statistical testing skill. Frequentist hypothesis testing (t-test, ANOVA, chi-sq
 
 Statistical tests build on each other: assumption checks gate the choice of test, the test gates posthoc analysis, posthoc gates effect-size interpretation. Use the **jupyter MCP** (see top-level AGENTS.md → Stateful Python Compute) so each step's output is visible before deciding the next:
 
+0. **Activate** the notebook first: `use_notebook("notebook.ipynb")`. Every subsequent cell tool fails until this is called.
 1. **Load data + define groups** in a cell. Keep the variables alive for the rest of the analysis.
 2. **Assumption checks** as separate cells: normality (Shapiro–Wilk / QQ plot), variance homogeneity (Levene), independence. Decide parametric vs nonparametric **after** seeing the diagnostics.
 3. **Run the test** (one cell) — record statistic, p-value, df, effect size. Save raw `scipy` / `statsmodels` result objects with `pickle.dump` if you'll cite them again.

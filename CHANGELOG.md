@@ -2,6 +2,32 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.0.2] — 2026-05-31
+
+v3.0.0 で同梱した jupyter-mcp-server の CLI 引数 / env 名を私が誤って実装していたため、Docker イメージで Jupyter MCP が **正しく起動していなかった**。実機の jupyter-mcp-server v1.27.2 を JSON-RPC で probe して正確なツール名と env 名を確認、修正。
+
+### Fixed
+- **`mcp.service.ts:injectJupyterRuntime` の CLI 引数 / env 名を修正**: jupyter-mcp-server は `--notebook-path` を受け付けず unknown option として弾いていた。実 API に合わせて以下に置き換え:
+  - **削除**: `--notebook-path <path>` arg、`JUPYTER_SERVER_URL` env、`JUPYTER_SERVER_TOKEN` env
+  - **追加**: env `RUNTIME_URL` / `RUNTIME_TOKEN` (kernel runtime 接続用、CLI の `--runtime-url` / `--runtime-token` と同一)、env `DOCUMENT_URL` / `DOCUMENT_TOKEN` (document service 用、AIRA の embedded セットアップでは runtime と同じ値)、env `DOCUMENT_ID` (notebook 自動 activate)
+- args は `['--transport', 'stdio']` のままで、接続情報は env 経由になる。
+
+### Changed
+- **Co-Scientist v4.6.0 → v4.6.1**: jupyter-mcp-server の実 API に合わせ、`use_notebook("notebook.ipynb")` を **最初に必ず呼ぶ** ことを明示。これを忘れると以降の cell 操作がすべて "no active notebook" で失敗するため、first-call で確実に成功させるためのガード。
+  - `AGENTS.md`: Stateful Python Compute セクションに "First-call requirement" を新設、Recommended pattern に step 0 として `use_notebook` を追加。
+  - `copilot-instructions.md`: Workflow 行の先頭に "first call must be `use_notebook(...)`" を追加。
+  - 代表サブスキル 3 個 (`co-scientist-eda-correlation` / `co-scientist-statistical-testing` / `co-scientist-data-preprocessing`): 各 Stateful Compute Pattern の冒頭 step 0 に `use_notebook("notebook.ipynb")` を追加。
+
+### Tests
+- **新規 regression テスト**: `routes/mcp.test.ts` に "does not inject the legacy --notebook-path arg or JUPYTER_SERVER_* env (regression for v3.0.2 fix)" を追加。
+- 既存の injection テストは新しい env キーを assert する形に更新。
+- 193 backend + 21 frontend tests all green。
+
+### Background
+- v3.0.0 リリース時、jupyter-mcp-server を私が **未検証のまま** 実装していた。今回 `pip install` + JSON-RPC `tools/list` で正確な API を確認した結果が下記の通り。
+- ツール一覧 (v1.27.2): `use_notebook` / `list_notebooks` / `restart_notebook` / `unuse_notebook` / `connect_to_jupyter` / `insert_cell` / `insert_execute_code_cell` / `execute_cell` / `read_cell` / `read_notebook` / `delete_cell` / `move_cell` / `overwrite_cell_source` / `edit_cell_source` / `execute_code` / `list_files` / `list_kernels` の 17 個。
+- `append_execute_code_cell` のような名前は存在せず、cell 追加は `insert_execute_code_cell(index, code)` で行う。
+
 ## [v3.0.1] — 2026-05-30
 
 Co-Scientist スキル群を v3.0.0 で追加した Jupyter MCP に合わせて notebook-first に方針転換。広範な書き換えではなく、**トップ方針 + 代表サブスキル 3 個** に絞ることで agent の自発的選択を促す方式。残りの 199 サブスキルは未変更でも、トップ方針が効くため大半のケースで jupyter MCP が選ばれる想定。

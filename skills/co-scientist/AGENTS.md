@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.6.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.6.1 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.6.0
+# Co-Scientist v4.6.1
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -75,13 +75,18 @@ AIRA-γ ships a per-project **JupyterLab kernel** exposed through the `jupyter` 
 - End-to-end runs that must be reproducible by another tool (CI, paper reviewer).
 - Anything intended to be cited from `report.md` / `paper.md` as a runnable artifact.
 
+### First-call requirement
+
+Before any cell operation, call **`use_notebook("notebook.ipynb")`** to activate the project's notebook for the session. All subsequent `insert_execute_code_cell` / `execute_cell` / `read_cell` calls operate on the activated notebook. Forgetting this step makes every cell tool fail with "no active notebook". Once activated, the notebook stays active for the rest of the run.
+
 ### Recommended pattern
 
 ```
-1. EXPLORE in notebook (jupyter MCP cells) — fast iteration, decisions documented as cell sequence
-2. REFACTOR settled logic into src/*.py modules
-3. DRIVE final runs from the notebook by importing the refactored modules
-4. KEEP the notebook as the human-readable trace alongside report.md / paper.md
+0. ACTIVATE  use_notebook("notebook.ipynb")    — once per run, mandatory
+1. EXPLORE   insert_execute_code_cell(...)     — fast iteration, decisions documented as cells
+2. REFACTOR  settled logic into src/*.py modules
+3. DRIVE     final runs from the notebook by importing the refactored modules
+4. KEEP      the notebook as the human-readable trace alongside report.md / paper.md
 ```
 
 ### Notebook hygiene

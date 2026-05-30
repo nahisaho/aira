@@ -35,6 +35,7 @@ EDA and correlation analysis skill. Exploratory data analysis, correlation matri
 
 EDA is the canonical "load once, inspect many times" workflow. Use the **jupyter MCP** for the interactive phase (see top-level AGENTS.md → Stateful Python Compute):
 
+0. **Activate** the notebook first: `use_notebook("notebook.ipynb")`. Every subsequent cell tool fails until this is called.
 1. **Load** the dataset once in a cell (`df = pd.read_csv(...)`). Do not reload in subsequent cells.
 2. **Profile**: shape, dtypes, missingness, basic descriptives — one operation per cell so each result is preserved in the notebook.
 3. **Distributions**: histograms / boxplots per variable. Save figures to `figures/` from the cells.
