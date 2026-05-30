@@ -319,7 +319,8 @@ function createSchema(db: CompatDatabase): void {
       config_json TEXT NOT NULL,
       enabled     INTEGER NOT NULL DEFAULT 1,
       preset_id   TEXT,
-      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS project_files (
       id           TEXT PRIMARY KEY,
@@ -390,6 +391,17 @@ function createSchema(db: CompatDatabase): void {
   const mcpCols = db.pragma('table_info(project_mcp_configs)') as Array<{ name: string }>;
   if (Array.isArray(mcpCols) && !mcpCols.some(c => c.name === 'preset_id')) {
     db.exec("ALTER TABLE project_mcp_configs ADD COLUMN preset_id TEXT");
+  }
+
+  // Migrate project_mcp_configs: add updated_at column. PATCH writes to it,
+  // so DBs created before this column existed (≤ v2.7.1 fresh DBs) crashed
+  // every edit with "no such column: updated_at".
+  const mcpColsForUpdatedAt = db.pragma('table_info(project_mcp_configs)') as Array<{ name: string }>;
+  if (Array.isArray(mcpColsForUpdatedAt) && !mcpColsForUpdatedAt.some(c => c.name === 'updated_at')) {
+    // SQLite requires non-constant DEFAULTs (CURRENT_TIMESTAMP) to be added
+    // without DEFAULT first; backfill afterwards.
+    db.exec("ALTER TABLE project_mcp_configs ADD COLUMN updated_at DATETIME");
+    db.exec("UPDATE project_mcp_configs SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL");
   }
 
   // Migrate project_mcp_configs: add 'http' to the type CHECK constraint.

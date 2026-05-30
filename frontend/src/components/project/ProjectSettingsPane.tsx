@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { skillsApi, mcpApi, ragApi, type Skill, type McpConfig, type RagSettings, type RagStats } from '../../api/client';
 import { usePreferencesStore } from '../../stores/preferences';
 import { useT } from '../../useT';
@@ -202,6 +202,7 @@ function McpTab({ projectId }: { projectId: string }) {
 
   const [configs, setConfigs] = useState<McpConfig[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<'stdio' | 'sse' | 'http'>('stdio');
   const [command, setCommand] = useState('');
@@ -255,7 +256,8 @@ function McpTab({ projectId }: { projectId: string }) {
         {configs.map((cfg) => {
           const desc = typeof cfg.config?.description === 'string' ? cfg.config.description : null;
           return (
-          <div key={cfg.id} className={`flex items-center justify-between rounded px-3 py-2 text-sm ${
+          <Fragment key={cfg.id}>
+          <div className={`flex items-center justify-between rounded px-3 py-2 text-sm ${
             light ? 'bg-gray-50' : 'bg-gray-700'
           }`}>
             <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -275,6 +277,12 @@ function McpTab({ projectId }: { projectId: string }) {
             </div>
             <div className="flex gap-2 shrink-0 ml-2">
               <button
+                onClick={() => setEditingId(editingId === cfg.id ? null : cfg.id)}
+                className={`text-xs ${editingId === cfg.id ? 'text-gray-400' : 'text-blue-400 hover:text-blue-300'}`}
+              >
+                {editingId === cfg.id ? t('mcp.cancel') : t('mcp.edit')}
+              </button>
+              <button
                 onClick={() => handleToggle(cfg.id, cfg.enabled)}
                 className={`text-xs ${cfg.enabled ? 'text-yellow-400' : 'text-green-400'}`}
               >
@@ -290,6 +298,15 @@ function McpTab({ projectId }: { projectId: string }) {
               )}
             </div>
           </div>
+          {editingId === cfg.id && (
+            <EditMcpForm
+              config={cfg}
+              projectId={projectId}
+              onSaved={async () => { setEditingId(null); await load(); }}
+              onCancel={() => setEditingId(null)}
+            />
+          )}
+          </Fragment>
           );
         })}
       </div>
@@ -374,6 +391,255 @@ function McpTab({ projectId }: { projectId: string }) {
           + {t('mcp.add')}
         </button>
       )}
+    </div>
+  );
+}
+
+// ─── Edit MCP Form ───
+//
+// Edit a single MCP config. Pre-fills from the listed config (where env/headers
+// values come back masked as '***') and uses the PATCH secret-omit semantics:
+// keys the user didn't touch are omitted (server keeps them), entries flagged
+// deleted send `null`, edited entries send the new value.
+
+type Entry = { key: string; value: string; deleted: boolean; original: boolean };
+
+function entriesFrom(maskedRecord: unknown): Entry[] {
+  if (!maskedRecord || typeof maskedRecord !== 'object') return [];
+  return Object.keys(maskedRecord as Record<string, unknown>).map(k => ({
+    key: k,
+    value: '',
+    deleted: false,
+    original: true,
+  }));
+}
+
+function EditMcpForm({
+  config,
+  projectId,
+  onSaved,
+  onCancel,
+}: {
+  config: McpConfig;
+  projectId: string;
+  onSaved: () => void | Promise<void>;
+  onCancel: () => void;
+}) {
+  const t = useT();
+  const light = usePreferencesStore((s) => s.theme) === 'light';
+  const cfg = config.config as Record<string, unknown>;
+  const isStdio = config.type === 'stdio';
+  const isHttpOrSse = config.type === 'sse' || config.type === 'http';
+
+  const initialName = config.name;
+  const initialCommand = typeof cfg.command === 'string' ? cfg.command : '';
+  const initialArgs = Array.isArray(cfg.args) ? (cfg.args as string[]).join(', ') : '';
+  const initialUrl = typeof cfg.url === 'string' ? cfg.url : '';
+  const initialDescription = typeof cfg.description === 'string' ? cfg.description : '';
+
+  const [name, setName] = useState(initialName);
+  const [command, setCommand] = useState(initialCommand);
+  const [args, setArgs] = useState(initialArgs);
+  const [url, setUrl] = useState(initialUrl);
+  const [description, setDescription] = useState(initialDescription);
+  const [envEntries, setEnvEntries] = useState<Entry[]>(() => entriesFrom(cfg.env));
+  const [headerEntries, setHeaderEntries] = useState<Entry[]>(() => entriesFrom(cfg.headers));
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const updateEntry = (
+    set: React.Dispatch<React.SetStateAction<Entry[]>>,
+    idx: number,
+    patch: Partial<Entry>,
+  ) => set(prev => prev.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
+
+  const removeEntry = (set: React.Dispatch<React.SetStateAction<Entry[]>>, idx: number) =>
+    set(prev => prev.filter((_, i) => i !== idx));
+
+  const addEntry = (set: React.Dispatch<React.SetStateAction<Entry[]>>) =>
+    set(prev => [...prev, { key: '', value: '', deleted: false, original: false }]);
+
+  const buildSecretsPatch = (entries: Entry[]): Record<string, string | null> | undefined => {
+    const out: Record<string, string | null> = {};
+    for (const e of entries) {
+      const key = e.key.trim();
+      if (!key) continue;
+      if (e.original && e.deleted) {
+        out[key] = null;
+      } else if (!e.original && !e.deleted && e.value !== '') {
+        // New entry added by the user
+        out[key] = e.value;
+      } else if (e.original && !e.deleted && e.value !== '') {
+        // Existing entry whose value was overwritten
+        out[key] = e.value;
+      }
+      // else: untouched original (value left blank) → omitted → server keeps it
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+  };
+
+  const buildPatch = (): Record<string, unknown> => {
+    const patch: Record<string, unknown> = {};
+    const trimmedName = name.trim();
+    if (trimmedName && trimmedName !== initialName) patch.name = trimmedName;
+
+    if (isStdio) {
+      const newCommand = command.trim();
+      if (newCommand !== initialCommand) patch.command = newCommand;
+      const newArgs = args.split(',').map(a => a.trim()).filter(Boolean);
+      const oldArgs = Array.isArray(cfg.args) ? (cfg.args as string[]) : [];
+      if (JSON.stringify(newArgs) !== JSON.stringify(oldArgs)) patch.args = newArgs;
+      const envPatch = buildSecretsPatch(envEntries);
+      if (envPatch) patch.env = envPatch;
+    }
+
+    if (isHttpOrSse) {
+      const newUrl = url.trim();
+      if (newUrl !== initialUrl) patch.url = newUrl;
+      const headersPatch = buildSecretsPatch(headerEntries);
+      if (headersPatch) patch.headers = headersPatch;
+    }
+
+    const newDesc = description.trim();
+    if (newDesc !== initialDescription) patch.description = newDesc;
+
+    return patch;
+  };
+
+  const handleSave = async () => {
+    setError('');
+    const patch = buildPatch();
+    if (Object.keys(patch).length === 0) {
+      onCancel();
+      return;
+    }
+    setSaving(true);
+    try {
+      await mcpApi.update(projectId, config.id, patch);
+      await onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+      setSaving(false);
+    }
+  };
+
+  const inputClass = `w-full rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+    light ? 'bg-white border border-gray-300 text-gray-900' : 'bg-gray-600 text-gray-100'
+  }`;
+  const smallInputClass = `rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+    light ? 'bg-white border border-gray-300 text-gray-900' : 'bg-gray-600 text-gray-100'
+  }`;
+
+  const renderSecretSection = (
+    heading: string,
+    entries: Entry[],
+    set: React.Dispatch<React.SetStateAction<Entry[]>>,
+  ) => (
+    <div className="space-y-1">
+      <div className={`text-xs font-semibold ${light ? 'text-gray-600' : 'text-gray-400'}`}>{heading}</div>
+      {entries.map((entry, idx) => (
+        <div key={idx} className={`flex gap-1 items-center ${entry.deleted ? 'opacity-40 line-through' : ''}`}>
+          <input
+            value={entry.key}
+            readOnly={entry.original}
+            onChange={(e) => updateEntry(set, idx, { key: e.target.value })}
+            placeholder={t('mcp.entryKey')}
+            className={`${smallInputClass} flex-1 min-w-0 ${entry.original ? 'opacity-70' : ''}`}
+          />
+          <input
+            value={entry.value}
+            onChange={(e) => updateEntry(set, idx, { value: e.target.value })}
+            placeholder={entry.original ? t('mcp.unchangedValue') : t('mcp.entryValue')}
+            className={`${smallInputClass} flex-1 min-w-0`}
+            disabled={entry.deleted}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (entry.original) {
+                updateEntry(set, idx, { deleted: !entry.deleted, value: '' });
+              } else {
+                removeEntry(set, idx);
+              }
+            }}
+            className={`text-xs px-1 ${entry.deleted ? 'text-green-400' : 'text-red-400'} hover:opacity-80`}
+            title={entry.deleted ? 'undo' : 'remove'}
+          >
+            {entry.deleted ? '↶' : '×'}
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => addEntry(set)}
+        className="text-xs text-blue-400 hover:text-blue-300"
+      >
+        + {t('mcp.addEntry')}
+      </button>
+    </div>
+  );
+
+  return (
+    <div className={`rounded p-3 mt-1 mb-2 space-y-2 ${light ? 'bg-gray-100 border border-gray-200' : 'bg-gray-800 border border-gray-700'}`}>
+      <h4 className={`text-sm font-semibold ${light ? 'text-gray-800' : 'text-gray-200'}`}>
+        {t('mcp.editTitle')}
+      </h4>
+
+      <div>
+        <label className={`block text-xs mb-1 ${light ? 'text-gray-600' : 'text-gray-400'}`}>{t('mcp.name')}</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+      </div>
+
+      <div className={`text-xs ${light ? 'text-gray-500' : 'text-gray-500'}`}>
+        {t('mcp.type')}: <span className="font-mono">{config.type}</span> · <span className="italic">{t('mcp.typeFixedHint')}</span>
+      </div>
+
+      {isStdio && (
+        <>
+          <div>
+            <label className={`block text-xs mb-1 ${light ? 'text-gray-600' : 'text-gray-400'}`}>{t('mcp.command')}</label>
+            <input value={command} onChange={(e) => setCommand(e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label className={`block text-xs mb-1 ${light ? 'text-gray-600' : 'text-gray-400'}`}>{t('mcp.args')}</label>
+            <input value={args} onChange={(e) => setArgs(e.target.value)} className={inputClass} />
+          </div>
+          {renderSecretSection(t('mcp.envHeading'), envEntries, setEnvEntries)}
+        </>
+      )}
+
+      {isHttpOrSse && (
+        <>
+          <div>
+            <label className={`block text-xs mb-1 ${light ? 'text-gray-600' : 'text-gray-400'}`}>{t('mcp.url')}</label>
+            <input value={url} onChange={(e) => setUrl(e.target.value)} className={inputClass} />
+          </div>
+          {renderSecretSection(t('mcp.headersHeading'), headerEntries, setHeaderEntries)}
+        </>
+      )}
+
+      <div>
+        <label className={`block text-xs mb-1 ${light ? 'text-gray-600' : 'text-gray-400'}`}>{t('mcp.description')}</label>
+        <input value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
+      </div>
+
+      {error && <p className="text-xs text-red-400">{error}</p>}
+
+      <div className="flex gap-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded text-white"
+        >
+          {t('mcp.save')}
+        </button>
+        <button
+          onClick={onCancel}
+          className={`px-3 py-1 text-xs ${light ? 'text-gray-500' : 'text-gray-400'}`}
+        >
+          {t('mcp.cancel')}
+        </button>
+      </div>
     </div>
   );
 }

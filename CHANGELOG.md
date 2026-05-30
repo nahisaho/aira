@@ -2,6 +2,24 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v2.7.2] — 2026-05-30
+
+### Added
+- **MCP サーバー設定の編集機能**: 一度作成した MCP config を Settings → MCP の各行から「Edit」できるようになった。name / command / args / url / description / env / headers が編集可能。type は固定(変更したい場合は再作成)。
+  - 既存の secret(env / headers 値)はサーバから '***' でマスクされて返ってくるため、編集フォームでは placeholder="(未変更)" を表示し**入力欄を空のままにしたキーは PATCH に含めない** → サーバ側で既存値が保持される。
+  - 各エントリは個別に値の差し替え / 削除(↶ で取り消し)/ 新規追加が可能。`***` を生で送ると `MaskedValueError` で 400 を返す。
+  - ビルトイン MCP も Edit 可(env を後付けしたいケースで便利)。Delete は引き続き非ビルトインのみ。
+
+### Fixed
+- **新規 DB で MCP config の PATCH が常に 500 を返していたバグ**: `project_mcp_configs` テーブルの CREATE 文に `updated_at` カラムが無いのに `mcp.service.ts:update()` がそこへ書き込もうとしていた。`v2.6.0` のテーブル再作成パス(古い CHECK 制約のとき)を通る DB だけ偶然動いていた状態。
+  - スキーマに `updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP` を追加。
+  - 既存 DB 用に `ALTER TABLE ... ADD COLUMN updated_at` + `created_at` 値で backfill するマイグレーションを追加。
+  - Edit UI を導入したことで初めて表面化したバグ(v2.7.1 までは UI から PATCH を叩く経路がなかった)。
+
+### Tests
+- 新規 backend 6 ケース: `routes/mcp.test.ts` の PATCH セクション(name 更新 / description 更新 / env の omit/null/string semantics / `***` 拒否 / headers semantics / enabled toggle)。
+- 181 backend + 21 frontend tests all green。
+
 ## [v2.7.1] — 2026-05-29
 
 ### Fixed
