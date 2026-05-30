@@ -2,6 +2,39 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.0.0] — 2026-05-30 — AIRA-γ
+
+**v3 系列の最大の柱**: Python コード実行を stateless な `python script.py` から **stateful な Jupyter カーネル** に格上げ。AIRA は Docker イメージに JupyterLab + 科学計算スタックを同梱し、エージェントが MCP 経由で同じカーネルに接続し続けることで `df = pd.read_csv(...)` の状態が複数ターンに渡って保持される。
+
+### Added — Jupyter MCP の Docker 同梱
+
+- **Jupyter Server を AIRA 起動時に spawn**: `backend/src/services/jupyter-server.ts` を新規追加。127.0.0.1 にバインド、起動時にランダム 256-bit token を生成、子プロセスを管理。crash しても AIRA 本体は継続(Jupyter MCP のみ disabled 状態に)。終了時に SIGTERM → SIGKILL(grace 3s)で graceful 停止。
+- **`jupyter` を 4 つ目のビルトイン MCP として配信**: `BUILTIN_MCP_CONFIGS` に追加。type=stdio、`jupyter-mcp-server --transport stdio --notebook-path <per-project>`。実行時に `mcp.service.ts:generateTempConfig` が JUPYTER_SERVER_URL / JUPYTER_SERVER_TOKEN env を注入し、`projects/<id>/workspace/notebook.ipynb` が無ければ空 notebook を自動生成。
+- **Per-project notebook**: 各プロジェクトは独自の `notebook.ipynb` を持ち、Jupyter Server 側で project ごとに独立したカーネル状態を保つ。`paper.md` から cell ID を引用すれば Article V (Traceability) と整合。
+- **科学計算スタックのプリインストール**: `numpy / pandas / scipy / scikit-learn / matplotlib / seaborn / sympy` を `pip install --no-cache-dir` で同梱。Dockerfile に `gfortran / libopenblas-dev / liblapack-dev` を追加(scipy / sklearn ビルド用)。image サイズ +1.5〜2 GB の想定。
+- **新規 / 既存プロジェクトの差別化シード**: `seedBuiltinMcpForProject` に `isNewProject` オプションを追加。各 built-in に `enabledForExisting` フラグを追加し、`jupyter` のみ `enabledForExisting: false`。**既存 (v2.x) プロジェクトでは disabled で seed**、**v3.0.0 以降に作成されたプロジェクトでは enabled で seed**。これにより既存ワークフローへの突然の挙動変化を回避し、ユーザは明示的に有効化することで移行できる。
+- **Preflight に jupyter / jupyter-mcp-server の存在チェックを追加**: 失敗時は warn ログのみで起動継続(Jupyter MCP が無効になるだけ)。
+
+### Fixed
+- (なし — 純機能追加)
+
+### Tests
+- 新規 backend 11 ケース:
+  - `config/paths.test.ts` (3): `getNotebookPath` の戻り値 / `getWorkspaceDir` との一貫性 / 他 path helper の安定性
+  - `services/jupyter-server.test.ts` (3): 起動前は url/token が null、test helper で state 設定、reset で clear
+  - `routes/mcp.test.ts` (5): jupyter ビルトインが既存 project では disabled / 新規 project では enabled / 他 built-in は両方 enabled / Jupyter Server 停止時は temp config から jupyter エントリ省略 / Jupyter 起動時は env と --notebook-path が注入され notebook.ipynb が自動生成
+- **22 backend test files / 192 tests + 21 frontend tests all green** (3 連続実行で flake なし)。
+
+### Migration notes
+- 既存 v2.x プロジェクトでは jupyter ビルトインが **disabled** で seed される。利用するには Settings → MCP → jupyter の "Enabled" トグルを ON にする。
+- Docker image サイズが +1.5〜2 GB(現 3.21 GB → 約 5 GB)。registry / pull 帯域への影響注意。
+- 既存 DB のスキーマ変更は無し(v2.6.0 で導入した CHECK 拡張のみ)。
+
+### 次の v3.0.1 で予定
+- Co-Scientist スキル文書を notebook-first に書き換え(現状は "Python script を書いて実行" パターンが残っている)
+- カーネル idle stop / scavenge(現状は AIRA 終了時にしか止まらない)
+- env allowlist の厳格化(セキュリティ監査 M3)— サブプロセスへの `process.env` 全継承をやめる
+
 ## [v2.7.2] — 2026-05-30
 
 ### Added

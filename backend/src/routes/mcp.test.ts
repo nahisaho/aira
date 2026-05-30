@@ -1,11 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+// (afterEach used in jupyter-runtime describe block below)
 import { Hono } from 'hono';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { mcpRoutes } from './mcp.js';
 import { initializeDatabase, getDatabase, closeDatabase } from '../db/index.js';
-import { setBaseDir, getBaseDir } from '../config/paths.js';
+import { setBaseDir, getBaseDir, getNotebookPath } from '../config/paths.js';
+import {
+  seedBuiltinMcpForProject,
+  McpService,
+} from '../services/mcp.service.js';
+import {
+  resetJupyterStateForTesting,
+  setJupyterStateForTesting,
+} from '../services/jupyter-server.js';
+import fs from 'node:fs';
 
 const PROJECT_ID = 'b0000000-0000-0000-0000-000000000001';
 
@@ -235,9 +245,118 @@ describe('MCP routes — transport types (stdio / sse / http)', () => {
     const listRes = await app.request(`/api/projects/${PROJECT_ID}/mcp`);
     expect(listRes.status).toBe(200);
     const list = await listRes.json();
-    const httpEntry = list.find((c: { name: string }) => c.name === 'jupyter');
+    const httpEntry = list.find((c: { name: string }) => c.name === 'jupyter' && c.type === 'http');
     expect(httpEntry).toBeDefined();
     expect(httpEntry.type).toBe('http');
     expect((httpEntry.config as Record<string, unknown>).url).toBe('https://example.com/mcp');
+  });
+});
+
+describe('Built-in seeding behavior (v3.0.0 jupyter)', () => {
+  let tmpDir: string;
+  let originalBaseDir: string;
+  const P_EXISTING = 'c0000000-0000-0000-0000-000000000001';
+  const P_NEW = 'c0000000-0000-0000-0000-000000000002';
+
+  beforeEach(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aira-mcp-seed-'));
+    originalBaseDir = getBaseDir();
+    setBaseDir(tmpDir);
+    closeDatabase();
+    await initializeDatabase();
+    const db = getDatabase();
+    db.prepare('INSERT INTO projects (id, name) VALUES (?, ?)').run(P_EXISTING, 'Existing');
+    db.prepare('INSERT INTO projects (id, name) VALUES (?, ?)').run(P_NEW, 'New');
+  });
+
+  afterEach(() => {
+    closeDatabase();
+    setBaseDir(originalBaseDir);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('seeds jupyter as DISABLED on existing projects', () => {
+    seedBuiltinMcpForProject(P_EXISTING, { isNewProject: false });
+    const db = getDatabase();
+    const row = db.prepare(
+      "SELECT enabled FROM project_mcp_configs WHERE project_id = ? AND name = 'jupyter' AND builtin = 1",
+    ).get(P_EXISTING) as { enabled: number } | undefined;
+    expect(row).toBeDefined();
+    expect(row?.enabled).toBe(0);
+  });
+
+  it('seeds jupyter as ENABLED on new projects', () => {
+    seedBuiltinMcpForProject(P_NEW, { isNewProject: true });
+    const db = getDatabase();
+    const row = db.prepare(
+      "SELECT enabled FROM project_mcp_configs WHERE project_id = ? AND name = 'jupyter' AND builtin = 1",
+    ).get(P_NEW) as { enabled: number } | undefined;
+    expect(row).toBeDefined();
+    expect(row?.enabled).toBe(1);
+  });
+
+  it('seeds the other built-ins as ENABLED regardless of isNewProject', () => {
+    seedBuiltinMcpForProject(P_EXISTING, { isNewProject: false });
+    const db = getDatabase();
+    const rows = db.prepare(
+      "SELECT name, enabled FROM project_mcp_configs WHERE project_id = ? AND builtin = 1 AND name != 'jupyter'",
+    ).all(P_EXISTING) as Array<{ name: string; enabled: number }>;
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(r.enabled).toBe(1);
+  });
+});
+
+describe('generateTempConfig — jupyter runtime injection', () => {
+  let tmpDir: string;
+  let originalBaseDir: string;
+  const PID = 'd0000000-0000-0000-0000-000000000001';
+
+  beforeEach(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aira-mcp-runtime-'));
+    originalBaseDir = getBaseDir();
+    setBaseDir(tmpDir);
+    closeDatabase();
+    await initializeDatabase();
+    const db = getDatabase();
+    db.prepare('INSERT INTO projects (id, name) VALUES (?, ?)').run(PID, 'Runtime Test');
+    seedBuiltinMcpForProject(PID, { isNewProject: true }); // jupyter enabled
+    resetJupyterStateForTesting();
+  });
+
+  afterEach(() => {
+    resetJupyterStateForTesting();
+    closeDatabase();
+    setBaseDir(originalBaseDir);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('omits jupyter from temp config when Jupyter Server is not running', () => {
+    const tmpFile = new McpService().generateTempConfig(PID);
+    expect(tmpFile).not.toBeNull();
+    const json = JSON.parse(fs.readFileSync(tmpFile!, 'utf-8'));
+    expect(Object.keys(json.mcpServers)).not.toContain('jupyter');
+  });
+
+  it('injects JUPYTER_SERVER_URL / TOKEN env and --notebook-path when Jupyter is running, and creates an empty notebook', () => {
+    setJupyterStateForTesting(8889, 'fake-jupyter-token');
+    const notebookPath = getNotebookPath(PID);
+    expect(fs.existsSync(notebookPath)).toBe(false);
+
+    const tmpFile = new McpService().generateTempConfig(PID);
+    expect(tmpFile).not.toBeNull();
+    const json = JSON.parse(fs.readFileSync(tmpFile!, 'utf-8'));
+    const jp = json.mcpServers.jupyter;
+    expect(jp).toBeDefined();
+    expect(jp.env.JUPYTER_SERVER_URL).toBe('http://127.0.0.1:8889');
+    expect(jp.env.JUPYTER_SERVER_TOKEN).toBe('fake-jupyter-token');
+    expect(jp.args).toContain('--notebook-path');
+    expect(jp.args).toContain(notebookPath);
+
+    // Notebook file auto-created with valid structure
+    expect(fs.existsSync(notebookPath)).toBe(true);
+    const nb = JSON.parse(fs.readFileSync(notebookPath, 'utf-8'));
+    expect(nb.nbformat).toBe(4);
+    expect(nb.cells).toEqual([]);
+    expect(nb.metadata.kernelspec.name).toBe('python3');
   });
 });

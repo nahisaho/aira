@@ -20,6 +20,7 @@ import {
   setTokenSupplier,
   PROXY_PORT,
 } from './services/credential-proxy.js';
+import { startJupyterServer, stopJupyterServer } from './services/jupyter-server.js';
 import { AuthService } from './services/auth.service.js';
 import type { Server } from 'node:http';
 
@@ -65,7 +66,17 @@ export async function startServer(portOrOpts: number | StartOptions): Promise<St
   // 3. Orphan recovery
   recoverOrphanRuns();
 
-  // 4. Seed built-ins
+  // 4. Start Jupyter Server (best-effort; AIRA stays up even if jupyter is
+  // unavailable, just without the stateful Python compute layer).
+  try {
+    await startJupyterServer();
+  } catch (err) {
+    console.warn(`[AIRA] Jupyter Server unavailable: ${(err as Error).message}`);
+    console.warn('[AIRA] Jupyter MCP will not function. Install jupyter-server + jupyter-mcp-server in the Python env to enable it.');
+  }
+
+  // 5. Seed built-ins (depends on Jupyter Server URL/token being available
+  // for jupyter MCP, but seeding tolerates absence — entry stays disabled).
   seedBuiltinSkills();
   seedBuiltinMcpAll();
   new McpService().scavengeStaleConfigs();
@@ -125,6 +136,7 @@ export async function startServer(portOrOpts: number | StartOptions): Promise<St
 export async function stopServer(): Promise<void> {
   console.log('[AIRA] Shutting down...');
   stopAllRuns();
+  await stopJupyterServer();
   if (proxyServer) {
     await stopCredentialProxy(proxyServer);
     proxyServer = null;

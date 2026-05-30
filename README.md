@@ -1,8 +1,8 @@
-# AIRA-β — AI Research Administrator
+# AIRA-γ — AI Research Administrator
 
 > Web ベースの AI Research Assistant
-> GitHub Copilot CLI をエージェントエンジンとして使用  
-> **v2.5.0**
+> GitHub Copilot CLI をエージェントエンジンとして使用、Jupyter カーネルでステートフルな Python 実行
+> **v3.0.0**
 
 ## 概要
 

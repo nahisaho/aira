@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getDatabase } from '../db/index.js';
 import * as pathConfig from '../config/paths.js';
+import { getJupyterUrl, getJupyterToken } from './jupyter-server.js';
 
 export interface McpConfig {
   id: string;
@@ -23,7 +24,15 @@ export interface McpConfigParsed extends Omit<McpConfig, 'config_json'> {
 
 const SECRET_MASK = '***';
 
-/** Built-in MCP servers seeded into every project */
+/**
+ * Built-in MCP servers seeded into every project.
+ *
+ * `enabledForExisting` — when seeding into an *already-created* project at
+ * startup, this flag decides whether the MCP is enabled by default. New
+ * projects (created after startup) always get every built-in enabled. Used to
+ * gradually introduce new built-ins without flipping behavior on running
+ * workflows (see jupyter below).
+ */
 const BUILTIN_MCP_CONFIGS = [
   {
     name: 'tooluniverse',
@@ -35,6 +44,7 @@ const BUILTIN_MCP_CONFIGS = [
       description: 'ToolUniverse MCP server providing access to 100+ scientific database APIs including PubMed, ChEMBL, Ensembl, UniProt, STRING, Reactome, GDC, DepMap, and more.',
       url: 'https://github.com/mims-harvard/ToolUniverse',
     },
+    enabledForExisting: true,
   },
   {
     name: 'microsoft-learn',
@@ -43,6 +53,7 @@ const BUILTIN_MCP_CONFIGS = [
       url: 'https://learn.microsoft.com/api/mcp',
       description: 'Microsoft Learn MCP Server — search Microsoft docs, fetch articles, and find code samples. No authentication required.',
     },
+    enabledForExisting: true,
   },
   {
     name: 'azure-mcp',
@@ -54,15 +65,51 @@ const BUILTIN_MCP_CONFIGS = [
       description: 'Azure MCP Server — interact with Azure resources using natural language. Supports Azure CLI, azd, storage, databases, KQL, and more. Requires Azure login (az login).',
       url: 'https://github.com/microsoft/mcp',
     },
+    enabledForExisting: true,
+  },
+  {
+    name: 'jupyter',
+    type: 'stdio' as const,
+    config: {
+      command: 'jupyter-mcp-server',
+      // The --notebook-path arg and JUPYTER_SERVER_URL / JUPYTER_SERVER_TOKEN
+      // env vars are injected at runtime in generateTempConfig() because they
+      // depend on per-project paths and per-restart credentials.
+      args: ['--transport', 'stdio'],
+      env: {},
+      description: 'Stateful Python execution via a JupyterLab kernel. Use this for data analysis, statistics, ML, plotting, and any multi-step computation that benefits from persistent variables. Each project has its own notebook (notebook.ipynb in the workspace) and kernel; state survives between turns.',
+      url: 'https://github.com/datalayer/jupyter-mcp-server',
+    },
+    // Disabled on existing projects so v2.x users do not see behavior change
+    // mid-workflow. Enabled by default on projects created from v3.0.0 onwards.
+    enabledForExisting: false,
   },
 ];
+
+const EMPTY_NOTEBOOK_JSON = JSON.stringify({
+  cells: [],
+  metadata: {
+    kernelspec: { display_name: 'Python 3', language: 'python', name: 'python3' },
+    language_info: { name: 'python' },
+  },
+  nbformat: 4,
+  nbformat_minor: 5,
+}, null, 2);
 
 /**
  * Seed built-in MCP configs for a specific project.
  * Idempotent — skips if already present.
+ *
+ * @param opts.isNewProject — true when called from project creation; every
+ * built-in is enabled. When false (startup seeding into existing projects),
+ * each built-in's `enabledForExisting` decides the default state.
  */
-export function seedBuiltinMcpForProject(projectId: string): void {
+export function seedBuiltinMcpForProject(
+  projectId: string,
+  opts: { isNewProject?: boolean } = {},
+): void {
   const db = getDatabase();
+  const isNewProject = opts.isNewProject ?? false;
 
   // Ensure builtin column exists
   try {
@@ -77,16 +124,21 @@ export function seedBuiltinMcpForProject(projectId: string): void {
     ).get(projectId, mcp.name);
     if (existing) continue;
 
+    const enabledByDefault = isNewProject ? true : (mcp.enabledForExisting ?? true);
+    const enabled = enabledByDefault ? 1 : 0;
+
     const id = crypto.randomUUID();
     db.prepare(
       `INSERT INTO project_mcp_configs (id, project_id, name, type, config_json, enabled, builtin)
-       VALUES (?, ?, ?, ?, ?, 1, 1)`,
-    ).run(id, projectId, mcp.name, mcp.type, JSON.stringify(mcp.config));
+       VALUES (?, ?, ?, ?, ?, ?, 1)`,
+    ).run(id, projectId, mcp.name, mcp.type, JSON.stringify(mcp.config), enabled);
   }
 }
 
 /**
- * Seed built-in MCP configs for ALL existing projects.
+ * Seed built-in MCP configs for ALL existing projects (called once at startup).
+ * Built-ins flagged enabledForExisting=false are inserted in the disabled state
+ * so v2.x workflows don't change behavior under their feet.
  */
 export function seedBuiltinMcpAll(): void {
   const db = getDatabase();
@@ -100,7 +152,7 @@ export function seedBuiltinMcpAll(): void {
 
   const projects = db.prepare('SELECT id FROM projects').all() as Array<{ id: string }>;
   for (const project of projects) {
-    seedBuiltinMcpForProject(project.id);
+    seedBuiltinMcpForProject(project.id, { isNewProject: false });
   }
 }
 
@@ -269,6 +321,12 @@ export class McpService {
 
   /**
    * Generate a temporary MCP config file for agent execution.
+   *
+   * Runtime injection for built-ins that need per-run credentials:
+   *  - jupyter: injects JUPYTER_SERVER_URL / JUPYTER_SERVER_TOKEN env vars
+   *    (regenerated each AIRA restart) and the per-project --notebook-path
+   *    flag. Auto-creates an empty notebook on first use so jupyter-mcp-server
+   *    has something to attach to.
    */
   generateTempConfig(projectId: string): string | null {
     const db = getDatabase();
@@ -283,6 +341,13 @@ export class McpService {
       let config: Record<string, unknown>;
       try { config = JSON.parse(row.config_json); }
       catch { continue; }
+
+      if (row.name === 'jupyter') {
+        const injected = injectJupyterRuntime(config, projectId);
+        if (!injected) continue; // Jupyter Server not running — skip this entry
+        config = injected;
+      }
+
       mcpServers[row.name] = { type: row.type, ...config };
     }
 
@@ -305,6 +370,8 @@ export class McpService {
     return tmpFile;
   }
 
+  // (helper declared at module level — see injectJupyterRuntime below)
+
   private maskSecrets(row: McpConfig): McpConfigParsed {
     let config: Record<string, unknown>;
     try { config = JSON.parse(row.config_json) as Record<string, unknown>; }
@@ -322,6 +389,44 @@ export class McpService {
     const { config_json: _, ...rest } = row;
     return { ...rest, config };
   }
+}
+
+/**
+ * Inject runtime-only fields into the jupyter MCP config:
+ *  - JUPYTER_SERVER_URL / JUPYTER_SERVER_TOKEN env (token rotates per restart)
+ *  - --notebook-path arg pointing at the project's notebook
+ *  - Auto-create an empty notebook on first use
+ *
+ * Returns null when the Jupyter Server is unavailable, so the caller can skip
+ * the jupyter entry instead of handing jupyter-mcp-server a broken config.
+ */
+function injectJupyterRuntime(
+  config: Record<string, unknown>,
+  projectId: string,
+): Record<string, unknown> | null {
+  const url = getJupyterUrl();
+  const token = getJupyterToken();
+  if (!url || !token) {
+    console.warn('[mcp] Jupyter Server is not running; skipping jupyter MCP for this run');
+    return null;
+  }
+
+  const notebookPath = pathConfig.getNotebookPath(projectId);
+  if (!fs.existsSync(notebookPath)) {
+    fs.mkdirSync(path.dirname(notebookPath), { recursive: true });
+    fs.writeFileSync(notebookPath, EMPTY_NOTEBOOK_JSON, 'utf8');
+  }
+
+  const env = { ...((config.env as Record<string, string>) ?? {}) };
+  env.JUPYTER_SERVER_URL = url;
+  env.JUPYTER_SERVER_TOKEN = token;
+
+  const args = Array.isArray(config.args) ? [...(config.args as string[])] : [];
+  if (!args.includes('--notebook-path')) {
+    args.push('--notebook-path', notebookPath);
+  }
+
+  return { ...config, env, args };
 }
 
 export class McpNotFoundError extends Error {

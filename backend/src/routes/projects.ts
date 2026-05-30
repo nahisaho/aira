@@ -42,7 +42,7 @@ projectRoutes.post('/api/projects', async (c) => {
 
   try {
     const project = projectService.create(parsed.data.name, parsed.data.description);
-    seedBuiltinMcpForProject(project.id);
+    seedBuiltinMcpForProject(project.id, { isNewProject: true });
 
     // Auto-assign skill set to new project only when explicitly specified.
     if (parsed.data.skillSetId) {

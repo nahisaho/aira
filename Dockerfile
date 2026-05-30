@@ -27,14 +27,32 @@ LABEL org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app
 
-# System dependencies for MCP servers and Copilot CLI
+# System dependencies for MCP servers, Copilot CLI, and the v3.0.0 Python
+# compute layer (Jupyter Server + jupyter-mcp-server + scipy stack).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git ca-certificates python3 python3-pip python3-venv \
-      python3-dev gcc g++ \
+      python3-dev gcc g++ gfortran \
+      libopenblas-dev liblapack-dev \
+      pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ToolUniverse MCP server
-RUN pip install --break-system-packages tooluniverse
+# ── Python packages (single layer, no pip cache, no compile artefacts) ──
+#
+# Grouped by purpose so layer cache invalidation is targeted:
+#   1. Existing MCP server: tooluniverse
+#   2. v3.0.0 Jupyter compute layer: jupyter-server + ipykernel +
+#      jupyter-mcp-server (Datalayer)
+#   3. Scientific stack (CRUD pandas / numerical / ML / plotting / symbolic)
+#
+# --no-cache-dir keeps the image lean; --break-system-packages is required on
+# Debian-based slim images that mark the system Python as PEP 668 managed.
+RUN pip install --no-cache-dir --break-system-packages \
+      tooluniverse \
+      jupyter-server ipykernel jupyter-mcp-server \
+      numpy pandas scipy scikit-learn \
+      matplotlib seaborn sympy \
+    && rm -rf /root/.cache/pip /tmp/pip-* \
+    && python3 -m ipykernel install --sys-prefix --name=python3 --display-name="Python 3"
 
 # Wrapper script: tooluniverse outputs banners on stdout that corrupt JSON-RPC.
 # Filter them so only JSON lines pass through.

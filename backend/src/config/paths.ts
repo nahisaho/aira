@@ -32,6 +32,16 @@ export function getWorkspaceDir(projectId: string): string {
   return path.join(_baseDir, 'projects', projectId, 'workspace');
 }
 
+/**
+ * Path to the Jupyter notebook for a specific project.
+ * The notebook is the stateful Python compute surface introduced in v3.0.0.
+ * Lives under workspace/ so it's visible in the file pane and bundled in
+ * project ZIP downloads.
+ */
+export function getNotebookPath(projectId: string): string {
+  return path.join(getWorkspaceDir(projectId), 'notebook.ipynb');
+}
+
 /** Temp directory inside data. */
 export function getTmpDir(): string {
   return path.join(_baseDir, 'data', '.tmp');

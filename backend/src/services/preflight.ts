@@ -13,6 +13,7 @@ export interface PreflightCheck {
 export interface PreflightResult {
   os: PreflightCheck;
   cli: PreflightCheck;
+  jupyter: PreflightCheck;
   dataDir: PreflightCheck;
   projectsDir: PreflightCheck;
   token: PreflightCheck;
@@ -31,6 +32,7 @@ export function getCachedCliPath(): string | undefined {
 export function runPreflight(): PreflightResult {
   const osCheck = checkOs();
   const cliCheck = checkCli();
+  const jupyterCheck = checkJupyter();
   const dataDirCheck = checkDataDir();
   const projectsDirCheck = checkProjectsDir();
   const tokenCheck = checkToken();
@@ -41,10 +43,14 @@ export function runPreflight(): PreflightResult {
   if (!cliCheck.ok) {
     console.warn('[AIRA] WARNING: Copilot CLI not found. Agent invocation will fail until installed.');
   }
+  if (!jupyterCheck.ok) {
+    console.warn(`[AIRA] WARNING: ${jupyterCheck.message}`);
+  }
 
   return {
     os: osCheck,
     cli: cliCheck,
+    jupyter: jupyterCheck,
     dataDir: dataDirCheck,
     projectsDir: projectsDirCheck,
     token: tokenCheck,
@@ -107,6 +113,41 @@ function detectCliCommand(): CliDetectionResult | null {
   }
 
   return null;
+}
+
+function checkJupyter(): PreflightCheck {
+  // Both binaries are required for the v3.0.0 Python compute layer. Missing
+  // either is a warning, not fatal — AIRA stays up, only Jupyter MCP is
+  // unavailable.
+  let jupyterVersion = '';
+  try {
+    jupyterVersion = execFileSync('jupyter', ['--version'], {
+      encoding: 'utf-8',
+      timeout: 5_000,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim().split('\n')[0] ?? '';
+  } catch {
+    return {
+      ok: false,
+      code: 'JUPYTER_NOT_FOUND',
+      message: 'jupyter not found in PATH. Jupyter MCP will be unavailable.',
+    };
+  }
+  try {
+    execFileSync('jupyter-mcp-server', ['--help'], {
+      timeout: 5_000,
+      windowsHide: true,
+      stdio: 'pipe',
+    });
+  } catch {
+    return {
+      ok: false,
+      code: 'JUPYTER_MCP_NOT_FOUND',
+      message: 'jupyter-mcp-server not found in PATH. Jupyter MCP will be unavailable.',
+    };
+  }
+  return { ok: true, message: `Jupyter available (${jupyterVersion})` };
 }
 
 function checkDataDir(): PreflightCheck {
