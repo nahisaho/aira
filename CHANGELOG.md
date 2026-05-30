@@ -2,6 +2,11 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.1.1] — 2026-05-31
+
+### Fixed
+- **Windows CI で paths.test.ts の "other path helpers remain stable" が失敗していた**: v3.1.0 で追加したテストで expected 値を `'/srv/aira/data'` のようにフォワードスラッシュ hardcode していたが、Windows の `path.join` はバックスラッシュを返すため `'\srv\aira\data'` と不一致。`path.join` を expected 側でも使うよう修正し、プラットフォーム非依存に。テスト本体は変更なし、機能変更なし。
+
 ## [v3.1.0] — 2026-05-31
 
 エージェントが書いた Jupyter notebook を **AIRA UI 内の iframe で直接編集・実行** できるようにする GUI 統合。v3.0.0 で同梱した stateful Jupyter カーネルに対して、人間側のインタラクションを「別タブで JupyterLab を開く」レベルでなく **AIRA UI と一体化** させる。

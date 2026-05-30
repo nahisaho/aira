@@ -33,8 +33,10 @@ describe('paths config', () => {
 
   it('other path helpers remain stable', () => {
     setBaseDir('/srv/aira');
-    expect(getDataDir()).toBe('/srv/aira/data');
-    expect(getProjectsDir()).toBe('/srv/aira/projects');
-    expect(getTmpDir()).toBe('/srv/aira/data/.tmp');
+    // Use path.join on the expected side too so the assertion is platform-
+    // agnostic (Windows uses backslash separators).
+    expect(getDataDir()).toBe(path.join('/srv/aira', 'data'));
+    expect(getProjectsDir()).toBe(path.join('/srv/aira', 'projects'));
+    expect(getTmpDir()).toBe(path.join('/srv/aira', 'data', '.tmp'));
   });
 });
