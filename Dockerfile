@@ -48,7 +48,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Debian-based slim images that mark the system Python as PEP 668 managed.
 RUN pip install --no-cache-dir --break-system-packages \
       tooluniverse \
-      jupyter-server ipykernel jupyter-mcp-server \
+      jupyter-server jupyterlab ipykernel jupyter-mcp-server \
       numpy pandas scipy scikit-learn \
       matplotlib seaborn sympy \
     && rm -rf /root/.cache/pip /tmp/pip-* \
@@ -108,6 +108,10 @@ ENV AIRA_PORT=3000
 ENV AIRA_SERVE_FRONTEND=true
 
 EXPOSE 3000
+# v3.1.0 — JupyterLab UI. Only reachable when started with
+#   -e AIRA_JUPYTER_BIND=0.0.0.0 -p 8888:8888
+# (Default bind is 127.0.0.1 so the port is closed unless explicitly opened.)
+EXPOSE 8888
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"

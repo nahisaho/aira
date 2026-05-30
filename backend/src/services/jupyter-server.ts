@@ -1,15 +1,30 @@
 /**
- * Jupyter Server lifecycle — v3.0.0 (AIRA-γ)
+ * Jupyter Server lifecycle — v3.0.0 (AIRA-γ), extended in v3.1.0 (AIRA-γ GUI).
  *
- * Spawns a single long-lived Jupyter Server bound to 127.0.0.1 so AIRA-managed
- * subprocesses (specifically jupyter-mcp-server) can connect and operate on
- * per-project notebooks while preserving kernel state across agent runs.
+ * Spawns a single long-lived Jupyter Server. Two consumers:
+ *  - jupyter-mcp-server (stdio child, agent-driven cell ops). Always works.
+ *  - JupyterLab UI in an AIRA iframe (browser-driven, requires bind=0.0.0.0 +
+ *    port publish so the user's browser can reach it).
  *
  * Security model:
- *  - 127.0.0.1 bind only — no LAN exposure.
- *  - Random 256-bit auth token generated at startup; never persisted.
- *  - Subprocesses receive the token via env (JUPYTER_SERVER_TOKEN), not via
- *    URL query strings (avoids leaking through process listings).
+ *  - Default bind 127.0.0.1 — closed unless the operator opens it explicitly.
+ *  - Random 256-bit auth token by default. Can be pinned via AIRA_JUPYTER_TOKEN
+ *    so the JupyterLab bookmark URL stays stable across restarts.
+ *  - Tornado headers loosen frame-ancestors and X-Frame-Options to allow the
+ *    AIRA UI origin to embed JupyterLab; other origins still blocked.
+ *
+ * Env overrides (all optional, defaults preserve v3.0.x behavior):
+ *  - AIRA_JUPYTER_BIND       host to bind (default 127.0.0.1; 0.0.0.0 to
+ *                            allow browser access from outside the container)
+ *  - AIRA_JUPYTER_PORT       port (default 8888, auto-bumped if occupied)
+ *  - AIRA_JUPYTER_TOKEN      fixed auth token (default: per-startup random)
+ *  - AIRA_JUPYTER_PUBLIC_URL URL the browser uses to reach Jupyter (default:
+ *                            http://localhost:<port>). Set this if AIRA is
+ *                            running on a non-localhost hostname (e.g. behind
+ *                            a reverse proxy or accessed via LAN IP).
+ *  - AIRA_ALLOWED_ORIGINS    inherited from AIRA's CSRF/CORS allowlist; also
+ *                            granted iframe-parent permission so the AIRA UI
+ *                            can embed JupyterLab.
  *
  * Lifecycle:
  *  - startJupyterServer(): spawn, wait for /api/status to respond OK.
@@ -25,7 +40,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { getDataDir } from '../config/paths.js';
 
-const HOST = '127.0.0.1';
+const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = parseInt(process.env.AIRA_JUPYTER_PORT ?? '8888', 10);
 const STARTUP_TIMEOUT_MS = 30_000;
 const STOP_GRACE_MS = 3_000;
@@ -33,9 +48,41 @@ const STOP_GRACE_MS = 3_000;
 let _process: ChildProcess | null = null;
 let _port: number | null = null;
 let _token: string | null = null;
+let _bindHost: string | null = null;
 
+function bindHost(): string {
+  return process.env.AIRA_JUPYTER_BIND ?? DEFAULT_HOST;
+}
+
+/**
+ * URL used by AIRA-internal subprocesses (jupyter-mcp-server) to reach the
+ * Jupyter Server. Always loopback because the subprocess runs in the same
+ * container, so 127.0.0.1 works even when the public bind is 0.0.0.0.
+ */
 export function getJupyterUrl(): string | null {
-  return _port ? `http://${HOST}:${_port}` : null;
+  return _port ? `http://${DEFAULT_HOST}:${_port}` : null;
+}
+
+/**
+ * URL the user's browser uses to reach Jupyter for the iframe. Defaults to
+ * http://localhost:<port> which works when the user runs the container with
+ * `-p 8888:8888` on the same machine. Override via AIRA_JUPYTER_PUBLIC_URL for
+ * remote/LAN/reverse-proxy access.
+ */
+export function getJupyterPublicUrl(): string | null {
+  if (!_port) return null;
+  return process.env.AIRA_JUPYTER_PUBLIC_URL ?? `http://localhost:${_port}`;
+}
+
+/**
+ * Whether the Jupyter Server is reachable from outside the container (i.e.
+ * iframe-embeddable). True only when bound to 0.0.0.0 or a non-loopback
+ * address, so the UI can show a helpful "open with -p 8888:8888" message
+ * instead of a broken iframe.
+ */
+export function isJupyterPubliclyReachable(): boolean {
+  if (!_bindHost) return false;
+  return _bindHost === '0.0.0.0' || (!_bindHost.startsWith('127.') && _bindHost !== 'localhost');
 }
 
 export function getJupyterToken(): string | null {
@@ -51,6 +98,7 @@ export function resetJupyterStateForTesting(): void {
   _process = null;
   _port = null;
   _token = null;
+  _bindHost = null;
 }
 
 /**
@@ -58,25 +106,26 @@ export function resetJupyterStateForTesting(): void {
  * Jupyter Server. ONLY for tests — production callers must use
  * startJupyterServer().
  */
-export function setJupyterStateForTesting(port: number, token: string): void {
+export function setJupyterStateForTesting(port: number, token: string, host = DEFAULT_HOST): void {
   _port = port;
   _token = token;
+  _bindHost = host;
 }
 
-function probePortFree(port: number): Promise<boolean> {
+function probePortFree(port: number, host: string): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
     server.once('error', () => resolve(false));
     server.once('listening', () => {
       server.close(() => resolve(true));
     });
-    server.listen(port, HOST);
+    server.listen(port, host);
   });
 }
 
-async function findFreePort(start: number): Promise<number> {
+async function findFreePort(start: number, host: string): Promise<number> {
   for (let port = start; port < start + 50; port++) {
-    if (await probePortFree(port)) return port;
+    if (await probePortFree(port, host)) return port;
   }
   throw new Error(`No free port found near ${start}`);
 }
@@ -102,6 +151,31 @@ async function waitForReady(url: string, token: string, timeoutMs: number): Prom
 }
 
 /**
+ * Build the comma-separated list of origins allowed to embed JupyterLab in
+ * an iframe. Mirrors the AIRA CSRF/CORS allowlist so the JupyterLab UI is
+ * reachable from the same browser contexts that already trust AIRA.
+ */
+function frameAncestorOrigins(): string {
+  const origins = new Set<string>([
+    "'self'",
+    `http://localhost:${process.env.AIRA_PORT ?? '3000'}`,
+    `http://127.0.0.1:${process.env.AIRA_PORT ?? '3000'}`,
+  ]);
+  // Vite dev ports
+  for (const p of [5173, 5174, 5175]) {
+    origins.add(`http://localhost:${p}`);
+    origins.add(`http://127.0.0.1:${p}`);
+  }
+  if (process.env.AIRA_ALLOWED_ORIGINS) {
+    for (const o of process.env.AIRA_ALLOWED_ORIGINS.split(',')) {
+      const t = o.trim();
+      if (t) origins.add(t);
+    }
+  }
+  return Array.from(origins).join(' ');
+}
+
+/**
  * Start the Jupyter Server. Idempotent — returns existing url/token if already
  * running. Throws if `jupyter` is not installed or the server fails to become
  * ready within STARTUP_TIMEOUT_MS.
@@ -121,22 +195,43 @@ export async function startJupyterServer(): Promise<{ url: string; token: string
     );
   }
 
-  _token = crypto.randomBytes(32).toString('hex');
-  _port = await findFreePort(DEFAULT_PORT);
+  _bindHost = bindHost();
+  _token = process.env.AIRA_JUPYTER_TOKEN || crypto.randomBytes(32).toString('hex');
+  // Probe ports from the loopback side — even when binding 0.0.0.0, a port
+  // that's free on 127.0.0.1 is free on all interfaces.
+  _port = await findFreePort(DEFAULT_PORT, DEFAULT_HOST);
 
   // Pin the Jupyter state directory under AIRA's data/ so it does not write to
   // the user's home directory inside the container.
   const jupyterDataDir = path.join(getDataDir(), 'jupyter');
   fs.mkdirSync(jupyterDataDir, { recursive: true, mode: 0o700 });
 
+  // Tornado headers — relax X-Frame-Options + tighten CSP frame-ancestors so
+  // exactly the AIRA UI origins are allowed to iframe JupyterLab. Anyone else
+  // (including arbitrary cross-origin pages) is still blocked.
+  const ancestors = frameAncestorOrigins();
+  const tornadoSettings = JSON.stringify({
+    headers: {
+      'Content-Security-Policy': `frame-ancestors ${ancestors}`,
+      // Remove X-Frame-Options by setting empty string (tornado collapses it).
+      'X-Frame-Options': '',
+    },
+  });
+
   const args = [
     'server',
     '--no-browser',
     `--port=${_port}`,
-    `--ServerApp.ip=${HOST}`,
+    `--ServerApp.ip=${_bindHost}`,
     `--IdentityProvider.token=${_token}`,
     '--ServerApp.open_browser=False',
     '--ServerApp.log_level=WARN',
+    // v3.1.0 — default landing page is the JupyterLab UI, not the classic tree
+    '--ServerApp.default_url=/lab',
+    // Allow iframe embedding from AIRA UI origins
+    `--ServerApp.tornado_settings=${tornadoSettings}`,
+    // Match the AIRA CORS allowlist so AJAX from the iframe works
+    `--ServerApp.allow_origin_pat=^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:\\d+)?$`,
   ];
 
   _process = spawn('jupyter', args, {
@@ -161,6 +256,7 @@ export async function startJupyterServer(): Promise<{ url: string; token: string
     _process = null;
     _port = null;
     _token = null;
+    _bindHost = null;
   });
 
   try {
@@ -171,10 +267,15 @@ export async function startJupyterServer(): Promise<{ url: string; token: string
     _process = null;
     _port = null;
     _token = null;
+    _bindHost = null;
     throw err;
   }
 
-  console.log(`[jupyter-server] Listening on ${getJupyterUrl()} (auth required)`);
+  const publicUrl = getJupyterPublicUrl();
+  const reachableNote = isJupyterPubliclyReachable()
+    ? `iframe-reachable at ${publicUrl}`
+    : 'loopback only (iframe needs AIRA_JUPYTER_BIND=0.0.0.0 + -p 8888:8888)';
+  console.log(`[jupyter-server] Listening on http://${_bindHost}:${_port}/lab — ${reachableNote}`);
   return { url: getJupyterUrl()!, token: _token };
 }
 
@@ -201,4 +302,5 @@ export async function stopJupyterServer(): Promise<void> {
   _process = null;
   _port = null;
   _token = null;
+  _bindHost = null;
 }

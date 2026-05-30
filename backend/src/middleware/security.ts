@@ -181,6 +181,23 @@ export const cspMiddleware = createMiddleware(async (c, next) => {
     `http://127.0.0.1:${p}`, `ws://127.0.0.1:${p}`,
   ]).join(' ');
 
+  // v3.1.0 — frame-src allows AIRA UI to embed JupyterLab. Same loopback
+  // host:port shape as connect-src. AIRA_JUPYTER_PUBLIC_URL is added when set
+  // so deployments behind a reverse proxy / non-localhost hostname work.
+  const jupyterPort = parseInt(process.env.AIRA_JUPYTER_PORT ?? '8888', 10);
+  const frameSrcParts = new Set<string>([
+    "'self'",
+    `http://localhost:${jupyterPort}`,
+    `http://127.0.0.1:${jupyterPort}`,
+  ]);
+  if (process.env.AIRA_JUPYTER_PUBLIC_URL) {
+    try {
+      const u = new URL(process.env.AIRA_JUPYTER_PUBLIC_URL);
+      frameSrcParts.add(`${u.protocol}//${u.host}`);
+    } catch { /* malformed env, skip */ }
+  }
+  const frameSrc = Array.from(frameSrcParts).join(' ');
+
   c.header(
     'Content-Security-Policy',
     [
@@ -194,6 +211,7 @@ export const cspMiddleware = createMiddleware(async (c, next) => {
       "base-uri 'self'",
       "form-action 'self'",
       "frame-ancestors 'none'",
+      `frame-src ${frameSrc}`,
     ].join('; '),
   );
 

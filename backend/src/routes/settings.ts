@@ -5,6 +5,12 @@ import { execFile, execFileSync } from 'node:child_process';
 import { AuthService } from '../services/auth.service.js';
 import { getProjectsDir } from '../config/paths.js';
 import { getDatabase } from '../db/index.js';
+import {
+  getJupyterPublicUrl,
+  getJupyterToken,
+  isJupyterRunning,
+  isJupyterPubliclyReachable,
+} from '../services/jupyter-server.js';
 
 const settingsRoutes = new Hono();
 const authService = new AuthService();
@@ -20,6 +26,34 @@ settingsRoutes.get('/api/settings', (c) => {
       configured: authService.hasToken(),
       source: authService.isEnvToken() ? 'environment' : 'settings',
     },
+  });
+});
+
+/**
+ * GET /api/settings/jupyter — info the frontend needs to embed JupyterLab.
+ *
+ * `available` distinguishes three states:
+ *   - "ready":     Jupyter is running AND publicly reachable from the browser
+ *                  (bind=0.0.0.0 typically) → iframe should work.
+ *   - "loopback":  Jupyter is running but bound to 127.0.0.1 → browser cannot
+ *                  reach it; UI should explain how to enable iframe access.
+ *   - "down":      Jupyter Server is not running at all.
+ *
+ * Token is exposed so the iframe URL (which the browser navigates to) can
+ * include it; this matches how JupyterLab is normally accessed and the same
+ * token already flows through subprocess env to jupyter-mcp-server.
+ */
+settingsRoutes.get('/api/settings/jupyter', (c) => {
+  if (!isJupyterRunning()) {
+    return c.json({ available: 'down' });
+  }
+  const publicUrl = getJupyterPublicUrl();
+  const token = getJupyterToken();
+  const reachable = isJupyterPubliclyReachable();
+  return c.json({
+    available: reachable ? 'ready' : 'loopback',
+    publicUrl,
+    token,
   });
 });
 

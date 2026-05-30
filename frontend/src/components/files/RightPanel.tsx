@@ -7,6 +7,7 @@ import { useT } from '../../useT';
 import { type TranslationKey } from '../../i18n';
 import { filesApi, runsApi } from '../../api/client';
 import { FileViewerModal } from './FileViewerModal';
+import { NotebookPane } from './NotebookPane';
 
 export function RightPanel() {
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
@@ -18,6 +19,7 @@ export function RightPanel() {
   const light = theme === 'light';
 
   const [viewingFile, setViewingFile] = useState<{ id: string; path: string } | null>(null);
+  const [tab, setTab] = useState<'files' | 'notebook'>('files');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,7 +62,27 @@ export function RightPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full p-3 overflow-y-auto">
+    <div className="flex flex-col h-full">
+      {/* Tab bar */}
+      <div className={`flex border-b shrink-0 ${light ? 'border-gray-200 bg-gray-50' : 'border-gray-700 bg-gray-800'}`}>
+        <TabButton active={tab === 'files'} onClick={() => setTab('files')} light={light}>
+          {t('panel.tabFiles')}
+        </TabButton>
+        <TabButton active={tab === 'notebook'} onClick={() => setTab('notebook')} light={light}>
+          {t('panel.tabNotebook')}
+        </TabButton>
+      </div>
+
+      {/* Notebook tab — iframe fills remaining space */}
+      {tab === 'notebook' && (
+        <div className="flex-1 min-h-0">
+          <NotebookPane projectId={activeProjectId} />
+        </div>
+      )}
+
+      {/* Files tab — original scrollable content (inlined to keep typing simple) */}
+      {tab === 'files' && (
+    <div className="flex flex-col flex-1 min-h-0 p-3 overflow-y-auto">
       {/* Pipeline Progress */}
       {pipelineSteps.length > 0 && (
         <section className="mb-4">
@@ -217,9 +239,11 @@ export function RightPanel() {
           );
         })()}
       </section>
+    </div>
+      )}
 
-      {/* File Viewer Modal */}
-      {viewingFile && activeProjectId && (
+      {/* File Viewer Modal — shared across tabs */}
+      {viewingFile && (
         <FileViewerModal
           projectId={activeProjectId}
           fileId={viewingFile.id}
@@ -228,6 +252,29 @@ export function RightPanel() {
         />
       )}
     </div>
+  );
+}
+
+function TabButton({ active, onClick, light, children }: {
+  active: boolean;
+  onClick: () => void;
+  light: boolean;
+  children: React.ReactNode;
+}) {
+  const base = 'flex-1 text-xs px-3 py-2 font-medium border-b-2 transition-colors';
+  const activeCls = light
+    ? 'border-blue-500 text-blue-700 bg-white'
+    : 'border-blue-400 text-blue-300 bg-gray-900';
+  const inactiveCls = light
+    ? 'border-transparent text-gray-500 hover:text-gray-700'
+    : 'border-transparent text-gray-400 hover:text-gray-200';
+  return (
+    <button
+      onClick={onClick}
+      className={`${base} ${active ? activeCls : inactiveCls}`}
+    >
+      {children}
+    </button>
   );
 }
 

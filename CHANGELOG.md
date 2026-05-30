@@ -2,6 +2,63 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.1.0] — 2026-05-31
+
+エージェントが書いた Jupyter notebook を **AIRA UI 内の iframe で直接編集・実行** できるようにする GUI 統合。v3.0.0 で同梱した stateful Jupyter カーネルに対して、人間側のインタラクションを「別タブで JupyterLab を開く」レベルでなく **AIRA UI と一体化** させる。
+
+### Added — JupyterLab UI 同梱と iframe 統合
+
+- **Docker image に `jupyterlab` を同梱** (Dockerfile 1 行追加、+200〜300 MB)。`EXPOSE 8888` で iframe 用ポートを明示。
+- **`jupyter-server.ts` を強化**:
+  - `AIRA_JUPYTER_BIND` env (default 127.0.0.1) で bind 先を制御。iframe を有効にするには `0.0.0.0` を指定。
+  - `AIRA_JUPYTER_TOKEN` env で auth token を固定可(default はランダム)。ブックマーク用。
+  - `AIRA_JUPYTER_PUBLIC_URL` env で browser がアクセスする URL を明示(default は `http://localhost:<port>`)。reverse proxy / 非 localhost ホスト名運用に対応。
+  - `--ServerApp.default_url=/lab` で JupyterLab UI をデフォルト landing に。
+  - `--ServerApp.tornado_settings` で `Content-Security-Policy: frame-ancestors ...` を AIRA UI Origin の allowlist に絞り、`X-Frame-Options` を削除。AIRA UI からだけ iframe 可能。
+  - `--ServerApp.allow_origin_pat` で localhost 系 Origin の AJAX を許可。
+  - `getJupyterPublicUrl()` / `isJupyterPubliclyReachable()` を新規 export。
+- **CSP frame-src を追加** (`middleware/security.ts`): AIRA UI から JupyterLab を iframe で読み込めるよう、`localhost:8888` / `127.0.0.1:8888` + `AIRA_JUPYTER_PUBLIC_URL` を frame-src に追加。
+- **新規 API `GET /api/settings/jupyter`**: 状態を `{ available: 'ready' | 'loopback' | 'down', publicUrl?, token? }` で返す。frontend が iframe URL を組み立てる用。`available` の 3 状態でユーザに対する案内も変える。
+- **Frontend `NotebookPane` 新規作成** (`components/files/NotebookPane.tsx`):
+  - mount 時に `jupyterApi.getSettings()` で状態取得
+  - `ready` → iframe で `<publicUrl>/lab/tree/projects/<id>/workspace/notebook.ipynb?token=<token>` を直接 deep-link
+  - `loopback` → docker run の正しいオプション (`-p 8888:8888 -e AIRA_JUPYTER_BIND=0.0.0.0`) を表示
+  - `down` → AIRA ログ参照を案内
+  - 「別タブで開く」ボタンで iframe を回避してフォールバック可
+- **`RightPanel` をタブ化**: 上部に `[ファイル] [ノートブック]` の 2 タブを追加。Notebook タブ選択時は `NotebookPane` がパネル全幅 + 全高で表示される(ResizablePanel で幅を広げて使う想定)。
+
+### Tests
+- 新規 backend 9 ケース:
+  - `jupyter-server.test.ts` (+6): `getJupyterPublicUrl` の default / env override / loopback 判定 (`127.0.0.1` / `localhost` は false、`0.0.0.0` は true) / 内部 URL は常に loopback
+  - `routes/settings.test.ts` (+2): `/api/settings/jupyter` の down / loopback 応答
+  - `middleware/security.test.ts` (+2): CSP `frame-src` に Jupyter port が含まれること、`AIRA_JUPYTER_PUBLIC_URL` env が反映されること
+- **22 backend test files / 202 tests + 21 frontend tests all green**。Vite production build OK。
+
+### Setup — iframe 統合を有効にする起動コマンド
+
+```bash
+docker run -d \
+  -p 3001:3000 \
+  -p 8888:8888 \
+  -e AIRA_JUPYTER_BIND=0.0.0.0 \
+  -e AIRA_JUPYTER_TOKEN=my-stable-jupyter-token \  # optional 但しブックマーク安定化
+  -e GITHUB_TOKEN="ghp_xxx" \
+  -v aira-data:/app/data \
+  -v aira-projects:/app/projects \
+  ghcr.io/nahisaho/aira:v3.1.0
+```
+
+`-p 8888:8888` と `-e AIRA_JUPYTER_BIND=0.0.0.0` の両方が必要。片方だけだとブラウザから JupyterLab に到達できず、UI が "loopback" 案内を表示する。
+
+### Default behavior は v3.0.x と同じ
+
+env を何も指定しなければ JupyterLab は `127.0.0.1:8888` bind のままで、外部から見えない(セキュリティ上の default-deny)。Notebook タブを開くと "loopback" 案内が出るが、エージェント経由の jupyter MCP は引き続き機能する。
+
+### Migration
+- 既存 v3.0.x ユーザに必要な action なし。iframe 機能を使いたい場合のみ起動オプション追加。
+- Docker image size: +200〜300 MB (約 5 GB → 約 5.3 GB)。GitHub Actions の Docker Publish も少し時間が伸びる。
+- DB スキーマ変更なし。
+
 ## [v3.0.2] — 2026-05-31
 
 v3.0.0 で同梱した jupyter-mcp-server の CLI 引数 / env 名を私が誤って実装していたため、Docker イメージで Jupyter MCP が **正しく起動していなかった**。実機の jupyter-mcp-server v1.27.2 を JSON-RPC で probe して正確なツール名と env 名を確認、修正。

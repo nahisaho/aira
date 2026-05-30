@@ -103,6 +103,12 @@ const translations = {
     'panel.runHistory': '実行履歴',
     'panel.stop': '停止',
     'panel.noProject': 'プロジェクト未選択',
+    'panel.tabFiles': 'ファイル',
+    'panel.tabNotebook': 'ノートブック',
+    'notebook.openExternal': '別タブで開く',
+    'notebook.unavailable': 'Jupyter Server が起動していません',
+    'notebook.loopback': 'Jupyter Server は loopback bind のためブラウザから直接アクセスできません。コンテナを次のオプション付きで起動してください: -p 8888:8888 -e AIRA_JUPYTER_BIND=0.0.0.0',
+    'notebook.loading': 'Jupyter 情報を取得中...',
 
     // Skills
     'skills.title': 'Agent Skills',
@@ -241,6 +247,12 @@ const translations = {
     'panel.runHistory': 'Run History',
     'panel.stop': 'Stop',
     'panel.noProject': 'No project selected',
+    'panel.tabFiles': 'Files',
+    'panel.tabNotebook': 'Notebook',
+    'notebook.openExternal': 'Open in new tab',
+    'notebook.unavailable': 'Jupyter Server is not running',
+    'notebook.loopback': 'Jupyter Server is bound to loopback and cannot be reached from the browser. Restart the container with: -p 8888:8888 -e AIRA_JUPYTER_BIND=0.0.0.0',
+    'notebook.loading': 'Loading Jupyter info...',
 
     // Skills
     'skills.title': 'Agent Skills',

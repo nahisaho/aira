@@ -129,6 +129,25 @@ describe('Security Middleware', () => {
       expect(csp).toContain("object-src 'none'");
       expect(csp).toContain("frame-ancestors 'none'");
     });
+
+    it('should include frame-src allowing the Jupyter port (v3.1.0 GUI)', async () => {
+      const res = await app.request('/api/test');
+      const csp = res.headers.get('Content-Security-Policy');
+      expect(csp).toContain('frame-src');
+      expect(csp).toContain('http://localhost:8888');
+      expect(csp).toContain('http://127.0.0.1:8888');
+    });
+
+    it('should add AIRA_JUPYTER_PUBLIC_URL to frame-src when set', async () => {
+      process.env.AIRA_JUPYTER_PUBLIC_URL = 'https://jupyter.example.com';
+      try {
+        const res = await app.request('/api/test');
+        const csp = res.headers.get('Content-Security-Policy');
+        expect(csp).toContain('https://jupyter.example.com');
+      } finally {
+        delete process.env.AIRA_JUPYTER_PUBLIC_URL;
+      }
+    });
   });
 
   describe('CORS', () => {

@@ -294,6 +294,20 @@ export const healthApi = {
   check: () => request<{ status: string }>('/health'),
 };
 
+// ─── Jupyter (v3.1.0) ───
+
+export type JupyterAvailability = 'ready' | 'loopback' | 'down';
+
+export interface JupyterSettings {
+  available: JupyterAvailability;
+  publicUrl?: string;
+  token?: string;
+}
+
+export const jupyterApi = {
+  getSettings: () => request<JupyterSettings>('/settings/jupyter'),
+};
+
 // ─── Agents Repos ───
 
 export interface AgentsRepo {
