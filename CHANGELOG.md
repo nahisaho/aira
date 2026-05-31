@@ -2,6 +2,11 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.2.1] — 2026-05-31
+
+### Fixed
+- **CI で TS6133 (`path is declared but its value is never read`) を解消**: v3.2.0 で `services/notebook-trace.ts` に未使用 import (`import path from 'node:path'`) が残っていた。tsc strict mode で macos-latest runner が build を fail させていた。import を削除。コードベース・テストへの影響なし。
+
 ## [v3.2.0] — 2026-05-31 — Computational Provenance
 
 Qiita 記事「AIRA-γ: フィクションからノンフィクションへ」を受けた次世代設計。Jupyter MCP の同梱(v3.0)で「コードが書ける」ようになったが、**「数値が本当に計算結果に由来するか」は検証されていなかった**。v3.2.0 はこの trust gap を埋めるリリース。Pillar 1〜4 + 6 を実装(Pillar 5 figure provenance は v3.3 へ繰り延べ)。
