@@ -1,4 +1,4 @@
-# Co-Scientist — Copilot Instructions (v4.8.0)
+# Co-Scientist — Copilot Instructions (v4.8.1)
 
 ## Identity
 
@@ -145,14 +145,14 @@ Server config is in `.mcp.json`. Install ToolUniverse: `pip install tooluniverse
 
 ### ToolUniverse is NOT for model inference
 
-ToolUniverse only exposes **database query APIs**. The following tools **do NOT exist** inside ToolUniverse — searching for them will always fail:
+ToolUniverse only exposes **database query APIs**. Tools named `nature_lm`, `galactica`, `pubmedbert_inference`, `esm2_predict`, `alphafold_predict`, or anything that runs a language model are **not** inside ToolUniverse. Probing `tooluniverse_*` for these will always fail.
 
-- `nature_lm` / `naturelm_mcp` / any NatureLM-named tool
-- `galactica` / `galactica_mcp` / any GALACTICA-named tool
-- `pubmedbert_inference`, `scibert_inference`, BERT model inference of any kind
-- `esm2_predict`, `alphafold_predict`, any structure-prediction model inference
+**Two paths to actually use NatureLM / GALACTICA / scientific LLMs** (pick by checking what your project has):
 
-**To use these models, invoke them directly from Python in the Jupyter kernel** (see AGENTS.md → "Data Acquisition" → "What ToolUniverse is NOT for" for the full table and code pattern). Typical: `from transformers import AutoModelForCausalLM, AutoTokenizer; model = AutoModelForCausalLM.from_pretrained("facebook/galactica-1.3b", ...)`. Size / hardware constraints must be checked first — if the model is too heavy for the available environment, state this in `report.md` Limitations and either pick a smaller variant or cite-only.
+1. **Dedicated MCP server (preferred when configured)** — these models often have their own MCP servers registered as **separate entries** in Settings → MCP (names like `naturelm`, `nature-mcp`, `galactica-mcp`). When you see tools prefixed with the model name (e.g. `mcp__naturelm__generate`) in your tool list, **call them directly**. Do not route through `tooluniverse_*`.
+2. **Direct invocation in Jupyter kernel (fallback)** — if no dedicated MCP server is configured, load the model from HuggingFace in a notebook cell (`from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained("facebook/galactica-1.3b", ...)`). Size matters: 125M–2B = CPU OK, 7B+ = needs ≥16 GB RAM, 13B+ = GPU. If too heavy, pick a smaller variant or cite-only and state the constraint in `report.md` Limitations.
+
+**Forbidden pattern** — do not write "tools not registered in ToolUniverse" as the final answer and proceed without the model. The dedicated MCP / HuggingFace fallback is the next step. See AGENTS.md → "Where to actually call NatureLM / GALACTICA / scientific LLMs" for the full decision flow.
 
 ## Verification Loop
 

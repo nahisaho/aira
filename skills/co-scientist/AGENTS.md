@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.8.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.8.1 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.8.0
+# Co-Scientist v4.8.1
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -57,7 +57,7 @@ Target total runtime: **60 minutes** (complex experiments may take up to 90 minu
 - **Docstrings**: Required for all public functions.
 - **Type hints**: Recommended.
 
-## Computational Provenance (v4.8.0)
+## Computational Provenance (v4.8.1)
 
 Every numeric claim in `report.md` / `paper.md` must be **traceable back to a specific notebook cell**. Without this, the report becomes "scientific fiction" — numbers that look computed but have no auditable derivation. AIRA captures cell-level execution traces automatically and runs a validator. **The work is not complete until the validator passes.**
 
@@ -96,7 +96,7 @@ AIRA's validator (`POST /api/projects/:id/validate`) checks four gates:
 3. **`no_error_in_cited`** — every cell cited from `report.md` / `paper.md` must have empty `stderr` and no error outputs.
 4. **`citation_coverage`** — ≥80% of detected numeric claims must have a `[cell:<id>]` citation.
 
-### Mandatory second-pass repair loop (v4.8.0)
+### Mandatory second-pass repair loop (v4.8.1)
 
 **Before delivering the final response, you must:**
 
@@ -246,43 +246,72 @@ Command: `tooluniverse-smcp --compact-mode` (stdio transport, compact mode loads
 
 ### What ToolUniverse is NOT for
 
-ToolUniverse exposes **database query APIs** (PubMed search, gene lookup, compound retrieval, …). It does **NOT** expose model inference. **The following tools do not exist inside ToolUniverse**, and trying to call them via the ToolUniverse MCP will always fail:
+ToolUniverse exposes **database query APIs** (PubMed search, gene lookup, compound retrieval, …). It does **NOT** expose model inference. Tools named `nature_lm`, `galactica`, `pubmedbert_inference`, `esm2_predict`, `alphafold_predict`, or anything that "runs a language model" **are NOT inside ToolUniverse** — do not look for them there. Probing `tooluniverse_*` tools for these will always fail.
 
-- ❌ `nature_lm` / `naturelm_mcp` / any NatureLM-named tool
-- ❌ `galactica` / `galactica_mcp` / any GALACTICA-named tool
-- ❌ `pubmedbert_inference` / `scibert_inference` / similar BERT inference tools
-- ❌ `esm2_predict` / `alphafold_predict` / any structure-prediction model inference
-- ❌ Any other "run a language model" tool
+### Where to actually call NatureLM / GALACTICA / scientific LLMs
 
-If you need model inference, use **direct invocation in the Jupyter kernel** (see table + code pattern below), not ToolUniverse. ToolUniverse is for **looking up scientific data**, not running models.
+Each science model can be reached in one of two ways. **Check which MCP servers your project has enabled (Settings → MCP) before picking the path.**
 
-Concrete models commonly cited / requested and how to actually use them:
+**Path 1 — Dedicated MCP server (preferred when configured)**
 
-| Asset | What it is | How to use it (direct invocation in Jupyter MCP) |
+If the project has a dedicated MCP server for the model (these are **separate MCP entries**, not part of ToolUniverse), call its tools **directly**:
+
+| Model | Dedicated MCP name | When it's available |
 |---|---|---|
-| **GALACTICA** (`facebook/galactica-*`) | Meta's scientific LLM | `transformers` from HuggingFace, load locally |
-| **NatureLM** (`microsoft/NatureLM-*-Inst`) | Microsoft cross-domain scientific LLM | `transformers` from HuggingFace, load locally |
-| **PubMedBERT / SciBERT / BioBERT** | Domain BERT variants | `transformers` from HuggingFace |
-| **ESM-2 / ESMFold** (`facebook/esm2_*`) | Protein language models | `transformers` or `fair-esm` |
-| **MolFormer / ChemBERTa** | Molecular Transformers | `transformers` or `simpletransformers` |
-| **AlphaFold weights** (raw) | Protein structure prediction | Use the dedicated `co-scientist-alphafold-structures` sub-skill (separate pipeline). Do not try to load AlphaFold weights via MCP. |
+| **NatureLM** | `nature-mcp` / `naturelm` | When the operator has added the entry under Settings → MCP |
+| **GALACTICA** | `galactica-mcp` / `galactica` | Same |
 
-**Direct invocation pattern** (preferred, runs in the project's Jupyter kernel):
+The MCP server name appears in the tool prefix when you list available tools — e.g. `mcp__naturelm__generate`, `mcp__galactica__generate`. If you see them in the tool list, **use them directly**. **Do NOT route the request through `tooluniverse_*` tools — ToolUniverse will never serve these.**
+
+**Path 2 — Direct invocation in the Jupyter kernel (fallback when no dedicated MCP)**
+
+If the dedicated MCP server is not configured, fall back to loading the model from HuggingFace inside the Jupyter kernel:
+
+| Asset | HuggingFace id | Notes |
+|---|---|---|
+| **GALACTICA** | `facebook/galactica-*` (125m / 1.3b / 6.7b / 30b / 120b) | CPU-only viable up to 1.3b |
+| **NatureLM** | `microsoft/NatureLM-*-Inst` (8B / 8x7B / 46.7B) | 8B needs ~16 GB RAM, 8x7B+ needs GPU |
+| **PubMedBERT / SciBERT / BioBERT** | `microsoft/BiomedNLP-*`, `allenai/scibert_*`, `dmis-lab/biobert-*` | Small, CPU OK |
+| **ESM-2 / ESMFold** | `facebook/esm2_*` | Protein language models |
+| **MolFormer / ChemBERTa** | `ibm/MoLFormer-XL-both-10pct`, `seyonec/ChemBERTa-zinc-base-v1` | Small chemistry models |
+| **AlphaFold (raw weights)** | — | Use the dedicated `co-scientist-alphafold-structures` sub-skill instead. Do not load AlphaFold weights yourself. |
 
 ```python
-# Inside a notebook cell (use_notebook("notebook.ipynb") first)
+# Inside a notebook cell (after use_notebook("notebook.ipynb")):
 from transformers import AutoModelForCausalLM, AutoTokenizer
 model_id = "facebook/galactica-1.3b"  # pick the size that fits available memory
 tok = AutoTokenizer.from_pretrained(model_id)
 model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", torch_dtype="auto")
-inputs = tok("Q: What is the binding affinity of aspirin to COX-1?\n\nA:", return_tensors="pt").to(model.device)
+inputs = tok("Q: What is the binding affinity of aspirin to COX-1?\n\nA:",
+             return_tensors="pt").to(model.device)
 out = model.generate(**inputs, max_new_tokens=200)
 print(tok.decode(out[0], skip_special_tokens=True))
 ```
 
-**Size / hardware reality check** (state this in `report.md` Limitations if it matters):
-- 1B〜2B params: CPU-only OK, slow (minutes per generation)
-- 7B〜8B params: needs ~16GB RAM, much faster with GPU
+**Decision flowchart**
+
+```
+User request mentions NatureLM / GALACTICA / etc.
+        │
+        ▼
+List your available MCP tools (whatever the harness exposes).
+        │
+        ├── Found `mcp__naturelm__*` / `mcp__galactica__*` / similar?
+        │       → Path 1: call them DIRECTLY. Done.
+        │
+        └── Not found?
+                → Path 2: load from HuggingFace in Jupyter.
+                  If too heavy for the env, pick a smaller variant
+                  OR cite-only and state the constraint in Limitations.
+
+Either way: NEVER route the request through `tooluniverse_*` tools.
+NEVER write "tools not registered in ToolUniverse" as if that ended
+the matter — the dedicated MCP / HuggingFace path is the next step.
+```
+
+**Hardware reality check** (state this in `report.md` Limitations if it matters):
+- 125M–2B params: CPU-only OK, slow (minutes per generation)
+- 7B–8B params: needs ~16 GB RAM, much faster with GPU
 - 13B+ params: GPU required for practical use; if unavailable, state "model not exercised due to hardware constraints" and proceed with a smaller variant or cite-only treatment.
 
 **When the model is too heavy for the available environment**, do NOT invent results. Either:

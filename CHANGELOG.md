@@ -2,6 +2,22 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.3.1] — 2026-06-01
+
+### Fixed
+- **agent が NatureLM/GALACTICA を ToolUniverse 経由で扱おうとして "tools not registered in ToolUniverse" で終わらせてしまう挙動を修正**: Round 10 観測。v3.1.4 で「これらは存在しない」と書いたのが過剰修正で、実際には `nature-mcp` / `galactica-mcp` が **独立の MCP サーバ** として AIRA に設定されているケースを想定できていなかった。agent は ToolUniverse で見つからないと処理を諦めていた。
+- **Co-Scientist v4.8.0 → v4.8.1**: AGENTS.md / copilot-instructions.md を以下に書き換え:
+  - 「Path 1: 独立 MCP サーバ(`mcp__naturelm__*` / `mcp__galactica__*` 等)があれば直接呼ぶ」
+  - 「Path 2: 無ければ Jupyter kernel で `transformers` から fallback でロード」
+  - **「`tools not registered in ToolUniverse` を最終結論にしない」** を Forbidden pattern として明示
+  - 決定フローチャートを追加(MCP リストを確認 → 該当 MCP があれば Path 1、無ければ Path 2)
+  - PubMedBERT / SciBERT / BioBERT / ESM-2 / MolFormer / ChemBERTa の HuggingFace ID も明記
+- skill.json + 各ヘッダの version を v4.8.1 に bump。
+
+### Migration
+- skill 文書の変更のみ。バックエンドコード変更なし、API 完全後方互換。
+- 既存実験中の agent には反映されない(image を v3.3.1 に差し替え + 再起動が必要)。
+
 ## [v3.3.0] — 2026-06-01 — Provenance Enforcement
 
 Qiita 記事 [Round 9 で測定した v3.2.0 の効果と限界](https://qiita.com/hisaho/items/75ff865b4a0da03785a1) を踏まえた追加施策。`[cell:<id>]` 引用は 0→89% に増えたが、citation coverage は **15.7%(目標 80% 未達)**、`pip freeze` 実行率 **0%**、citation linter に **DOI 誤検出**が指摘された。v3.3.0 はこれを 4 Pillar で潰す:
