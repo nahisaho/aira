@@ -2,6 +2,18 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.1.2] — 2026-05-31
+
+### Changed
+- **サイドバー上部のタイトルを `AIRA-β` → `AIRA-γ` に変更** (`frontend/src/i18n.ts` の `sidebar.title`、ja/en 両方)。AIRA-γ は v3 系列(Jupyter MCP / JupyterLab GUI 同梱)のコードネーム。README / AGENTS.md はすでに整合済みだったが UI が β のままだったので追従。
+
+### Added
+- **Settings 画面に "バージョン情報" セクションを追加**。AIRA バージョン(`package.json` から runtime 読み取り、フォールバックは `unknown`)と Copilot CLI バージョン(`copilot --version` 実行結果、未インストール時は "未インストール" 表示)を表示。
+- 新規 API `GET /api/settings/version` → `{ aira: string, copilotCli: string | null }`。
+
+### Tests
+- 機能追加に対する直接テストは未追加(UI 表示と既存 settings 構造に従う単純な追加のため)。既存 202 tests グリーンで回帰なし、tsc 両 workspace + Vite production build 成功。
+
 ## [v3.1.1] — 2026-05-31
 
 ### Fixed

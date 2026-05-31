@@ -3,7 +3,7 @@ export type Locale = 'ja' | 'en';
 const translations = {
   ja: {
     // Sidebar
-    'sidebar.title': 'AIRA-β',
+    'sidebar.title': 'AIRA-γ',
     'sidebar.subtitle': 'AI Research Assistant',
     'sidebar.newProject': '+ 新規',
     'sidebar.settings': '⚙ 設定',
@@ -45,6 +45,13 @@ const translations = {
     'settings.cliUpdating': 'アップデート中...',
     'settings.cliUpdateSuccess': '✓ アップデート完了',
     'settings.cliUpdateFailed': '✗ アップデート失敗',
+
+    // About / Version (v3.1.2)
+    'settings.about': 'バージョン情報',
+    'settings.airaVersion': 'AIRA',
+    'settings.copilotCliVersion': 'Copilot CLI',
+    'settings.versionLoading': '読み込み中...',
+    'settings.copilotCliNotInstalled': '未インストール',
 
     // Admin
     'settings.cleanProjects': '🗑 不要フォルダ削除',
@@ -147,7 +154,7 @@ const translations = {
   },
   en: {
     // Sidebar
-    'sidebar.title': 'AIRA-β',
+    'sidebar.title': 'AIRA-γ',
     'sidebar.subtitle': 'AI Research Assistant',
     'sidebar.newProject': '+ New',
     'sidebar.settings': '⚙ Settings',
@@ -189,6 +196,13 @@ const translations = {
     'settings.cliUpdating': 'Updating...',
     'settings.cliUpdateSuccess': '✓ Update complete',
     'settings.cliUpdateFailed': '✗ Update failed',
+
+    // About / Version (v3.1.2)
+    'settings.about': 'About',
+    'settings.airaVersion': 'AIRA',
+    'settings.copilotCliVersion': 'Copilot CLI',
+    'settings.versionLoading': 'Loading...',
+    'settings.copilotCliNotInstalled': 'not installed',
 
     // Admin
     'settings.cleanProjects': '🗑 Clean folders',

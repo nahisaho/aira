@@ -31,6 +31,8 @@ export function SettingsPane({ onClose }: { onClose: () => void }) {
           <CliUpdateSettings />
           <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
           <AgentsRepoSettings />
+          <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
+          <AboutSection />
         </div>
       </div>
     </div>
@@ -433,6 +435,51 @@ function AgentsRepoSettings() {
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+function AboutSection() {
+  const t = useT();
+  const [versions, setVersions] = useState<{ aira: string; copilotCli: string | null } | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    settingsApi
+      .getVersion()
+      .then((v) => { if (!cancelled) setVersions(v); })
+      .catch(() => { if (!cancelled) setError(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-gray-300 dark:text-gray-300 light:text-gray-700 mb-3">
+        {t('settings.about')}
+      </h3>
+      <div className="space-y-1.5 text-sm">
+        <div className="flex items-baseline gap-2">
+          <span className="text-gray-400 dark:text-gray-400 light:text-gray-500 min-w-[100px]">
+            {t('settings.airaVersion')}
+          </span>
+          <span className="font-mono text-gray-200 dark:text-gray-200 light:text-gray-800">
+            {error ? '?' : versions ? `v${versions.aira}` : t('settings.versionLoading')}
+          </span>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-gray-400 dark:text-gray-400 light:text-gray-500 min-w-[100px]">
+            {t('settings.copilotCliVersion')}
+          </span>
+          <span className="font-mono text-gray-200 dark:text-gray-200 light:text-gray-800">
+            {error
+              ? '?'
+              : versions
+                ? versions.copilotCli ?? t('settings.copilotCliNotInstalled')
+                : t('settings.versionLoading')}
+          </span>
+        </div>
+      </div>
     </section>
   );
 }

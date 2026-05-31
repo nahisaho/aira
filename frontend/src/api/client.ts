@@ -217,6 +217,8 @@ export const settingsApi = {
     request<{ deleted: string[]; count: number }>('/settings/clean-projects', { method: 'POST' }),
   restart: () =>
     request<{ status: string }>('/settings/restart', { method: 'POST' }),
+  getVersion: () =>
+    request<{ aira: string; copilotCli: string | null }>('/settings/version'),
 };
 
 // ─── Skills ───

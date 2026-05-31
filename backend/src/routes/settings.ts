@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFile, execFileSync } from 'node:child_process';
 import { AuthService } from '../services/auth.service.js';
 import { getProjectsDir } from '../config/paths.js';
@@ -83,6 +85,49 @@ settingsRoutes.post('/api/settings/validate-token', async (c) => {
     return c.json({ valid: true, login: result.login, scopes: result.scopes });
   }
   return c.json({ valid: false }, 200);
+});
+
+/**
+ * GET /api/settings/version — AIRA + Copilot CLI version info.
+ *
+ * AIRA version is read once at module load from the root package.json. In
+ * production the file is at /app/package.json (per Dockerfile); in dev it is
+ * resolved relative to this source file. Falls back to "unknown" if either
+ * lookup fails so the endpoint stays usable.
+ */
+const AIRA_VERSION = (() => {
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    // backend/src/routes/settings.ts → ../../../package.json
+    // backend/dist/routes/settings.js → ../../../package.json
+    const candidates = [
+      path.resolve(here, '..', '..', '..', 'package.json'),
+      path.resolve(here, '..', '..', 'package.json'),
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        const parsed = JSON.parse(fs.readFileSync(p, 'utf-8')) as { name?: string; version?: string };
+        if (parsed.name === 'aira' && parsed.version) return parsed.version;
+      }
+    }
+  } catch { /* fall through */ }
+  return 'unknown';
+})();
+
+settingsRoutes.get('/api/settings/version', (c) => {
+  let cliVersion: string | null = null;
+  try {
+    cliVersion = execFileSync('copilot', ['--version'], {
+      encoding: 'utf-8',
+      timeout: 5_000,
+    }).trim().split('\n')[0] ?? null;
+  } catch {
+    // Copilot CLI not installed; surface as null instead of failing the request
+  }
+  return c.json({
+    aira: AIRA_VERSION,
+    copilotCli: cliVersion,
+  });
 });
 
 // GET /api/settings/cli-version — get current CLI version
