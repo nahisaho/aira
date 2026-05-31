@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.6.1 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.6.2 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.6.1
+# Co-Scientist v4.6.2
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -167,13 +167,59 @@ Command: `tooluniverse-smcp --compact-mode` (stdio transport, compact mode loads
 
 ### Tool Usage Rules
 
-- Use MCP tools when available for database queries (PubMed, ChEMBL, Ensembl, UniProt, etc.).
+- Use MCP tools when available for **database queries** (PubMed, ChEMBL, Ensembl, UniProt, etc.).
 - Fall back to Python `requests` + public REST APIs when MCP server is unavailable.
 - Fall back to `web_search` as a secondary option.
 - Each sub-skill's `tu_tools` frontmatter lists its available MCP tools.
 - Each sub-skill's "Available Tools (MCP)" section documents tool names and sources.
 - Do not enable more than 10 MCP servers simultaneously.
 - Record all tool invocations in `logs/process-log.jsonl`.
+
+### What ToolUniverse is NOT for
+
+ToolUniverse exposes **database query APIs** (PubMed search, gene lookup, compound retrieval, …). It does **NOT** expose model inference. **The following tools do not exist inside ToolUniverse**, and trying to call them via the ToolUniverse MCP will always fail:
+
+- ❌ `nature_lm` / `naturelm_mcp` / any NatureLM-named tool
+- ❌ `galactica` / `galactica_mcp` / any GALACTICA-named tool
+- ❌ `pubmedbert_inference` / `scibert_inference` / similar BERT inference tools
+- ❌ `esm2_predict` / `alphafold_predict` / any structure-prediction model inference
+- ❌ Any other "run a language model" tool
+
+If you need model inference, use **direct invocation in the Jupyter kernel** (see table + code pattern below), not ToolUniverse. ToolUniverse is for **looking up scientific data**, not running models.
+
+Concrete models commonly cited / requested and how to actually use them:
+
+| Asset | What it is | How to use it (direct invocation in Jupyter MCP) |
+|---|---|---|
+| **GALACTICA** (`facebook/galactica-*`) | Meta's scientific LLM | `transformers` from HuggingFace, load locally |
+| **NatureLM** (`microsoft/NatureLM-*-Inst`) | Microsoft cross-domain scientific LLM | `transformers` from HuggingFace, load locally |
+| **PubMedBERT / SciBERT / BioBERT** | Domain BERT variants | `transformers` from HuggingFace |
+| **ESM-2 / ESMFold** (`facebook/esm2_*`) | Protein language models | `transformers` or `fair-esm` |
+| **MolFormer / ChemBERTa** | Molecular Transformers | `transformers` or `simpletransformers` |
+| **AlphaFold weights** (raw) | Protein structure prediction | Use the dedicated `co-scientist-alphafold-structures` sub-skill (separate pipeline). Do not try to load AlphaFold weights via MCP. |
+
+**Direct invocation pattern** (preferred, runs in the project's Jupyter kernel):
+
+```python
+# Inside a notebook cell (use_notebook("notebook.ipynb") first)
+from transformers import AutoModelForCausalLM, AutoTokenizer
+model_id = "facebook/galactica-1.3b"  # pick the size that fits available memory
+tok = AutoTokenizer.from_pretrained(model_id)
+model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", torch_dtype="auto")
+inputs = tok("Q: What is the binding affinity of aspirin to COX-1?\n\nA:", return_tensors="pt").to(model.device)
+out = model.generate(**inputs, max_new_tokens=200)
+print(tok.decode(out[0], skip_special_tokens=True))
+```
+
+**Size / hardware reality check** (state this in `report.md` Limitations if it matters):
+- 1B〜2B params: CPU-only OK, slow (minutes per generation)
+- 7B〜8B params: needs ~16GB RAM, much faster with GPU
+- 13B+ params: GPU required for practical use; if unavailable, state "model not exercised due to hardware constraints" and proceed with a smaller variant or cite-only treatment.
+
+**When the model is too heavy for the available environment**, do NOT invent results. Either:
+1. Use a smaller variant of the same family.
+2. Cite the model in `paper.md` Related Work / Methods as a reference and use a feasible alternative (smaller LM, classical baseline) for actual computation.
+3. State the constraint explicitly in Limitations.
 
 ## Routing Rules
 

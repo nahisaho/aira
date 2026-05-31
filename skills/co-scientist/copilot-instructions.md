@@ -1,4 +1,4 @@
-# Co-Scientist — Copilot Instructions (v4.6.1)
+# Co-Scientist — Copilot Instructions (v4.6.2)
 
 ## Identity
 
@@ -107,6 +107,17 @@ Expected output: empty. If any files are listed, delete them and re-verify.
 
 ### MCP Configuration
 Server config is in `.mcp.json`. Install ToolUniverse: `pip install tooluniverse`.
+
+### ToolUniverse is NOT for model inference
+
+ToolUniverse only exposes **database query APIs**. The following tools **do NOT exist** inside ToolUniverse — searching for them will always fail:
+
+- `nature_lm` / `naturelm_mcp` / any NatureLM-named tool
+- `galactica` / `galactica_mcp` / any GALACTICA-named tool
+- `pubmedbert_inference`, `scibert_inference`, BERT model inference of any kind
+- `esm2_predict`, `alphafold_predict`, any structure-prediction model inference
+
+**To use these models, invoke them directly from Python in the Jupyter kernel** (see AGENTS.md → "Data Acquisition" → "What ToolUniverse is NOT for" for the full table and code pattern). Typical: `from transformers import AutoModelForCausalLM, AutoTokenizer; model = AutoModelForCausalLM.from_pretrained("facebook/galactica-1.3b", ...)`. Size / hardware constraints must be checked first — if the model is too heavy for the available environment, state this in `report.md` Limitations and either pick a smaller variant or cite-only.
 
 ## Verification Loop
 

@@ -2,6 +2,19 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.1.4] — 2026-05-31
+
+### Changed
+- **Co-Scientist v4.6.1 → v4.6.2**: 「NatureLM / GALACTICA / その他のモデル inference 系を ToolUniverse 経由で呼ぼうとする幻覚」を防ぐ明示的なガードを追加。Round-8 実験で agent が `nature_lm_mcp` / `galactica_mcp` ツールが ToolUniverse 内に存在すると誤認して呼び出そうとする事例を受けて。
+  - `AGENTS.md` の Data Acquisition セクションに **"What ToolUniverse is NOT for"** サブセクションを追加。存在しないツール名(`nature_lm`, `galactica_mcp`, `pubmedbert_inference`, `esm2_predict`, `alphafold_predict` 等)を ❌ 列挙。
+  - 代替パターンとして **Jupyter MCP の kernel 内で `transformers` を使った直接呼び出し** をコード例付きで提示(GALACTICA / NatureLM / ESM-2 / MolFormer 等のテーブル)。
+  - サイズ / ハードウェア現実チェック(1B→CPU可、7B→16GB RAM、13B+→GPU 必須)と、不可能な場合の処理(小型バリアント / cite-only / Limitations 明記)を規定。
+  - `copilot-instructions.md` にも凝縮版で同じガードを追加。
+
+### Migration
+- Docker image を rebuild & redeploy が必要 (`skills/` がイメージに焼き込まれているため、現在動いている container には反映されない)。`gh run list` で Docker Publish 完走を待ってから新 image を pull → 再起動。
+- 実行中の round-8 等で問題が発生している場合は: agent が `nature_lm_mcp not found` のような失敗を繰り返すなら、container を v3.1.4 image に差し替えて再実行が必要。
+
 ## [v3.1.3] — 2026-05-31
 
 ### Fixed
