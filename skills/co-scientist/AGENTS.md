@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.7.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.8.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.7.0
+# Co-Scientist v4.8.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -57,9 +57,19 @@ Target total runtime: **60 minutes** (complex experiments may take up to 90 minu
 - **Docstrings**: Required for all public functions.
 - **Type hints**: Recommended.
 
-## Computational Provenance (v4.7.0)
+## Computational Provenance (v4.8.0)
 
-Every numeric claim in `report.md` / `paper.md` must be **traceable back to a specific notebook cell**. Without this, the report becomes "scientific fiction" — numbers that look computed but have no auditable derivation. AIRA captures cell-level execution traces automatically and runs a validator before the work is considered complete.
+Every numeric claim in `report.md` / `paper.md` must be **traceable back to a specific notebook cell**. Without this, the report becomes "scientific fiction" — numbers that look computed but have no auditable derivation. AIRA captures cell-level execution traces automatically and runs a validator. **The work is not complete until the validator passes.**
+
+### Notebook starts pre-seeded (v3.3.0)
+
+Every new project's `notebook.ipynb` is created with three template cells:
+
+- `[cell:aira-header]` — markdown title + provenance reminders.
+- `[cell:aira-env]` — runs `!pip freeze > requirements.txt` (passes the `env_capture` gate). **Execute this once at the start of any project.**
+- `[cell:aira-seed]` — seeds `random`, `numpy.random`, and `torch` (passes the `seed_presence` gate). Re-seed in later cells only when intentionally exploring different seeds.
+
+You inherit these cells — you don't need to create them. **Execute `[cell:aira-env]` and `[cell:aira-seed]` early in every project run** so the two cheap gates pass before any analysis cells are added.
 
 ### Numeric-claim citation format
 
@@ -74,28 +84,47 @@ AUROC = 0.83 ± 0.02 (95% CI: [0.79, 0.87]) [cell:eda-corr-final]
 - Multiple cells may be cited if the value is composed: `[cell:fit-model] [cell:eval-test]`.
 - Citation applies to all primary metrics, p-values, sample sizes (n=...), effect sizes, CIs, and any other reportable number.
 - Tables and figures should reference cells in their caption: `Figure 1. ROC curve [cell:viz-roc].`
+- The validator allows up to 400 chars between a claim and its citation (v3.3.0). Same paragraph is comfortably within range.
+- DOIs, year-in-citation patterns like `(Smith et al., 2024)`, and section/figure/equation labels are **automatically excluded** from numeric-claim detection — don't add fake citations to those.
 
 ### Reproducibility gates (validator)
 
-Before marking the experiment complete, AIRA's validator (`POST /api/projects/:id/validate`) checks four gates:
+AIRA's validator (`POST /api/projects/:id/validate`) checks four gates:
 
 1. **`seed_presence`** — every cell that uses RNG (`np.random.*`, `random.*`, `torch.*rand*`, `tf.random.*`) must have a seed set in scope (in-cell or earlier).
 2. **`env_capture`** — `requirements.txt` must exist OR a cell must have run `pip freeze` / `pip list`.
 3. **`no_error_in_cited`** — every cell cited from `report.md` / `paper.md` must have empty `stderr` and no error outputs.
 4. **`citation_coverage`** — ≥80% of detected numeric claims must have a `[cell:<id>]` citation.
 
-These gates are **soft** — they don't block execution, but **a failing gate is a defect**. If any gate fails, repair it before delivering the final response:
-- Seed missing → add `np.random.seed(42)` (or equivalent) to an early cell.
-- Env not captured → add a cell that runs `!pip freeze > requirements.txt` and re-execute.
-- Cited cell has stderr → fix the bug, re-execute, update the citation.
-- Coverage too low → add citations to the bare numbers.
+### Mandatory second-pass repair loop (v4.8.0)
+
+**Before delivering the final response, you must:**
+
+1. Call `POST /api/projects/:id/validate`.
+2. If `pass: true` → continue to the final response.
+3. If `pass: false` → call `POST /api/projects/:id/validate/repair` to get a structured violation list and a markdown repair prompt with:
+   - The exact uncited claims (file + match string).
+   - Any unknown citations and what they referenced.
+   - Failed gates with remediation hints.
+   - The list of cell ids you can cite.
+4. Apply the repair instructions in order:
+   - For each **uncited claim**, find the cell whose output is the value and add `[cell:<id>]` right after the number in `report.md` / `paper.md`.
+   - For each **unknown citation**, fix the cell id (typo) or repoint it to a real one.
+   - For each **failed gate**, run the suggested fix:
+     - `seed_presence` → re-execute `[cell:aira-seed]` (or add the missing library's seed).
+     - `env_capture` → re-execute `[cell:aira-env]`.
+     - `no_error_in_cited` → fix the cell so it produces clean output, re-execute, then re-cite.
+     - `citation_coverage` → walk through the uncited claim list above.
+5. Re-run step 1. Loop until `pass: true` OR you have attempted 3 repair iterations.
+
+If 3 iterations don't pass, **state explicitly in the final response** what remains uncited / which gate failed, and why a repair was not possible. **Do not hide the failure.**
 
 ### Required artifacts (in addition to existing layout)
 
 - `data/raw/` — real input data lives here (don't generate mock data when files exist here)
 - `data/SOURCES.md` — provenance log; append a row for every external dataset / API queried (URL/DOI, sha256, size, retrieved date, license)
 - `workspace/.trace/execution-trace.jsonl` — append-only audit log of notebook snapshots, written automatically by AIRA after each run. Do not modify.
-- `requirements.txt` — captured environment (preferably via `pip freeze`)
+- `requirements.txt` — captured environment (preferably via `pip freeze` — already wired up via `[cell:aira-env]`)
 
 ## Stateful Python Compute (Jupyter MCP)
 

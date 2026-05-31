@@ -2,6 +2,53 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.3.0] — 2026-06-01 — Provenance Enforcement
+
+Qiita 記事 [Round 9 で測定した v3.2.0 の効果と限界](https://qiita.com/hisaho/items/75ff865b4a0da03785a1) を踏まえた追加施策。`[cell:<id>]` 引用は 0→89% に増えたが、citation coverage は **15.7%(目標 80% 未達)**、`pip freeze` 実行率 **0%**、citation linter に **DOI 誤検出**が指摘された。v3.3.0 はこれを 4 Pillar で潰す:
+
+### Added — Pillar A: Citation linter の精度向上
+
+- **誤検出フィルタ**: DOI (`10.xxxx/...` / `doi.org/...`)、4 桁年号 (1900-2100)、section / figure / equation ラベル (`Section 3.1`, `Fig. 2.5`, `Eq. 1.2`)、reference citation (`(Smith et al., 2024)`) を numeric claim から除外。
+- **CITE_NEAR を 200 → 400 chars に拡大**: Round 9 解析で「引用と claim が同じ段落だが 200 文字超」のケースが多発していたため。
+
+### Added — Pillar B: Second-pass 修復エンドポイント
+
+- **新規 `POST /api/projects/:id/validate/repair`**: validate の結果から「未引用 claim」「不正な citation」「失敗 gate」を構造化リストとして返す + agent 用の markdown 修復プロンプトも生成。
+- プロンプトには: 各違反の説明 / 修正ヒント (`!pip freeze`, seed 設定 等) / **利用可能な cell ID のリスト** が含まれる。
+- skill 側に「validate → fail → repair → 修正 → 再 validate → pass までループ」のワークフローを組み込み(最大 3 反復、超過時は失敗を明示記載)。
+
+### Added — Pillar C: Pre-seeded notebook template
+
+- 新規 project の `notebook.ipynb` に 3 cells を pre-insert:
+  - `[cell:aira-header]` — markdown title + 引用規律のリマインダ
+  - `[cell:aira-env]` — `!pip freeze > requirements.txt` (env_capture gate を default で pass)
+  - `[cell:aira-seed]` — `random` / `numpy.random` / `torch` の seed 設定 (seed_presence gate を default で pass)
+- Round 9 で 0% だった `pip freeze` 実行を **テンプレート埋め込みで強制的に可能化**。agent はこの 2 cell を実行するだけで 2/4 の gate を通せる。
+
+### Changed — Pillar D: Co-Scientist v4.7.0 → v4.8.0
+
+- **AGENTS.md / copilot-instructions.md に Mandatory second-pass repair loop を追加**: 完了前に必ず validate を呼び、fail なら repair を呼び、修復を適用し、再 validate するループ(最大 3 反復、超過時は失敗を最終応答に明示)。
+- pre-seeded template (`[cell:aira-header/env/seed]`) の存在を前提とし、agent はこれを継承して analysis cell を追加する。
+- citation の auto-exclusion (DOI / reference / section label) も明示し、不要な `[cell:...]` 付与を防止。
+- skill.json + 各ヘッダの version を v4.8.0 に bump。
+
+### Tests
+- 新規 backend 11 ケース:
+  - `provenance-validator.test.ts` (+6): DOI 除外 / doi.org 除外 / 年号除外 / section ラベル除外 / 真の metric は保持 / CITE_NEAR 400 chars
+  - `provenance-validator.test.ts > buildRepairPayload` (+5): pass=true 時の空 payload / 未引用 claim 列挙 / unknown citation 列挙 / 失敗 gate と remediation hint / trace 未取得時
+  - `routes/mcp.test.ts` (+1 更新): pre-seeded template の 3 cells を assert
+- **24 backend test files / 250 tests + 21 frontend tests all green**、tsc + Vite build OK。
+
+### 期待効果(Round 10 想定)
+- env_capture gate 通過率: **0% → ~100%**(`[cell:aira-env]` 1 つ実行するだけ)
+- seed_presence gate 通過率: **100% を維持** + 明示化
+- citation_coverage: **15.7% → 80%+ を目標**(linter 誤検出減 + repair ループ + 距離拡大の合わせ技)
+- DOI 誤検出件数: **0 件**
+
+### Migration
+- 既存 v3.2.x プロジェクトは `notebook.ipynb` が空のまま。新規プロジェクトのみ pre-seeded。手動で同等の cell を追加すれば既存 project でも gate を通せる。
+- API は完全な後方互換。新規 endpoint `/validate/repair` を追加しただけ。
+
 ## [v3.2.1] — 2026-05-31
 
 ### Fixed

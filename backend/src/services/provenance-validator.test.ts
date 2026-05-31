@@ -5,6 +5,7 @@ import os from 'node:os';
 import {
   extractNumericClaims,
   validateProject,
+  buildRepairPayload,
 } from './provenance-validator.js';
 import {
   captureSnapshot,
@@ -47,6 +48,57 @@ describe('extractNumericClaims', () => {
     const md = 'AUROC = 0.83 on the held-out split.';
     const claims = extractNumericClaims(md, 'report.md');
     expect(claims[0]!.cited).toEqual([]);
+  });
+
+  // v3.3.0 — Pillar A false-positive filters
+  describe('exclusion rules (v3.3.0)', () => {
+    it('excludes DOI strings (DOI: 10.1038/nature12873)', () => {
+      const md = 'See DOI: 10.1038/nature12873 for the reference.';
+      const claims = extractNumericClaims(md, 'paper.md');
+      // No metric should be detected from the DOI body
+      expect(claims.filter(c => c.match.includes('10.1038')).length).toBe(0);
+    });
+
+    it('excludes doi.org URL DOIs', () => {
+      const md = 'Available at https://doi.org/10.1093/bioinformatics/btaa123';
+      const claims = extractNumericClaims(md, 'paper.md');
+      expect(claims.filter(c => c.match.includes('10.1093')).length).toBe(0);
+    });
+
+    it('excludes 4-digit years in citation parens like (Smith et al., 2024)', () => {
+      const md = 'Recent work (Smith et al., 2024) reports n = 2020 patients.';
+      const claims = extractNumericClaims(md, 'paper.md');
+      // The "n = 2020" sample-size match: 2020 is suspicious (year), but
+      // sample-size pattern only catches it because of "n =". This is real
+      // intent; we keep it. The "(Smith et al., 2024)" itself should not
+      // produce any numeric claim.
+      // The year 2024 alone is not caught by any pattern, so this mainly
+      // exercises reference-citation rule (no claim from the citation).
+      expect(claims.find(c => c.match === '2024' || c.match.includes('2024'))).toBeUndefined();
+    });
+
+    it('excludes section / figure / equation labels (Section 3.1, Fig. 2.5, Eq. 1.2)', () => {
+      const md = `
+        See Section 3.1 for context, Figure 2.5 below, and Eq. 1.2 above.
+      `;
+      const claims = extractNumericClaims(md, 'report.md');
+      // None of "3.1", "2.5", "1.2" should appear as a numeric claim
+      const stripped = claims.map(c => c.match);
+      expect(stripped.filter(s => /3\.1|2\.5|1\.2/.test(s)).length).toBe(0);
+    });
+
+    it('keeps a real metric assignment that happens to neighbour a section label', () => {
+      const md = 'See Section 3.1. AUROC = 0.83 [cell:abc] was achieved.';
+      const claims = extractNumericClaims(md, 'report.md');
+      expect(claims.some(c => c.match.includes('AUROC') && c.match.includes('0.83'))).toBe(true);
+    });
+
+    it('CITE_NEAR is now 400 chars — citation farther than 200 but within 400 is captured', () => {
+      const filler = 'word '.repeat(50); // ~250 chars of filler
+      const md = `AUROC = 0.83 ${filler} [cell:far-cite].`;
+      const claims = extractNumericClaims(md, 'report.md');
+      expect(claims[0]!.cited).toContain('far-cite');
+    });
   });
 });
 
@@ -196,5 +248,97 @@ describe('validateProject', () => {
     expect(report.unknown_citations.length).toBe(1);
     expect(report.unknown_citations[0]!.bad_cell_id).toBe('fake-id-that-does-not-exist');
     expect(report.pass).toBe(false);
+  });
+
+  // v3.3.0 Pillar B — second-pass repair payload
+  describe('buildRepairPayload (v3.3.0)', () => {
+    it('returns pass=true with no violations when everything is good', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'seed', cell_type: 'code', source: 'import numpy as np\nnp.random.seed(0)', outputs: [] },
+            { id: 'm', cell_type: 'code', source: 'm = 0.83', outputs: [] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'requirements.txt': 'numpy\n',
+          'report.md': 'AUROC = 0.83 [cell:m].',
+        },
+      );
+
+      const repair = buildRepairPayload(PROJECT_ID);
+      expect(repair.available).toBe(true);
+      expect(repair.needs_repair).toBe(false);
+      expect(repair.pass).toBe(true);
+      expect(repair.violations).toHaveLength(0);
+      expect(repair.repair_prompt).toBe('');
+    });
+
+    it('lists uncited claims and includes them in the markdown prompt', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'seed', cell_type: 'code', source: 'import numpy as np\nnp.random.seed(0)', outputs: [] },
+            { id: 'eval', cell_type: 'code', source: 'auroc = 0.7', outputs: [] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'requirements.txt': '',
+          'report.md': 'AUROC = 0.83 and F1 = 0.72 on the test set.',
+        },
+      );
+
+      const repair = buildRepairPayload(PROJECT_ID);
+      expect(repair.needs_repair).toBe(true);
+      expect(repair.violations.some(v => v.issue === 'uncited')).toBe(true);
+      expect(repair.repair_prompt).toContain('uncited numeric claim');
+      // Available cell ids should be surfaced
+      expect(repair.repair_prompt).toContain('eval');
+    });
+
+    it('lists unknown citations with the bad cell id', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'seed', cell_type: 'code', source: 'import random\nrandom.seed(1)', outputs: [] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'requirements.txt': '',
+          'report.md': 'AUROC = 0.83 [cell:does-not-exist]',
+        },
+      );
+
+      const repair = buildRepairPayload(PROJECT_ID);
+      expect(repair.violations.some(v => v.issue === 'unknown_citation')).toBe(true);
+      expect(repair.repair_prompt).toContain('does-not-exist');
+    });
+
+    it('includes failed gate names with remediation hints', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'rng', cell_type: 'code', source: 'import numpy as np\nnp.random.randn(5)', outputs: [] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {},  // no requirements.txt → env_capture fails
+      );
+      const repair = buildRepairPayload(PROJECT_ID);
+      const gateViolations = repair.violations.filter(v => v.issue === 'gate_failed');
+      expect(gateViolations.length).toBeGreaterThan(0);
+      // Remediation hints surfaced in the prompt
+      expect(repair.repair_prompt).toMatch(/pip\s+freeze/);
+      expect(repair.repair_prompt).toMatch(/seed/);
+    });
+
+    it('returns available=false when no trace exists', () => {
+      const repair = buildRepairPayload(PROJECT_ID);
+      expect(repair.available).toBe(false);
+      expect(repair.reason).toContain('No trace snapshot');
+    });
   });
 });

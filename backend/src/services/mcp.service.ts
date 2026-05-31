@@ -86,8 +86,68 @@ const BUILTIN_MCP_CONFIGS = [
   },
 ];
 
-const EMPTY_NOTEBOOK_JSON = JSON.stringify({
-  cells: [],
+// v3.3.0 Pillar C — pre-seeded notebook template.
+//
+// Round-9 telemetry showed agents almost never ran `pip freeze` on their own,
+// so the env_capture gate failed 100% of the time. Seeding the notebook with
+// a header + an env-capture cell makes the gate pass by default and gives the
+// agent a starter cell layout to extend.
+//
+// Cells included:
+//   1. markdown header (instructions)
+//   2. code: `!pip freeze > requirements.txt` — captures env
+//   3. code: `import numpy as np; np.random.seed(42); ...` — seeds the
+//      common RNG libraries (cheap; agent may add torch / tf later)
+//
+// Cell ids are stable so [cell:...] citations in templates / examples stay
+// valid across project lifetimes.
+const NOTEBOOK_TEMPLATE_JSON = JSON.stringify({
+  cells: [
+    {
+      id: 'aira-header',
+      cell_type: 'markdown',
+      metadata: {},
+      source: [
+        '# Project Notebook\n',
+        '\n',
+        'This notebook is the stateful Python surface for this AIRA project.\n',
+        '\n',
+        '- Cell `[cell:aira-env]` captures the Python environment (passes the `env_capture` provenance gate).\n',
+        '- Cell `[cell:aira-seed]` seeds the common RNG libraries (passes the `seed_presence` gate).\n',
+        '- Cite numbers in `report.md` / `paper.md` with `[cell:<id>]` referring to the cell that produced them.\n',
+      ],
+    },
+    {
+      id: 'aira-env',
+      cell_type: 'code',
+      metadata: {},
+      execution_count: null,
+      outputs: [],
+      source: ['# Capture the Python environment for reproducibility.\n', '!pip freeze > requirements.txt\n'],
+    },
+    {
+      id: 'aira-seed',
+      cell_type: 'code',
+      metadata: {},
+      execution_count: null,
+      outputs: [],
+      source: [
+        '# Seed RNG libraries that are present in the environment.\n',
+        'import random\n',
+        'random.seed(42)\n',
+        'try:\n',
+        '    import numpy as np\n',
+        '    np.random.seed(42)\n',
+        'except ImportError:\n',
+        '    pass\n',
+        'try:\n',
+        '    import torch\n',
+        '    torch.manual_seed(42)\n',
+        'except ImportError:\n',
+        '    pass\n',
+      ],
+    },
+  ],
   metadata: {
     kernelspec: { display_name: 'Python 3', language: 'python', name: 'python3' },
     language_info: { name: 'python' },
@@ -95,6 +155,9 @@ const EMPTY_NOTEBOOK_JSON = JSON.stringify({
   nbformat: 4,
   nbformat_minor: 5,
 }, null, 2);
+
+// Back-compat alias; existing code paths reference EMPTY_NOTEBOOK_JSON.
+const EMPTY_NOTEBOOK_JSON = NOTEBOOK_TEMPLATE_JSON;
 
 /**
  * Seed built-in MCP configs for a specific project.

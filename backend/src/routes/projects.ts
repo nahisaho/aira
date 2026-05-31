@@ -13,7 +13,7 @@ import {
   readLatestSnapshot,
   readAllSnapshots,
 } from '../services/notebook-trace.js';
-import { validateProject } from '../services/provenance-validator.js';
+import { validateProject, buildRepairPayload } from '../services/provenance-validator.js';
 
 const projectRoutes = new Hono();
 const projectService = new ProjectService();
@@ -121,6 +121,15 @@ projectRoutes.get('/api/projects/:id/notebook/trace', (c) => {
 projectRoutes.post('/api/projects/:id/validate', (c) => {
   const projectId = c.req.param('id');
   return c.json(validateProject(projectId));
+});
+
+// POST /api/projects/:id/validate/repair — second-pass repair payload (v3.3.0)
+// Returns a machine-readable violation list plus a markdown prompt the agent
+// can act on directly. Used by Co-Scientist's "before completing" loop:
+//   validate → if fail: read repair_prompt → fix → re-validate → until pass.
+projectRoutes.post('/api/projects/:id/validate/repair', (c) => {
+  const projectId = c.req.param('id');
+  return c.json(buildRepairPayload(projectId));
 });
 
 // DELETE /api/projects/:id

@@ -361,7 +361,17 @@ describe('generateTempConfig — jupyter runtime injection', () => {
     expect(fs.existsSync(notebookPath)).toBe(true);
     const nb = JSON.parse(fs.readFileSync(notebookPath, 'utf-8'));
     expect(nb.nbformat).toBe(4);
-    expect(nb.cells).toEqual([]);
+    // v3.3.0 — pre-seeded template (Pillar C): header + env capture + seed cells
+    expect(Array.isArray(nb.cells)).toBe(true);
+    expect(nb.cells.length).toBe(3);
+    const ids = nb.cells.map((c: { id: string }) => c.id);
+    expect(ids).toEqual(['aira-header', 'aira-env', 'aira-seed']);
+    // env_capture cell contains pip freeze
+    const envCell = nb.cells.find((c: { id: string }) => c.id === 'aira-env');
+    expect(envCell.source.join('')).toMatch(/pip\s+freeze/);
+    // seed cell sets RNG seeds
+    const seedCell = nb.cells.find((c: { id: string }) => c.id === 'aira-seed');
+    expect(seedCell.source.join('')).toMatch(/random\.seed/);
     expect(nb.metadata.kernelspec.name).toBe('python3');
   });
 
