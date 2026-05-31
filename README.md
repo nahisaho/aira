@@ -12,10 +12,15 @@ AIRA-β は、GitHub Copilot CLI を推論エンジンとして活用する Web 
 
 ```bash
 # Docker イメージの取得
-docker pull ghcr.io/nahisaho/aira:latest (最新版)
+docker pull ghcr.io/nahisaho/aira:latest
+```
 
-# コンテナの起動
-docker run -d -p 3001:3000 \
+### A. ローカル PC 単独で使う(最小構成)
+
+```bash
+docker run -d \
+  --name aira \
+  -p 3001:3000 \
   -e GITHUB_TOKEN="<your-github-token>" \
   -v aira-data:/app/data \
   -v aira-projects:/app/projects \
@@ -23,13 +28,75 @@ docker run -d -p 3001:3000 \
   ghcr.io/nahisaho/aira:latest
 ```
 
-ブラウザで `http://localhost:3001` にアクセスしてください。
+ブラウザで `http://localhost:3001` にアクセス。
+
+- エージェント経由の Jupyter MCP は内部で動作するので、AIRA チャットからは Python の stateful 実行ができる
+- ただし **AIRA UI 内の「ノートブック」タブで JupyterLab GUI を見たい場合は B または C を使う**
+
+### B. ローカル PC + JupyterLab GUI(同一マシン、ブラウザもローカル)
+
+`-p 8888:8888` と `-e AIRA_JUPYTER_BIND=0.0.0.0` を追加(v3.0.0+):
+
+```bash
+docker run -d \
+  --name aira \
+  -p 3001:3000 \
+  -p 8888:8888 \
+  -e AIRA_JUPYTER_BIND=0.0.0.0 \
+  -e AIRA_JUPYTER_TOKEN=my-stable-jupyter-token \
+  -e GITHUB_TOKEN="<your-github-token>" \
+  -v aira-data:/app/data \
+  -v aira-projects:/app/projects \
+  -v aira-npm-global:/app/.npm-global \
+  ghcr.io/nahisaho/aira:latest
+```
+
+ブラウザで `http://localhost:3001` → プロジェクト → 右ペインの「ノートブック」タブ → JupyterLab が iframe で表示。`AIRA_JUPYTER_TOKEN` は任意(指定すると Jupyter URL がブックマーク可で再起動後も同一)。
+
+### C. リモート/LAN(AIRA は別マシン、ブラウザは手元)
+
+例: AIRA は `192.168.1.15` で稼働、ブラウザは別 PC。AIRA がブラウザに見える URL を 2 つ env で教える(v3.1.3+):
+
+```bash
+docker run -d \
+  --name aira \
+  -p 3000:3000 \
+  -p 8888:8888 \
+  -e AIRA_JUPYTER_BIND=0.0.0.0 \
+  -e AIRA_JUPYTER_PUBLIC_URL=http://192.168.1.15:8888 \   # iframe 用 (ブラウザから見える Jupyter URL)
+  -e AIRA_PUBLIC_URL=http://192.168.1.15:3000 \           # AIRA UI 自身の URL (CORS/CSRF/frame-ancestors)
+  -e AIRA_JUPYTER_TOKEN=my-stable-jupyter-token \
+  -e GITHUB_TOKEN="<your-github-token>" \
+  -v aira-data:/app/data \
+  -v aira-projects:/app/projects \
+  -v aira-npm-global:/app/.npm-global \
+  ghcr.io/nahisaho/aira:latest
+```
+
+ブラウザで `http://192.168.1.15:3000` → 「ノートブック」タブで iframe 表示。
+
+**なぜ env が 2 つ必要か**: AIRA backend は「ブラウザがどの URL でアクセスしてくるか」予測できない(`localhost` か `192.168.x.x` かホスト名か reverse proxy 越しか)。`AIRA_PUBLIC_URL` で AIRA 自身の Origin、`AIRA_JUPYTER_PUBLIC_URL` で iframe の `src` を明示する。
 
 ### 前提条件
 
 - Docker
 - GitHub Copilot ライセンス
-- GitHub Token（`GITHUB_TOKEN` 環境変数または Settings 画面で設定）
+- GitHub Token(`GITHUB_TOKEN` 環境変数または Settings 画面で設定)
+
+### 起動オプション 早見表
+
+| env / flag | A 最小 | B ローカル GUI | C LAN GUI | 説明 |
+|---|:---:|:---:|:---:|---|
+| `-p 3001:3000` (任意のホストポート) | ✅ | ✅ | ✅ | AIRA UI |
+| `-p 8888:8888` | — | ✅ | ✅ | JupyterLab UI(GUI 利用時のみ) |
+| `-e GITHUB_TOKEN` | ✅ | ✅ | ✅ | Copilot CLI 認証 |
+| `-e AIRA_JUPYTER_BIND=0.0.0.0` | — | ✅ | ✅ | コンテナ外から Jupyter 到達可に(default は 127.0.0.1 で内部のみ) |
+| `-e AIRA_JUPYTER_TOKEN=<secret>` | — | 推奨 | 推奨 | 固定 token(default はランダム、再起動毎に変化) |
+| `-e AIRA_PUBLIC_URL=<URL>` | — | — | ✅ | LAN/リモート時の AIRA UI URL |
+| `-e AIRA_JUPYTER_PUBLIC_URL=<URL>` | — | — | ✅ | LAN/リモート時の iframe 用 Jupyter URL |
+| `-v aira-data:/app/data` | 推奨 | 推奨 | 推奨 | DB / 設定の永続化 |
+| `-v aira-projects:/app/projects` | 推奨 | 推奨 | 推奨 | プロジェクト workspace / notebook の永続化 |
+| `-v aira-npm-global:/app/.npm-global` | 推奨 | 推奨 | 推奨 | Copilot CLI アップデートの永続化 |
 
 ## 主な機能
 
