@@ -151,20 +151,43 @@ async function waitForReady(url: string, token: string, timeoutMs: number): Prom
 }
 
 /**
- * Build the comma-separated list of origins allowed to embed JupyterLab in
+ * Build the space-separated list of origins allowed to embed JupyterLab in
  * an iframe. Mirrors the AIRA CSRF/CORS allowlist so the JupyterLab UI is
  * reachable from the same browser contexts that already trust AIRA.
+ *
+ * The default set covers the typical Docker pattern `-p <host>:3000`. Since
+ * AIRA_PORT inside the container is always 3000 but the user's browser sees
+ * whatever host port they published to, we include a small range of common
+ * publish ports (3000-3003) so `-p 3001:3000` etc. just work without extra
+ * env config.
+ *
+ * For non-standard hostnames or ports, set AIRA_PUBLIC_URL (single URL) and
+ * /or AIRA_ALLOWED_ORIGINS (comma-separated list).
+ *
+ * Exported for testing.
  */
-function frameAncestorOrigins(): string {
-  const origins = new Set<string>([
-    "'self'",
-    `http://localhost:${process.env.AIRA_PORT ?? '3000'}`,
-    `http://127.0.0.1:${process.env.AIRA_PORT ?? '3000'}`,
-  ]);
+export function frameAncestorOrigins(): string {
+  const origins = new Set<string>(["'self'"]);
+
+  // Common Docker publish ports the user's browser is likely to hit AIRA at.
+  // 3000 is the container-internal default; 3001-3003 covers the typical
+  // `-p 3001:3000` host-port shifts users do to avoid conflicts.
+  for (const p of [3000, 3001, 3002, 3003]) {
+    origins.add(`http://localhost:${p}`);
+    origins.add(`http://127.0.0.1:${p}`);
+  }
   // Vite dev ports
   for (const p of [5173, 5174, 5175]) {
     origins.add(`http://localhost:${p}`);
     origins.add(`http://127.0.0.1:${p}`);
+  }
+  // Public URL of AIRA as seen by the browser (LAN IP, hostname, reverse
+  // proxy, etc.). Single URL for clarity.
+  if (process.env.AIRA_PUBLIC_URL) {
+    try {
+      const u = new URL(process.env.AIRA_PUBLIC_URL);
+      origins.add(`${u.protocol}//${u.host}`);
+    } catch { /* malformed; skip */ }
   }
   if (process.env.AIRA_ALLOWED_ORIGINS) {
     for (const o of process.env.AIRA_ALLOWED_ORIGINS.split(',')) {

@@ -2,6 +2,28 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.1.3] — 2026-05-31
+
+### Fixed
+- **AIRA UI 内の JupyterLab iframe が `-p 3001:3000` 等の Docker publish パターンで blocked と表示される問題を修正**: v3.1.0 で書いた `jupyter-server.ts:frameAncestorOrigins()` がコンテナ内部の `AIRA_PORT` (= 3000) しか allowlist に入れていなかったため、ホスト側ポート 3001 でアクセスするブラウザ Origin (`http://localhost:3001`) が JupyterLab の `Content-Security-Policy: frame-ancestors` で蹴られていた。 default の frame-ancestors を **3000-3003 の一般的な publish ポート** に拡張し、`-p 3001:3000` / `-p 3002:3000` 等の典型パターンでは追加 env なしで iframe が通るようにした。
+
+### Added
+- **`AIRA_PUBLIC_URL` env を新設**: 「ブラウザから見える AIRA の URL」を単一値で指定するための env。LAN IP / カスタムホスト名 / reverse proxy 経由のアクセスで使う。指定すると:
+  - JupyterLab の `frame-ancestors` allowlist に加わる(iframe 親として許可)
+  - AIRA の CORS / CSRF Origin allowlist に加わる(API リクエスト元として許可)
+  - URL の path/query は自動で剥がして `scheme://host` 形に正規化
+- `AIRA_ALLOWED_ORIGINS` (CSV、複数 URL) と併用可。前者は単一 URL の宣言、後者は追加 origin の列挙。
+
+### Tests
+- 新規 8 ケース:
+  - `jupyter-server.test.ts` (+6): `frameAncestorOrigins` を export してテスト可能化、default の 3000-3003 / Vite ポート / `AIRA_PUBLIC_URL` 反映 / URL 正規化 / `AIRA_ALLOWED_ORIGINS` 反映 / malformed URL のスキップ
+  - `middleware/security.test.ts` (+2): `isOriginAllowed` での `AIRA_PUBLIC_URL` 受理 / path 付き URL の正規化
+- 210 backend + 21 frontend tests all green。
+
+### Migration
+- **既に v3.1.2 で workaround として `AIRA_ALLOWED_ORIGINS=http://localhost:3001` 等を指定していたユーザ**は env を外して再起動するだけで動く(default に含まれるようになったため)。残したままでも動作変化なし。
+- 非標準ホスト名 (LAN IP / カスタムドメイン / reverse proxy) で AIRA にアクセスしているユーザは `AIRA_PUBLIC_URL` を指定するのが推奨。
+
 ## [v3.1.2] — 2026-05-31
 
 ### Changed

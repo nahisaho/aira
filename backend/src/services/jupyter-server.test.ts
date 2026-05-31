@@ -7,6 +7,7 @@ import {
   isJupyterPubliclyReachable,
   resetJupyterStateForTesting,
   setJupyterStateForTesting,
+  frameAncestorOrigins,
 } from './jupyter-server.js';
 
 describe('jupyter-server module', () => {
@@ -72,5 +73,55 @@ describe('jupyter-server module', () => {
     // Even when bound to 0.0.0.0, AIRA-internal subprocesses use loopback
     setJupyterStateForTesting(8888, 't', '0.0.0.0');
     expect(getJupyterUrl()).toBe('http://127.0.0.1:8888');
+  });
+
+  describe('frameAncestorOrigins (v3.1.3) — iframe parent allowlist for JupyterLab', () => {
+    afterEach(() => {
+      delete process.env.AIRA_PUBLIC_URL;
+      delete process.env.AIRA_ALLOWED_ORIGINS;
+    });
+
+    it("includes 'self' and common publish ports by default (3000-3003)", () => {
+      const ancestors = frameAncestorOrigins();
+      expect(ancestors).toContain("'self'");
+      for (const p of [3000, 3001, 3002, 3003]) {
+        expect(ancestors).toContain(`http://localhost:${p}`);
+        expect(ancestors).toContain(`http://127.0.0.1:${p}`);
+      }
+    });
+
+    it('includes Vite dev ports (5173-5175)', () => {
+      const ancestors = frameAncestorOrigins();
+      for (const p of [5173, 5174, 5175]) {
+        expect(ancestors).toContain(`http://localhost:${p}`);
+      }
+    });
+
+    it('honours AIRA_PUBLIC_URL (single URL for LAN / hostname / reverse proxy)', () => {
+      process.env.AIRA_PUBLIC_URL = 'http://192.168.1.100:3001';
+      const ancestors = frameAncestorOrigins();
+      expect(ancestors).toContain('http://192.168.1.100:3001');
+    });
+
+    it('normalises AIRA_PUBLIC_URL by stripping path / query', () => {
+      process.env.AIRA_PUBLIC_URL = 'https://aira.example.com:8443/some/path?x=1';
+      const ancestors = frameAncestorOrigins();
+      expect(ancestors).toContain('https://aira.example.com:8443');
+      expect(ancestors).not.toContain('/some/path');
+    });
+
+    it('honours AIRA_ALLOWED_ORIGINS (comma-separated)', () => {
+      process.env.AIRA_ALLOWED_ORIGINS = 'http://lan-a:3001,http://lan-b:3001';
+      const ancestors = frameAncestorOrigins();
+      expect(ancestors).toContain('http://lan-a:3001');
+      expect(ancestors).toContain('http://lan-b:3001');
+    });
+
+    it('silently skips a malformed AIRA_PUBLIC_URL', () => {
+      process.env.AIRA_PUBLIC_URL = 'not a url';
+      const ancestors = frameAncestorOrigins();
+      expect(ancestors).toContain("'self'");
+      expect(ancestors).toContain('http://localhost:3001');
+    });
   });
 });

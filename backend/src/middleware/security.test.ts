@@ -293,6 +293,26 @@ describe('Security Middleware', () => {
         delete process.env.AIRA_ALLOWED_ORIGINS;
       }
     });
+
+    it('should accept origin from AIRA_PUBLIC_URL env (v3.1.3)', () => {
+      process.env.AIRA_PUBLIC_URL = 'http://192.168.1.100:3001';
+      try {
+        // Same-origin would have allowed it anyway when Host matches; this
+        // test exercises the explicit allowlist path (different Host).
+        expect(isOriginAllowed('http://192.168.1.100:3001', 'something-else:9000')).toBe(true);
+      } finally {
+        delete process.env.AIRA_PUBLIC_URL;
+      }
+    });
+
+    it('should normalise AIRA_PUBLIC_URL (strip path) when matching', () => {
+      process.env.AIRA_PUBLIC_URL = 'https://aira.example.com:8443/some/path';
+      try {
+        expect(isOriginAllowed('https://aira.example.com:8443', 'other-host')).toBe(true);
+      } finally {
+        delete process.env.AIRA_PUBLIC_URL;
+      }
+    });
   });
 
   describe('CSRF token lifecycle (TTL + cap)', () => {

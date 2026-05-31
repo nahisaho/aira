@@ -19,6 +19,14 @@ function getAllowedOrigins(): string[] {
   if (vitePort === 5173) {
     origins.push(`http://localhost:5174`, `http://127.0.0.1:5174`, `http://[::1]:5174`);
   }
+  // AIRA_PUBLIC_URL (v3.1.3) — single URL the browser uses to reach AIRA, for
+  // Docker `-p` mappings and LAN / reverse-proxy access.
+  if (process.env.AIRA_PUBLIC_URL) {
+    try {
+      const u = new URL(process.env.AIRA_PUBLIC_URL);
+      origins.push(`${u.protocol}//${u.host}`);
+    } catch { /* malformed; skip */ }
+  }
   if (process.env.AIRA_ALLOWED_ORIGINS) {
     origins.push(
       ...process.env.AIRA_ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean),
