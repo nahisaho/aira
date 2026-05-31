@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.6.2 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.7.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.6.2
+# Co-Scientist v4.7.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -56,6 +56,46 @@ Target total runtime: **60 minutes** (complex experiments may take up to 90 minu
 - **Import validation**: Run `python -c "import module"` for each generated module before proceeding.
 - **Docstrings**: Required for all public functions.
 - **Type hints**: Recommended.
+
+## Computational Provenance (v4.7.0)
+
+Every numeric claim in `report.md` / `paper.md` must be **traceable back to a specific notebook cell**. Without this, the report becomes "scientific fiction" — numbers that look computed but have no auditable derivation. AIRA captures cell-level execution traces automatically and runs a validator before the work is considered complete.
+
+### Numeric-claim citation format
+
+Whenever you state a number in `report.md` / `paper.md`, **immediately follow it with the source cell** in `[cell:<id>]` form:
+
+```
+AUROC = 0.83 ± 0.02 (95% CI: [0.79, 0.87]) [cell:eda-corr-final]
+                                            ↑ id of the cell that computed it
+```
+
+- The `<id>` is the nbformat cell `id` field (visible in the notebook JSON, also surfaced in the `/notebook/trace` API and the AIRA UI Trace tab).
+- Multiple cells may be cited if the value is composed: `[cell:fit-model] [cell:eval-test]`.
+- Citation applies to all primary metrics, p-values, sample sizes (n=...), effect sizes, CIs, and any other reportable number.
+- Tables and figures should reference cells in their caption: `Figure 1. ROC curve [cell:viz-roc].`
+
+### Reproducibility gates (validator)
+
+Before marking the experiment complete, AIRA's validator (`POST /api/projects/:id/validate`) checks four gates:
+
+1. **`seed_presence`** — every cell that uses RNG (`np.random.*`, `random.*`, `torch.*rand*`, `tf.random.*`) must have a seed set in scope (in-cell or earlier).
+2. **`env_capture`** — `requirements.txt` must exist OR a cell must have run `pip freeze` / `pip list`.
+3. **`no_error_in_cited`** — every cell cited from `report.md` / `paper.md` must have empty `stderr` and no error outputs.
+4. **`citation_coverage`** — ≥80% of detected numeric claims must have a `[cell:<id>]` citation.
+
+These gates are **soft** — they don't block execution, but **a failing gate is a defect**. If any gate fails, repair it before delivering the final response:
+- Seed missing → add `np.random.seed(42)` (or equivalent) to an early cell.
+- Env not captured → add a cell that runs `!pip freeze > requirements.txt` and re-execute.
+- Cited cell has stderr → fix the bug, re-execute, update the citation.
+- Coverage too low → add citations to the bare numbers.
+
+### Required artifacts (in addition to existing layout)
+
+- `data/raw/` — real input data lives here (don't generate mock data when files exist here)
+- `data/SOURCES.md` — provenance log; append a row for every external dataset / API queried (URL/DOI, sha256, size, retrieved date, license)
+- `workspace/.trace/execution-trace.jsonl` — append-only audit log of notebook snapshots, written automatically by AIRA after each run. Do not modify.
+- `requirements.txt` — captured environment (preferably via `pip freeze`)
 
 ## Stateful Python Compute (Jupyter MCP)
 

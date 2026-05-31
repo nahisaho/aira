@@ -42,6 +42,35 @@ export function getNotebookPath(projectId: string): string {
   return path.join(getWorkspaceDir(projectId), 'notebook.ipynb');
 }
 
+/**
+ * Execution-trace directory (v3.2.0 Computational Provenance).
+ * Hidden under workspace/.trace/ so it does not clutter the File Pane.
+ */
+export function getTraceDir(projectId: string): string {
+  return path.join(getWorkspaceDir(projectId), '.trace');
+}
+
+/**
+ * JSONL append-only log of notebook snapshots. Each line is one snapshot
+ * captured at agent-run completion. Newest at bottom; linter reads the last
+ * line for current state but the file is the audit history.
+ */
+export function getTracePath(projectId: string): string {
+  return path.join(getTraceDir(projectId), 'execution-trace.jsonl');
+}
+
+/**
+ * Per-project raw data directory (v3.2.0 Pillar 4). When this directory has
+ * files, the agent is instructed to prefer them over generating mock data.
+ */
+export function getRawDataDir(projectId: string): string {
+  return path.join(getWorkspaceDir(projectId), 'data', 'raw');
+}
+
+export function getDataSourcesPath(projectId: string): string {
+  return path.join(getWorkspaceDir(projectId), 'data', 'SOURCES.md');
+}
+
 /** Temp directory inside data. */
 export function getTmpDir(): string {
   return path.join(_baseDir, 'data', '.tmp');

@@ -2,6 +2,63 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.2.0] — 2026-05-31 — Computational Provenance
+
+Qiita 記事「AIRA-γ: フィクションからノンフィクションへ」を受けた次世代設計。Jupyter MCP の同梱(v3.0)で「コードが書ける」ようになったが、**「数値が本当に計算結果に由来するか」は検証されていなかった**。v3.2.0 はこの trust gap を埋めるリリース。Pillar 1〜4 + 6 を実装(Pillar 5 figure provenance は v3.3 へ繰り延べ)。
+
+### Added — Pillar 1: Notebook 実行トレースの自動キャプチャ
+
+- **`services/notebook-trace.ts` 新規**: agent run の onDone で `notebook.ipynb` を parse し、cell ごとに source / exec_count / outputs / stdout / stderr / has_error / has_image / text_output を抽出。snapshot を `workspace/.trace/execution-trace.jsonl` に append。
+- **env_hash 付き**: `python3 -m pip freeze` の sha256 を各 snapshot に含める(プロセスライフタイムでキャッシュ)。
+- **読み出し API**: `GET /api/projects/:id/notebook/trace`(`?latest=1` で最新 snapshot のみ)。
+- truncation で 1 cell 4KB cap、stdin/stderr 個別に保持。
+
+### Added — Pillar 2: 数値 → `[cell:<id>]` 引用 linter
+
+- **`services/provenance-validator.ts` 新規**: `report.md` / `paper.md` をスキャンし、`AUROC = 0.83`、`(p < 0.001)`、`F1 of 0.92`、`n = 1024` 等のパターンを抽出。同一スパンの重複検出を deduplicate。
+- 各 claim に対し近傍 200 文字以内の `[cell:<id>]` 引用を収集し、trace の latest snapshot と cross-check。
+- **`uncited_claims` と `unknown_citations`** を返す(後者は実在しない cell ID への引用)。
+
+### Added — Pillar 3: 再現性ゲート 4 種
+
+`POST /api/projects/:id/validate` で同時に走る:
+1. **`seed_presence`** — `np.random.*` / `random.*` / `torch.*rand*` / `tf.random.*` 等を使う cell に seed 設定(in-cell or earlier)が無いものを検出
+2. **`env_capture`** — `requirements.txt` または `pip freeze` / `pip list` cell の存在
+3. **`no_error_in_cited`** — 引用された cell の stderr が非空 / error output 存在
+4. **`citation_coverage`** — 数値 claim の 80% 以上に引用がある
+
+soft mode(失敗してもブロックしない、報告のみ)。
+
+### Added — Pillar 4: `data/raw/` 規約
+
+- **`config/paths.ts`**: `getRawDataDir(projectId)` / `getDataSourcesPath(projectId)` 追加
+- **`exec-context.ts:ensureDataConventions`**: workspace 確保時に `data/raw/` ディレクトリと `data/SOURCES.md` skeleton(`File / Source / SHA-256 / Size / Retrieved / License / Notes` のテーブル)を自動生成
+- **Upload API 拡張**: `POST /api/projects/:id/files/upload` に `dest=data/raw` form フィールドを受け付ける(allowlist 方式、それ以外は 400)
+
+### Added — Pillar 6: Co-Scientist v4.6.2 → v4.7.0
+
+- **AGENTS.md に新セクション "Computational Provenance"**: `[cell:<id>]` 引用形式、reproducibility gates 4 種の説明、各 gate の修復手順、Required artifacts (`data/raw/`, `data/SOURCES.md`, `requirements.txt`, `workspace/.trace/`) を明示
+- **copilot-instructions.md に凝縮版**を追加
+- skill.json / 各ヘッダの version を v4.7.0 に bump
+
+### Added — Frontend: Validate モーダル
+
+- **`components/files/ValidationModal.tsx` 新規**: 4 gate の pass/fail、claim 数、uncited claims、unknown citations を一覧表示
+- **RightPanel の Files タブ上部に 🔬 Validate ボタン**を追加
+- i18n: `validate.*` キー追加 (ja/en)
+- `api/client.ts` に `provenanceApi.validate()` 追加
+
+### Tests
+- 新規 backend 29 ケース:
+  - `notebook-trace.test.ts` (+13): extractCells / capture / readLatest / readAll / malformed handling
+  - `provenance-validator.test.ts` (+14): claim extraction / 4 gate / unknown citations
+  - `routes/files.test.ts` (+2): `dest=data/raw` 受理 / 不正 dest 拒否
+- **24 backend test files / 239 tests + 21 frontend tests all green**、両 workspace tsc + Vite production build 成功。
+
+### 次のリリース予定
+- **v3.3.0**: Pillar 5(figure provenance — `.meta.json` 自動生成、図のソース cell 追跡)
+- **v4.0.0**: Trace タブ(notebook 実行履歴の可視化)、cell 引用の hover preview、validator が PASS してから "completed" にする hard mode
+
 ## [v3.1.4] — 2026-05-31
 
 ### Changed

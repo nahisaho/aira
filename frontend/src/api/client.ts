@@ -310,6 +310,38 @@ export const jupyterApi = {
   getSettings: () => request<JupyterSettings>('/settings/jupyter'),
 };
 
+// ─── Computational Provenance (v3.2.0) ───
+
+export interface NumericClaim {
+  pattern: string;
+  match: string;
+  index: number;
+  cited: string[];
+  source_file: string;
+}
+
+export interface GateResult {
+  name: string;
+  passed: boolean;
+  detail: string;
+  offenders?: string[];
+}
+
+export interface ValidationReport {
+  available: boolean;
+  reason?: string;
+  claims: NumericClaim[];
+  uncited_claims: NumericClaim[];
+  unknown_citations: Array<{ claim: NumericClaim; bad_cell_id: string }>;
+  gates: GateResult[];
+  pass: boolean;
+}
+
+export const provenanceApi = {
+  validate: (projectId: string) =>
+    request<ValidationReport>(`/projects/${projectId}/validate`, { method: 'POST' }),
+};
+
 // ─── Agents Repos ───
 
 export interface AgentsRepo {

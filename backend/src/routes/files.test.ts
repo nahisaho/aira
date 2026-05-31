@@ -110,4 +110,35 @@ describe('Files API — upload size limits', () => {
     const body = await res.json();
     expect(body.count).toBe(2);
   });
+
+  describe('v3.2.0 dest=data/raw', () => {
+    it('uploads to data/raw/ when dest is allowlisted', async () => {
+      const form = new FormData();
+      form.append('files', new Blob([new Uint8Array(200)]), 'measurement.csv');
+      form.append('dest', 'data/raw');
+      const res = await app.request(`/api/projects/${PROJECT_ID}/files/upload`, {
+        method: 'POST',
+        body: form,
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.uploaded[0]).toBe('data/raw/measurement.csv');
+
+      const filePath = path.join(getWorkspaceDir(PROJECT_ID), 'data', 'raw', 'measurement.csv');
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+
+    it('rejects an arbitrary dest with 400', async () => {
+      const form = new FormData();
+      form.append('files', new Blob([new Uint8Array(10)]), 'x.txt');
+      form.append('dest', '../../etc/passwd');
+      const res = await app.request(`/api/projects/${PROJECT_ID}/files/upload`, {
+        method: 'POST',
+        body: form,
+      });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBe('invalid_dest');
+    });
+  });
 });

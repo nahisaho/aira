@@ -9,6 +9,11 @@ import {
 import { seedBuiltinMcpForProject } from '../services/mcp.service.js';
 import { SkillsService } from '../services/skills.service.js';
 import { syncSkillFiles } from '../services/exec-context.js';
+import {
+  readLatestSnapshot,
+  readAllSnapshots,
+} from '../services/notebook-trace.js';
+import { validateProject } from '../services/provenance-validator.js';
 
 const projectRoutes = new Hono();
 const projectService = new ProjectService();
@@ -98,6 +103,24 @@ projectRoutes.patch('/api/projects/:id', async (c) => {
     }
     throw err;
   }
+});
+
+// ── v3.2.0 — Computational Provenance ────────────────────────────────
+
+// GET /api/projects/:id/notebook/trace — read snapshots
+projectRoutes.get('/api/projects/:id/notebook/trace', (c) => {
+  const projectId = c.req.param('id');
+  const latestOnly = c.req.query('latest') === '1';
+  if (latestOnly) {
+    return c.json({ snapshot: readLatestSnapshot(projectId) });
+  }
+  return c.json({ snapshots: readAllSnapshots(projectId) });
+});
+
+// POST /api/projects/:id/validate — run provenance gates
+projectRoutes.post('/api/projects/:id/validate', (c) => {
+  const projectId = c.req.param('id');
+  return c.json(validateProject(projectId));
 });
 
 // DELETE /api/projects/:id

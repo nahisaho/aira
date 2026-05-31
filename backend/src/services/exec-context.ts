@@ -4,6 +4,7 @@ import { McpService } from './mcp.service.js';
 import { createRedactorWithFlush } from './agent.service.js';
 import { startRun, stopRun, clearSession } from './container-runner.js';
 import { reconcileProjectFiles } from './file.service.js';
+import { captureSnapshot } from './notebook-trace.js';
 import {
   getRagSettings,
   indexMessageTokens,
@@ -28,6 +29,32 @@ export interface ExecContext {
 const authService = new AuthService();
 const skillsService = new SkillsService();
 const mcpService = new McpService();
+
+/**
+ * v3.2.0 Pillar 4 — ensure the data conventions exist:
+ *   - workspace/data/raw/       (place user-provided real data here)
+ *   - workspace/data/SOURCES.md (provenance log for data inputs)
+ *
+ * Idempotent. SOURCES.md gets a small skeleton on first creation so the agent
+ * has a template to append to.
+ */
+function ensureDataConventions(projectId: string): void {
+  const rawDir = pathConfig.getRawDataDir(projectId);
+  const sourcesPath = pathConfig.getDataSourcesPath(projectId);
+  fs.mkdirSync(rawDir, { recursive: true });
+  if (!fs.existsSync(sourcesPath)) {
+    const skeleton = `# Data Sources
+
+Track every input dataset used by this project. The agent should append a row
+for each file added under \`data/raw/\` and every external dataset / API
+queried for analysis.
+
+| File / Dataset | Source (URL / DOI / API endpoint) | SHA-256 | Size | Retrieved | License | Notes |
+|---|---|---|---|---|---|---|
+`;
+    fs.writeFileSync(sourcesPath, skeleton, 'utf8');
+  }
+}
 
 /**
  * Ensure the workspace directory is a valid git repository root.
@@ -261,6 +288,9 @@ export function assembleExecContext(projectId: string): ExecContext {
   // Ensure workspace is a valid git repo so Copilot CLI discovers instruction files.
   ensureWorkspaceRepo(workspaceDir);
 
+  // v3.2.0 Pillar 4 — ensure data/raw + data/SOURCES.md skeleton exists.
+  ensureDataConventions(projectId);
+
   // Sync skill files to workspace before spawning the CLI.
   // This is a safety net; normally done at skill-assignment time via the API.
   syncSkillFiles(projectId);
@@ -482,6 +512,16 @@ export function executeChat(
           console.log(`[exec-context] reconciled ${fileCount} files for project ${projectId}`);
         } catch (err) {
           console.warn('File reconciliation failed:', (err as Error).message);
+        }
+
+        // v3.2.0 — capture notebook snapshot for Computational Provenance
+        try {
+          const snap = captureSnapshot(projectId, runId);
+          if (snap) {
+            console.log(`[exec-context] trace: ${snap.cells.length} cells captured for project ${projectId.slice(0, 8)}`);
+          }
+        } catch (err) {
+          console.warn('Notebook trace capture failed:', (err as Error).message);
         }
 
         if (ctx.mcpConfigFile) {

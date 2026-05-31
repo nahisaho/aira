@@ -8,6 +8,7 @@ import { type TranslationKey } from '../../i18n';
 import { filesApi, runsApi } from '../../api/client';
 import { FileViewerModal } from './FileViewerModal';
 import { NotebookPane } from './NotebookPane';
+import { ValidationModal } from './ValidationModal';
 
 export function RightPanel() {
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
@@ -20,6 +21,7 @@ export function RightPanel() {
 
   const [viewingFile, setViewingFile] = useState<{ id: string; path: string } | null>(null);
   const [tab, setTab] = useState<'files' | 'notebook'>('files');
+  const [validating, setValidating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,6 +85,20 @@ export function RightPanel() {
       {/* Files tab — original scrollable content (inlined to keep typing simple) */}
       {tab === 'files' && (
     <div className="flex flex-col flex-1 min-h-0 p-3 overflow-y-auto">
+      {/* v3.2.0 — Provenance validator */}
+      <div className="mb-3">
+        <button
+          onClick={() => setValidating(true)}
+          className={`text-xs px-3 py-1 rounded ${
+            light
+              ? 'bg-purple-100 text-purple-800 hover:bg-purple-200'
+              : 'bg-purple-900/40 text-purple-300 hover:bg-purple-900/60'
+          }`}
+        >
+          {t('validate.button')}
+        </button>
+      </div>
+
       {/* Pipeline Progress */}
       {pipelineSteps.length > 0 && (
         <section className="mb-4">
@@ -249,6 +265,14 @@ export function RightPanel() {
           fileId={viewingFile.id}
           filePath={viewingFile.path}
           onClose={() => setViewingFile(null)}
+        />
+      )}
+
+      {/* Provenance Validator Modal (v3.2.0) */}
+      {validating && (
+        <ValidationModal
+          projectId={activeProjectId}
+          onClose={() => setValidating(false)}
         />
       )}
     </div>

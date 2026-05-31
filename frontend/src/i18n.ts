@@ -116,6 +116,18 @@ const translations = {
     'notebook.unavailable': 'Jupyter Server が起動していません',
     'notebook.loopback': 'Jupyter Server は loopback bind のためブラウザから直接アクセスできません。コンテナを次のオプション付きで起動してください: -p 8888:8888 -e AIRA_JUPYTER_BIND=0.0.0.0',
     'notebook.loading': 'Jupyter 情報を取得中...',
+    // Provenance validator (v3.2.0)
+    'validate.button': '🔬 検証',
+    'validate.title': '計算的プロベナンス検証',
+    'validate.loading': '検証中...',
+    'validate.passed': '✓ 全 gate 合格',
+    'validate.failed': '✗ 不合格 gate あり',
+    'validate.unavailable': '実行履歴がありません(エージェント実行を 1 ターン以上行ってください)',
+    'validate.gates': 'ゲート結果',
+    'validate.claims': '数値クレーム',
+    'validate.uncitedClaims': '引用なし',
+    'validate.unknownCitations': '存在しない cell への引用',
+    'validate.close': '閉じる',
 
     // Skills
     'skills.title': 'Agent Skills',
@@ -267,6 +279,18 @@ const translations = {
     'notebook.unavailable': 'Jupyter Server is not running',
     'notebook.loopback': 'Jupyter Server is bound to loopback and cannot be reached from the browser. Restart the container with: -p 8888:8888 -e AIRA_JUPYTER_BIND=0.0.0.0',
     'notebook.loading': 'Loading Jupyter info...',
+    // Provenance validator (v3.2.0)
+    'validate.button': '🔬 Validate',
+    'validate.title': 'Computational Provenance Report',
+    'validate.loading': 'Validating...',
+    'validate.passed': '✓ All gates passed',
+    'validate.failed': '✗ Some gates failed',
+    'validate.unavailable': 'No trace yet (run at least one agent turn first)',
+    'validate.gates': 'Gates',
+    'validate.claims': 'Numeric Claims',
+    'validate.uncitedClaims': 'Uncited',
+    'validate.unknownCitations': 'Unknown citations',
+    'validate.close': 'Close',
 
     // Skills
     'skills.title': 'Agent Skills',

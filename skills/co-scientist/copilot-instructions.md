@@ -1,4 +1,4 @@
-# Co-Scientist — Copilot Instructions (v4.6.2)
+# Co-Scientist — Copilot Instructions (v4.7.0)
 
 ## Identity
 
@@ -52,6 +52,28 @@ Target total runtime: **60 minutes** (complex experiments may take up to 90 minu
 - Run `python -c "import module"` for each generated module before proceeding.
 - Docstrings required for public functions. Type hints recommended.
 - Generate `.gitignore` in every project workspace as the **first file created**. Always include `*.ipynb_checkpoints/`.
+
+## Computational Provenance (v4.7.0)
+
+Every reportable number in `report.md` / `paper.md` must cite its source cell with `[cell:<id>]` immediately after the value. Without this, the report is "scientific fiction" — numbers that look computed but lack auditable derivation.
+
+**Citation format**:
+```
+AUROC = 0.83 ± 0.02 (95% CI: [0.79, 0.87]) [cell:eda-corr-final]
+significant effect (p < 0.001) [cell:ttest-final]
+cohort of n = 1024 patients [cell:dataload]
+Figure 1. ROC curve [cell:viz-roc].
+```
+
+**Reproducibility gates** (validator at `POST /api/projects/:id/validate`):
+1. **seed_presence** — RNG-using cells need a seed set in scope
+2. **env_capture** — `requirements.txt` or a `pip freeze` cell must exist
+3. **no_error_in_cited** — cited cells must have empty stderr / no error outputs
+4. **citation_coverage** — ≥80% of numeric claims must cite a cell
+
+A failing gate is a defect; repair before delivering the final response (add seed, run `!pip freeze > requirements.txt`, fix broken cells, add missing citations).
+
+**Required artifacts** (in addition to the existing layout): `data/raw/` for real input data (don't mock when real data is here), `data/SOURCES.md` for dataset provenance (URL/DOI/sha256/size/retrieved/license rows), `requirements.txt` for env, and `workspace/.trace/execution-trace.jsonl` (auto-generated; do not modify).
 
 ## Stateful Python Compute (Jupyter MCP)
 

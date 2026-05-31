@@ -249,6 +249,21 @@ fileRoutes.post('/api/projects/:id/files/upload', async (c) => {
     return c.json({ error: 'No files provided' }, 400);
   }
 
+  // v3.2.0 — optional `dest` allows uploading directly into a subdirectory
+  // such as `data/raw/`. Only allowlisted destinations are accepted to keep
+  // the workspace layout predictable.
+  const destRaw = body['dest'];
+  const destStr = typeof destRaw === 'string' ? destRaw : '';
+  const ALLOWED_DESTS = new Set(['', 'data/raw']);
+  if (!ALLOWED_DESTS.has(destStr)) {
+    return c.json({
+      error: 'invalid_dest',
+      allowed: Array.from(ALLOWED_DESTS).filter(Boolean),
+    }, 400);
+  }
+  const targetDir = destStr ? path.join(workspaceDir, destStr) : workspaceDir;
+  fs.mkdirSync(targetDir, { recursive: true });
+
   const fileList = Array.isArray(rawFiles) ? rawFiles : [rawFiles];
   const uploaded: string[] = [];
   const db = getDatabase();
@@ -300,14 +315,17 @@ fileRoutes.post('/api/projects/:id/files/upload', async (c) => {
       const base = safeName.slice(0, MAX_NAME - ext.length);
       safeName = base + ext;
     }
-    const dest = path.join(workspaceDir, safeName);
+    const dest = path.join(targetDir, safeName);
     const buffer = Buffer.from(await file.arrayBuffer());
     fs.writeFileSync(dest, buffer);
-    uploaded.push(safeName);
+    // The file_path stored in DB is the workspace-relative path so listings
+    // / downloads work regardless of where the file lives under workspace.
+    const relPath = destStr ? `${destStr}/${safeName}` : safeName;
+    uploaded.push(relPath);
 
     const stat = fs.statSync(dest);
     const id = crypto.randomUUID();
-    upsertStmt.run(id, projectId, safeName, safeName, stat.size, Math.round(stat.mtimeMs));
+    upsertStmt.run(id, projectId, safeName, relPath, stat.size, Math.round(stat.mtimeMs));
   }
 
   return c.json({ uploaded, count: uploaded.length });
