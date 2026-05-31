@@ -1,8 +1,9 @@
 # AIRA-γ — AI Research Administrator
 
 > Web ベースの AI Research Assistant
-> GitHub Copilot CLI をエージェントエンジンとして使用、Jupyter カーネルでステートフルな Python 実行
-> **v3.0.0**
+> GitHub Copilot CLI をエージェントエンジンとして使用
+> Jupyter カーネルでステートフルな Python 実行 + 計算的プロベナンス検証
+> **v3.2.1**
 
 ## 概要
 
@@ -107,11 +108,14 @@ docker run -d \
 | **チャット UI** | WebSocket ストリーミングによるリアルタイム応答、Markdown レンダリング対応 |
 | **プロジェクト管理** | プロジェクトの作成・削除・名前変更、プロジェクト単位での設定管理 |
 | **Agent Skills** | プロジェクトごとに研究支援スキルを割り当て・切替 |
-| **MCP 設定** | プロジェクトごとに MCP サーバーを設定（有効/無効切替） |
-| **ファイル管理** | 生成ファイルの表示・ダウンロード（ZIP 一括含む）、PDF / Excel / 画像 / SVG ビューア内蔵 |
-| **ファイルアップロード** | 入力データのアップロード |
+| **MCP 設定** | プロジェクトごとに MCP サーバーを設定(有効/無効切替、編集・追加) |
+| **ファイル管理** | 生成ファイルの表示・ダウンロード(ZIP 一括含む)、PDF / Excel / 画像 / SVG ビューア内蔵 |
+| **ファイルアップロード** | 入力データのアップロード(`data/raw/` への直接配置に対応 v3.2+) |
 | **実行履歴** | パイプライン進捗の可視化、プロンプト保存・ダウンロード |
-| **外部 Agents リポジトリ** | GitHub リポジトリから Agent Skills を取得・同期（複数リポジトリ対応） |
+| **外部 Agents リポジトリ** | GitHub リポジトリから Agent Skills を取得・同期(複数リポジトリ対応) |
+| **🐍 Stateful Python (Jupyter MCP)** | プロジェクトごとに JupyterLab カーネルを保持、エージェントの解析が state を跨いで継続(v3.0+) |
+| **📓 JupyterLab GUI 統合** | AIRA UI 内のノートブックタブで iframe 表示、エージェントが書いた cell を人間が直接編集・実行可(v3.1+) |
+| **🔬 Computational Provenance** | 数値→`[cell:<id>]` 引用 linter、再現性ゲート 4 種(seed/env/no-error/coverage)、`notebook.ipynb` の自動 trace、`data/raw/` 規約による出自管理(v3.2+) |
 
 ### MCP サーバー連携
 
@@ -196,6 +200,31 @@ your-repo/
 | **プロジェクト設定** | RAG の有効/無効、最大コンテキスト文字数をプロジェクトごとに設定 |
 | **手動再インデックス** | 全メッセージ・ファイルの再抽出 |
 
+### 🐍 Stateful Python via Jupyter MCP(v3.0.0)
+
+プロジェクトごとに JupyterLab カーネルを Docker に同梱し、`jupyter-mcp-server` (Datalayer) 経由でエージェントが cell 単位で操作します。`df = pd.read_csv(...)` の後の `df.describe()` が**同一プロセス**で実行されるため、ターンを跨いで state が保持されます。`notebook.ipynb` は `workspace/` 直下に 1 プロジェクト 1 ファイル。
+
+| 機能 | 説明 |
+|------|------|
+| **stateful カーネル** | 変数 / DataFrame / 学習済みモデルがターンを跨いで保持 |
+| **JupyterLab GUI iframe 統合** | 「ノートブック」タブで AIRA UI 内に埋め込み表示、人間が直接編集・実行可(v3.1+) |
+| **NumPy / pandas / scipy / scikit-learn / matplotlib / seaborn / sympy** 同梱 | 一般的な解析ワークフローが追加 pip なしで動く |
+
+### 🔬 Computational Provenance(v3.2.0)
+
+「Jupyter で書けるようになった」次に「**数値が本当に計算結果に由来するか**」を機械検証する仕組み。Qiita 記事 [AIRA-γ: フィクションからノンフィクションへ](https://qiita.com/hisaho/items/cb2debe43e85d65a6095) の論点に基づく v3 系列の柱機能。
+
+| 機能 | 説明 |
+|------|------|
+| **Notebook 実行トレース** | agent run ごとに `notebook.ipynb` を snapshot して `workspace/.trace/execution-trace.jsonl` に append。env_hash (pip freeze sha256) 付き |
+| **`[cell:<id>]` 引用 linter** | `report.md` / `paper.md` の数値クレーム (AUROC=0.83, p<0.001, n=1024 等) を抽出し、近傍の cell 引用と cross-check。`uncited` / `unknown_citations` を別レポート |
+| **再現性ゲート 4 種** | `seed_presence` (RNG cell に seed)、`env_capture` (requirements.txt or pip freeze)、`no_error_in_cited` (引用 cell の stderr 空)、`citation_coverage` (≥80%) |
+| **`data/raw/` 規約** | 入力データの配置先を workspace 内に固定。`data/SOURCES.md` skeleton (URL/DOI/sha256/size/license のテーブル) を自動生成 |
+| **🔬 Validate ボタン** | AIRA UI 右ペインのファイルタブから検証実行、4 gate の pass/fail + 違反 cell を一覧表示 |
+| **Co-Scientist v4.7.0** | スキル文書に引用規律 + gate 説明を組み込み、エージェントが自発的に provenance 規律を守る |
+
+> **AIRA-α / β / γ の進化**: α = LLM 単体推論、β = 科学基盤モデル (NatureLM/GALACTICA) 参照、γ = Jupyter MCP で実コード実行 + provenance 検証。
+
 ## 技術スタック
 
 | レイヤー | 技術 |
@@ -243,10 +272,34 @@ aira/
 
 ## 環境変数
 
+### 基本
+
 | 変数 | 説明 | デフォルト |
 |------|------|-----------|
-| `GITHUB_TOKEN` | GitHub Personal Access Token | — |
+| `GITHUB_TOKEN` | GitHub Personal Access Token (Settings 画面でも設定可) | — |
 | `AIRA_PORT` | バックエンドポート | `3000` |
+| `AIRA_PUBLIC_URL` | LAN/リモート時にブラウザから見える AIRA UI の URL (CORS / CSRF / iframe parent 用) | — |
+| `AIRA_ALLOWED_ORIGINS` | 追加 Origin の CSV(`AIRA_PUBLIC_URL` の複数版) | — |
+
+### Jupyter 関連(v3.0+)
+
+| 変数 | 説明 | デフォルト |
+|------|------|-----------|
+| `AIRA_JUPYTER_BIND` | JupyterLab の bind アドレス。iframe 利用には `0.0.0.0` 必須 | `127.0.0.1` |
+| `AIRA_JUPYTER_PORT` | JupyterLab ポート | `8888` |
+| `AIRA_JUPYTER_TOKEN` | 固定 token(default はランダム、再起動毎に変化) | random |
+| `AIRA_JUPYTER_PUBLIC_URL` | LAN/リモート時にブラウザが見える Jupyter URL(v3.1.3+) | `http://localhost:<port>` |
+
+### セキュリティ(v2.5+)
+
+| 変数 | 説明 | デフォルト |
+|------|------|-----------|
+| `AIRA_CSRF_TTL_MS` | CSRF token TTL | `86400000` (24h) |
+| `AIRA_CSRF_MAX_TOKENS` | CSRF token store の最大件数 | `10000` |
+| `AIRA_MAX_UPLOAD_FILE_BYTES` | ファイルアップロード 1 ファイル上限 | `104857600` (100 MB) |
+| `AIRA_MAX_UPLOAD_TOTAL_BYTES` | 同 1 リクエスト合計上限 | `524288000` (500 MB) |
+| `AIRA_GITHUB_HOSTS` | 外部 Agents repo で token 埋め込み可能ホストの追加(CSV、`github.com` は default) | — |
+| `AIRA_SERVE_FRONTEND` | Docker モードで backend が frontend dist を serve | `false` |
 
 ## ライセンス
 
