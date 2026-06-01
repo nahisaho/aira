@@ -2,6 +2,11 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.4.1] — 2026-06-02
+
+### Fixed
+- **CI で TS2741 (`value_mismatches missing in ValidationReport`)**: v3.4.0 で `ValidationReport` 型に `value_mismatches` を追加したが、`validateProject` の early-return path (snapshot 不在時)で当該フィールドを設定していなかった。tsc strict mode で macos runner が build failure。`value_mismatches: []` を補完。
+
 ## [v3.4.0] — 2026-06-02 — Semantic Verification
 
 Round 10 (v3.3.0 × 100 実験) で **citation coverage 96.5%、env_capture 99%、全 4 ゲート 99/100 通過** を達成。「数値が引用付きで報告される」状態は保証されたが、次の論点 **「引用先の cell が実際にその値を出力したか」** が未検査だった。v3.4.0 は Semantic Verification を導入してこのギャップを埋める + repair の時間コストを削減する(Round 10 で +56%)。

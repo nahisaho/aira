@@ -537,6 +537,7 @@ export function validateProject(projectId: string): ValidationReport {
       claims: [],
       uncited_claims: [],
       unknown_citations: [],
+      value_mismatches: [],
       gates: [],
       pass: false,
     };
