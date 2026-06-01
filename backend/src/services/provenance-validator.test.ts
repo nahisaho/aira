@@ -598,7 +598,8 @@ describe('validateProject', () => {
       );
       const pm = buildPostmortemReport(PROJECT_ID);
       expect(pm.available).toBe(true);
-      expect(pm.file).toMatch(/^\.trace\/postmortem-/);
+      // Normalise path separator so the regex works on Windows runners too.
+      expect(pm.file.replace(/\\/g, '/')).toMatch(/^\.trace\/postmortem-/);
       expect(pm.markdown_summary).toContain('Postmortem');
       expect(pm.markdown_summary).toMatch(/seed_presence|env_capture|tiny/);
 
@@ -606,7 +607,7 @@ describe('validateProject', () => {
       const traceDir = getTraceDir(PROJECT_ID);
       const files = fs.readdirSync(traceDir).filter(f => f.startsWith('postmortem-'));
       expect(files.length).toBeGreaterThan(0);
-      const payload = JSON.parse(fs.readFileSync(`${traceDir}/${files[0]}`, 'utf-8'));
+      const payload = JSON.parse(fs.readFileSync(path.join(traceDir, files[0]!), 'utf-8'));
       expect(payload.markdown_summary).toContain('Postmortem');
     });
   });

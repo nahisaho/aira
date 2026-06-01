@@ -2,6 +2,14 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.4.3] — 2026-06-02
+
+### Fixed
+- **CI で Windows runner のテストが失敗していた問題**(v3.4.2 で導入):
+  - Postmortem テストでパス比較に forward-slash regex を使っていたが、Windows の `path.join` は backslash を返す。テスト内で `.replace(/\\/g, '/')` で正規化し、ファイル読み込みも `path.join` 経由に。
+  - `notebook-trace.test.ts` / `provenance-validator.test.ts` の fs-heavy 統合テストが Windows で 5s timeout を超えていた。`vitest.config.ts` の `testTimeout` を default 5s → **15s に引き上げ**。fs latency 差吸収。
+- 機能・API 変更なし。
+
 ## [v3.4.2] — 2026-06-02 — Provenance Carry-overs
 
 v3.4.0 で「v3.5+ 候補」と書いた残課題 4 つをすべて消化。Round 10 で 1 件だけ全 gate 失敗した SCI-073 の corner case を構造化検出、figure 引用の出自検査、3 回 repair でも通らないケースの自動 postmortem、time-budget guard を導入。
