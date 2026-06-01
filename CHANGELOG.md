@@ -2,6 +2,61 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.4.0] — 2026-06-02 — Semantic Verification
+
+Round 10 (v3.3.0 × 100 実験) で **citation coverage 96.5%、env_capture 99%、全 4 ゲート 99/100 通過** を達成。「数値が引用付きで報告される」状態は保証されたが、次の論点 **「引用先の cell が実際にその値を出力したか」** が未検査だった。v3.4.0 は Semantic Verification を導入してこのギャップを埋める + repair の時間コストを削減する(Round 10 で +56%)。
+
+### Added — Pillar 1: Value Presence check(informational signal)
+
+- **新規 `valueAppearsInOutputs()`**: 引用付き claim から数値と precision を抽出し、引用 cell の `stdout` / `text_output` に precision-aware tolerance (`0.5 × 10^-precision + 1e-10` FP epsilon) で含まれるか検査
+- 例: `AUROC = 0.83 [cell:cv]` で `cv` cell の出力が `0.8316` → 一致(0.83 に丸まる範囲)
+- 例: `AUROC = 0.83 [cell:cv]` で `cv` cell が `0.92` → **mismatch**
+- ValidationReport に新フィールド `value_mismatches: ValueMismatch[]` を追加
+- 不一致は **informational(gate 不通過扱いしない)** — false positive(中間値 vs 最終値、formatting 差等)が起こりうるため。pass 判定は変更なし。
+- repair プロンプトにも "Value-presence warnings" セクションを追加して agent に通知
+
+### Changed — Pillar 3: Repair の single-batch 化
+
+- `formatRepairPrompt` を全面書き換え:
+  - 強い preamble: "**Apply ALL Fixes in ONE Pass**" / "Do NOT call `/validate` again until you have applied every fix below"
+  - 重複 remediation hint を行内に圧縮(per-violation の冗長な指示を排除)
+  - フラットセクション構造: Failed gates → Uncited claims → Unknown citations → Value-presence warnings → Available cell ids
+- 期待効果(Round 11):
+  - 平均 repair 反復: 1.10 → 1.02 程度に改善
+  - 平均所要時間: 24.4 分 → 18-20 分(Pillar 3 単体で約 −5 分/件)
+  - 100 件総計: 40.6h → 30-33h
+
+### Changed — Pillar 5: Co-Scientist v4.8.1 → v4.9.0
+
+- **AGENTS.md / copilot-instructions.md の Mandatory second-pass loop を single-batch 前提に書き換え**
+  - 「ALL fixes を 1 turn で適用してから `/validate` を再呼出」を明示
+  - **`[cell:aira-env]` / `[cell:aira-seed]` を序盤に必ず実行する** ことを step 1 として明示(Round 10 の paper.md 欠 2 件 / seed_presence 100→99% 退行への対策)
+- **新セクション "Self-check for citation correctness"** を追加: agent が `metric = X [cell:N]` を書く前に cell N の出力を確認、X が無ければ修正 → 1 iteration 節約
+- skill.json + 各ヘッダ version を v4.9.0 に bump
+
+### API 変更(後方互換)
+- `ValidationReport` に `value_mismatches` フィールド追加(既存 client は無視可能)
+- `RepairPayload.violations` の `issue` ユニオンに `'value_mismatch'` 追加(同上)
+
+### Tests
+- 新規 backend 7 ケース:
+  - `extractClaimValue` の精度抽出(metric-assignment / p-value / sample-size / 負値 / 数値なし)
+  - `valueAppearsInOutputs` の tolerance(decimal precision 2/3、整数 exact、FP boundary)
+  - value_mismatches の report 反映(citation 先に値が無ければ列挙、あれば 0、pass=true 維持)
+  - repair prompt が value mismatches を informational として surface
+  - single-batch prompt の文言("ONE Pass", "Do NOT call", 4 セクション構造)
+- **24 backend test files / 257 tests + 21 frontend tests all green**
+
+### Migration
+- 完全後方互換。新規フィールド追加のみ、API 既存路もすべて動作。
+- Co-Scientist の skill 文書のみの行動変化(Docker image rebuild で反映、現行 container には未反映)
+
+### v3.4.0 で未着手 / 残課題(v3.5+ 候補)
+- **Pillar 2 (figure provenance)**: `[cell:viz-roc]` 引用先で `plt.savefig` が実行されたかの突合
+- **Pillar 4 (auto-postmortem)**: 3 回 repair で通らないケースの構造化失敗ログ
+- **time-budget guard**: repair が paper.md 生成時間を食い潰さないようにする保護
+- **SCI-073 root cause**: Round 10 で 1 件だけ全ゲート失敗したケースの解析
+
 ## [v3.3.1] — 2026-06-01
 
 ### Fixed

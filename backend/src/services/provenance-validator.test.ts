@@ -6,6 +6,8 @@ import {
   extractNumericClaims,
   validateProject,
   buildRepairPayload,
+  extractClaimValue,
+  valueAppearsInOutputs,
 } from './provenance-validator.js';
 import {
   captureSnapshot,
@@ -257,7 +259,9 @@ describe('validateProject', () => {
         {
           cells: [
             { id: 'seed', cell_type: 'code', source: 'import numpy as np\nnp.random.seed(0)', outputs: [] },
-            { id: 'm', cell_type: 'code', source: 'm = 0.83', outputs: [] },
+            // v3.4.0: include output so the value_match check is satisfied
+            { id: 'm', cell_type: 'code', source: 'm = 0.83',
+              outputs: [{ output_type: 'stream', name: 'stdout', text: '0.83\n' }] },
           ],
           metadata: {}, nbformat: 4, nbformat_minor: 5,
         },
@@ -293,7 +297,8 @@ describe('validateProject', () => {
       const repair = buildRepairPayload(PROJECT_ID);
       expect(repair.needs_repair).toBe(true);
       expect(repair.violations.some(v => v.issue === 'uncited')).toBe(true);
-      expect(repair.repair_prompt).toContain('uncited numeric claim');
+      // v3.4.0 single-batch prompt uses "Uncited claims" section header
+      expect(repair.repair_prompt).toContain('Uncited claims');
       // Available cell ids should be surfaced
       expect(repair.repair_prompt).toContain('eval');
     });
@@ -339,6 +344,142 @@ describe('validateProject', () => {
       const repair = buildRepairPayload(PROJECT_ID);
       expect(repair.available).toBe(false);
       expect(repair.reason).toContain('No trace snapshot');
+    });
+  });
+
+  // v3.4.0 — Pillar 1: value-presence informational check
+  describe('Value presence check (v3.4.0 Pillar 1)', () => {
+    it('extractClaimValue parses the value and precision', () => {
+      expect(extractClaimValue('AUROC = 0.83')).toEqual({ value: 0.83, precision: 2 });
+      expect(extractClaimValue('p < 0.001')).toEqual({ value: 0.001, precision: 3 });
+      expect(extractClaimValue('n = 1024')).toEqual({ value: 1024, precision: 0 });
+      expect(extractClaimValue('rate of -0.05')).toEqual({ value: -0.05, precision: 2 });
+      expect(extractClaimValue('no number here')).toBeNull();
+    });
+
+    it('valueAppearsInOutputs matches with precision-aware tolerance', () => {
+      // 0.83 (precision 2 → tolerance 0.005) matches 0.8316 (rounds to 0.83)
+      expect(valueAppearsInOutputs(0.83, 2, '... auroc 0.8316 ...')).toBe(true);
+      // 0.83 does NOT match 0.84 (outside tolerance)
+      expect(valueAppearsInOutputs(0.83, 2, '... auroc 0.84 ...')).toBe(false);
+      // Higher precision 0.835 needs <0.0005 tolerance
+      expect(valueAppearsInOutputs(0.835, 3, '0.8355')).toBe(true);
+      expect(valueAppearsInOutputs(0.835, 3, '0.836')).toBe(false);
+      // Integer (precision 0, tolerance 0) needs exact match
+      expect(valueAppearsInOutputs(1024, 0, 'sample size: 1024 patients')).toBe(true);
+      expect(valueAppearsInOutputs(1024, 0, '1023')).toBe(false);
+      // No numbers in output
+      expect(valueAppearsInOutputs(0.83, 2, 'just text')).toBe(false);
+    });
+
+    it('reports value_mismatches when cell does not contain the value', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'seed', cell_type: 'code', source: 'import random\nrandom.seed(1)', outputs: [] },
+            { id: 'right', cell_type: 'code', source: 'auroc = 0.83',
+              outputs: [{ output_type: 'stream', name: 'stdout', text: 'auroc=0.8316\n' }] },
+            { id: 'wrong', cell_type: 'code', source: 'f1 = 0.92',
+              outputs: [{ output_type: 'stream', name: 'stdout', text: 'f1=0.9234\n' }] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'requirements.txt': '',
+          // citation points at 'wrong' but the value 0.83 is in 'right'
+          'report.md': 'We observed AUROC = 0.83 [cell:wrong] across folds.',
+        },
+      );
+
+      const report = validateProject(PROJECT_ID);
+      expect(report.value_mismatches.length).toBe(1);
+      expect(report.value_mismatches[0]!.cell_id).toBe('wrong');
+      expect(report.value_mismatches[0]!.expected).toBe(0.83);
+      // value_mismatches do NOT fail the overall pass
+      expect(report.pass).toBe(true);
+    });
+
+    it('passes value match when cell output contains the value (with rounding)', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'seed', cell_type: 'code', source: 'random.seed(1)', outputs: [] },
+            { id: 'm', cell_type: 'code', source: 'metric = 0.8316',
+              outputs: [{ output_type: 'stream', name: 'stdout', text: '0.8316\n' }] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'requirements.txt': '',
+          'report.md': 'AUROC = 0.83 [cell:m]',
+        },
+      );
+      const report = validateProject(PROJECT_ID);
+      expect(report.value_mismatches.length).toBe(0);
+    });
+
+    it('repair prompt surfaces value mismatches as informational', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'seed', cell_type: 'code', source: 'random.seed(1)', outputs: [] },
+            { id: 'm', cell_type: 'code', source: 'x = 0.50',
+              outputs: [{ output_type: 'stream', name: 'stdout', text: '0.50\n' }] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'requirements.txt': '',
+          'report.md': 'AUROC = 0.83 [cell:m]',
+        },
+      );
+      const repair = buildRepairPayload(PROJECT_ID);
+      // value_mismatch alone is informational → not blocking
+      expect(repair.needs_repair).toBe(false);
+      expect(repair.pass).toBe(true);
+      // But it IS surfaced in violations + prompt
+      expect(repair.violations.some(v => v.issue === 'value_mismatch')).toBe(true);
+      expect(repair.repair_prompt).toContain('Value-presence');
+      expect(repair.repair_prompt).toContain('0.83');
+    });
+  });
+
+  // v3.4.0 — Pillar 3: single-batch repair prompt
+  describe('Single-batch repair prompt (v3.4.0 Pillar 3)', () => {
+    it('uses single-batch language emphasising ALL fixes in one pass', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'rng', cell_type: 'code', source: 'import numpy as np\nnp.random.randn(5)', outputs: [] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'report.md': 'X = 0.5 and Y = 0.6 reported.',
+        },
+      );
+      const repair = buildRepairPayload(PROJECT_ID);
+      expect(repair.repair_prompt).toMatch(/ONE Pass|ALL fixes|in one pass/i);
+      expect(repair.repair_prompt).toContain('Do NOT call');
+    });
+
+    it('groups gates / uncited / unknown / value_mismatch into flat sections', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'rng', cell_type: 'code', source: 'import numpy as np\nnp.random.randn(5)', outputs: [] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'report.md': 'AUROC = 0.83 [cell:missing-cell] and F1 = 0.74 uncited.',
+        },
+      );
+      const repair = buildRepairPayload(PROJECT_ID);
+      // Sections present
+      expect(repair.repair_prompt).toMatch(/Uncited claims/);
+      expect(repair.repair_prompt).toMatch(/Unknown citations/);
+      expect(repair.repair_prompt).toMatch(/Failed reproducibility gates/);
     });
   });
 });

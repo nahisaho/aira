@@ -259,6 +259,28 @@ function checkCitationCoverage(claims: NumericClaim[], threshold = 0.8): GateRes
 
 // ── Public API ────────────────────────────────────────────────────────
 
+/**
+ * v3.4.0 — informational value-mismatch warning.
+ * For each cited claim, we extract the numeric value and look for it
+ * (precision-aware tolerance) in the cited cell's outputs. Mismatches
+ * indicate the citation may point to the wrong cell or have a typo,
+ * but they're SOFT signals — there are real cases (multi-step
+ * computation, formatting differences) where this fails for legitimate
+ * reasons. We surface them in the repair prompt but do NOT fail the
+ * overall pass on them.
+ */
+export interface ValueMismatch {
+  claim: NumericClaim;
+  /** Cell id the claim cited (the one we checked against). */
+  cell_id: string;
+  /** Numeric value parsed from the claim text. */
+  expected: number;
+  /** Decimal precision (number of digits after the dot) of the claimed value. */
+  precision: number;
+  /** Tolerance used (= 0.5 * 10^-precision). */
+  tolerance: number;
+}
+
 export interface ValidationReport {
   available: boolean;
   /** Reason when available=false. */
@@ -266,9 +288,54 @@ export interface ValidationReport {
   claims: NumericClaim[];
   uncited_claims: NumericClaim[];
   unknown_citations: Array<{ claim: NumericClaim; bad_cell_id: string }>;
+  /** v3.4.0 — values cited from cells whose outputs do not contain the value. */
+  value_mismatches: ValueMismatch[];
   gates: GateResult[];
   /** Overall pass = every gate passes AND no unknown citations. */
   pass: boolean;
+}
+
+/**
+ * v3.4.0 — extract the principal numeric value from a claim's match text.
+ * Returns the first number found (which is the only number for our patterns).
+ */
+export function extractClaimValue(matchText: string): { value: number; precision: number } | null {
+  const m = matchText.match(/-?\d+\.\d+|-?\d+/);
+  if (!m) return null;
+  const valueStr = m[0];
+  const value = parseFloat(valueStr);
+  if (Number.isNaN(value)) return null;
+  const precision = valueStr.includes('.') ? valueStr.split('.')[1]!.length : 0;
+  return { value, precision };
+}
+
+/**
+ * v3.4.0 — check whether the claimed value appears in the cell's outputs
+ * with precision-aware tolerance (0.5 * 10^-precision). E.g. claim "0.83"
+ * matches any number in [0.825, 0.835), so a cell that prints "0.8316"
+ * counts as a match (it would round to 0.83).
+ *
+ * For integer claims (no decimal), tolerance is 0 (exact match required).
+ */
+export function valueAppearsInOutputs(
+  claimedValue: number,
+  precision: number,
+  outputText: string,
+): boolean {
+  // Tolerance = half a unit at the claim's last decimal place, with a small
+  // floating-point epsilon so boundary values (e.g. 0.8355 vs 0.835 at p=3)
+  // round in our favour rather than failing due to IEEE-754 representation.
+  const tolerance = precision > 0
+    ? 0.5 * Math.pow(10, -precision) + 1e-10
+    : 0;
+  const numRe = /-?\d+(?:\.\d+)?/g;
+  let m: RegExpExecArray | null;
+  while ((m = numRe.exec(outputText)) !== null) {
+    const v = parseFloat(m[0]);
+    if (Number.isNaN(v)) continue;
+    if (Math.abs(v - claimedValue) <= tolerance) return true;
+  }
+  return false;
 }
 
 /**
@@ -290,7 +357,8 @@ export interface RepairPayload {
   violations: Array<{
     file: string;
     claim: string;
-    issue: 'uncited' | 'unknown_citation' | 'gate_failed';
+    /** v3.4.0 — added 'value_mismatch' (informational signal, not gate). */
+    issue: 'uncited' | 'unknown_citation' | 'gate_failed' | 'value_mismatch';
     detail: string;
   }>;
   /** Markdown prompt the agent reads to drive the second pass. */
@@ -338,6 +406,17 @@ export function buildRepairPayload(projectId: string): RepairPayload {
       });
     }
   }
+  // v3.4.0 — value-presence mismatches (informational; do not block pass).
+  // Still surfaced in the prompt so the agent can correct typos or re-aim
+  // citations at the right cells.
+  for (const v of report.value_mismatches) {
+    violations.push({
+      file: v.claim.source_file,
+      claim: v.claim.match,
+      issue: 'value_mismatch',
+      detail: `Value ${v.expected} is not present in cell [cell:${v.cell_id}] outputs (tolerance ±${v.tolerance}). Either fix the citation to point at the cell that actually produced ${v.expected}, or correct the value in the report.`,
+    });
+  }
 
   // Collect available cell ids — agent uses these to choose correct citations.
   const snapshot = readLatestSnapshot(projectId);
@@ -345,8 +424,13 @@ export function buildRepairPayload(projectId: string): RepairPayload {
     ? snapshot.cells.filter((c) => c.type === 'code').map((c) => c.id)
     : [];
 
-  const needsRepair = violations.length > 0;
-  const repair_prompt = needsRepair
+  // Repair is "needed" when there are blocking issues (uncited / unknown /
+  // gate_failed). value_mismatch alone is informational — the agent should
+  // still be told but the loop can declare pass=true if those are the only
+  // remaining items.
+  const blockingViolations = violations.filter(v => v.issue !== 'value_mismatch');
+  const needsRepair = blockingViolations.length > 0;
+  const repair_prompt = (violations.length > 0)
     ? formatRepairPrompt(violations, availableCellIds)
     : '';
 
@@ -359,6 +443,17 @@ export function buildRepairPayload(projectId: string): RepairPayload {
   };
 }
 
+/**
+ * v3.4.0 — Single-batch repair prompt.
+ *
+ * Round 10 telemetry showed agents average 1.10 repair iterations and most
+ * failures are concentrated in the first call. The earlier prompt structured
+ * fixes as "loop until pass" with per-iteration overhead — agents would
+ * sometimes re-read the prompt and re-derive analysis. The new prompt
+ * **insists on a single pass**: apply EVERY listed fix before calling
+ * /validate again. Sections are flat and dense; remediation hints sit
+ * inline with the offending row, not as bulky aside.
+ */
 function formatRepairPrompt(
   violations: RepairPayload['violations'],
   availableCellIds: string[],
@@ -366,65 +461,70 @@ function formatRepairPrompt(
   const uncited = violations.filter((v) => v.issue === 'uncited');
   const unknown = violations.filter((v) => v.issue === 'unknown_citation');
   const gates = violations.filter((v) => v.issue === 'gate_failed');
+  const valueMismatches = violations.filter((v) => v.issue === 'value_mismatch');
 
-  const sections: string[] = [];
-  sections.push('# Provenance Validator — Second-Pass Repair');
-  sections.push('');
-  sections.push('Your report failed at least one provenance check. Apply the fixes below, then call `POST /api/projects/:id/validate` again. Loop until all gates pass.');
+  const lines: string[] = [];
+  lines.push('# Provenance Repair — Apply ALL Fixes in ONE Pass');
+  lines.push('');
+  lines.push('**Do NOT call `/validate` again until you have applied every fix below.** Repair loops are budgeted; iterating on subsets wastes the agent\'s turn count and time. Walk the entire list once, then re-validate.');
+
+  if (gates.length > 0) {
+    lines.push('');
+    lines.push(`## Failed reproducibility gates (${gates.length}) — fix first`);
+    for (const v of gates) {
+      const hint = (() => {
+        switch (v.claim) {
+          case 'seed_presence':   return 'Execute the pre-seeded `[cell:aira-seed]` cell, or add `np.random.seed(42)` to an early cell.';
+          case 'env_capture':     return 'Execute the pre-seeded `[cell:aira-env]` cell (runs `!pip freeze > requirements.txt`).';
+          case 'no_error_in_cited': return 'Fix the broken cell so its output is clean, OR repoint the citation to a different cell.';
+          case 'citation_coverage': return 'Append `[cell:<id>]` to every uncited claim below in this same pass.';
+          default: return '';
+        }
+      })();
+      lines.push(`- **${v.claim}**: ${v.detail}${hint ? `  →  ${hint}` : ''}`);
+    }
+  }
 
   if (uncited.length > 0) {
-    sections.push('');
-    sections.push(`## ${uncited.length} uncited numeric claim(s) — add a [cell:<id>] reference`);
-    sections.push('');
-    for (const v of uncited.slice(0, 30)) {
-      sections.push(`- ${v.file}: \`${v.claim}\`  → append the cell id that produced this value, e.g. \`${v.claim} [cell:<id>]\``);
+    lines.push('');
+    lines.push(`## Uncited claims (${uncited.length}) — append \`[cell:<id>]\` to each`);
+    for (const v of uncited.slice(0, 40)) {
+      lines.push(`- ${v.file}: \`${v.claim}\``);
     }
-    if (uncited.length > 30) sections.push(`- … +${uncited.length - 30} more`);
+    if (uncited.length > 40) lines.push(`- … +${uncited.length - 40} more (apply the same pattern)`);
   }
 
   if (unknown.length > 0) {
-    sections.push('');
-    sections.push(`## ${unknown.length} unknown citation(s) — fix the cell id`);
-    sections.push('');
+    lines.push('');
+    lines.push(`## Unknown citations (${unknown.length}) — bad cell id`);
     for (const v of unknown.slice(0, 30)) {
-      sections.push(`- ${v.file}: \`${v.claim}\` — ${v.detail}`);
+      lines.push(`- ${v.file}: \`${v.claim}\` — ${v.detail}`);
     }
   }
 
-  if (gates.length > 0) {
-    sections.push('');
-    sections.push(`## ${gates.length} failed reproducibility gate(s)`);
-    sections.push('');
-    for (const v of gates) {
-      sections.push(`- **${v.claim}**: ${v.detail}`);
-      switch (v.claim) {
-        case 'seed_presence':
-          sections.push('  - Add an early cell with `np.random.seed(42)` / `random.seed(42)` / `torch.manual_seed(42)` (match the libraries you use).');
-          break;
-        case 'env_capture':
-          sections.push('  - Add a cell that runs `!pip freeze > requirements.txt` and execute it.');
-          break;
-        case 'no_error_in_cited':
-          sections.push('  - Either fix the broken cell so it produces clean output, or repoint the citation to a different cell that actually produced the value.');
-          break;
-        case 'citation_coverage':
-          sections.push('  - Walk through each uncited claim above and attach a `[cell:<id>]` reference.');
-          break;
-      }
+  if (valueMismatches.length > 0) {
+    lines.push('');
+    lines.push(`## Value-presence warnings (${valueMismatches.length}) — informational, not blocking`);
+    lines.push('The cited cell\'s outputs do not contain the value you wrote in the report. Either you cited the wrong cell or the value in the report is wrong. Fix if you can, otherwise document the mismatch in Limitations.');
+    for (const v of valueMismatches.slice(0, 20)) {
+      lines.push(`- ${v.file}: \`${v.claim}\` — ${v.detail}`);
     }
+    if (valueMismatches.length > 20) lines.push(`- … +${valueMismatches.length - 20} more`);
   }
 
   if (availableCellIds.length > 0) {
-    sections.push('');
-    sections.push('## Available cell ids (from the latest notebook snapshot)');
-    sections.push('');
-    sections.push('```');
-    sections.push(availableCellIds.slice(0, 50).join('\n'));
-    if (availableCellIds.length > 50) sections.push(`… +${availableCellIds.length - 50} more`);
-    sections.push('```');
+    lines.push('');
+    lines.push('## Available cell ids (from the latest snapshot)');
+    lines.push('```');
+    lines.push(availableCellIds.slice(0, 50).join('\n'));
+    if (availableCellIds.length > 50) lines.push(`… +${availableCellIds.length - 50} more`);
+    lines.push('```');
   }
 
-  return sections.join('\n');
+  lines.push('');
+  lines.push('Once every fix above is applied to your files (`report.md` / `paper.md`) and re-executed cells (if any), call `POST /api/projects/:id/validate`. Aim for `pass: true` on the next attempt.');
+
+  return lines.join('\n');
 }
 
 export function validateProject(projectId: string): ValidationReport {
@@ -453,11 +553,36 @@ export function validateProject(projectId: string): ValidationReport {
   }
 
   const cellIds = new Set(snapshot.cells.map((c) => c.id));
+  const cellById = new Map(snapshot.cells.map((c) => [c.id, c]));
   const uncited = claims.filter((c) => c.cited.length === 0);
   const unknown: ValidationReport['unknown_citations'] = [];
   for (const c of claims) {
     for (const cid of c.cited) {
       if (!cellIds.has(cid)) unknown.push({ claim: c, bad_cell_id: cid });
+    }
+  }
+
+  // v3.4.0 — value-presence check (informational). Only meaningful for
+  // claim patterns that name a numeric value (metric-assignment / metric-of /
+  // p-value / sample-size). For each cited claim, see if the value appears
+  // in the cited cell's outputs.
+  const value_mismatches: ValueMismatch[] = [];
+  for (const c of claims) {
+    if (c.cited.length === 0) continue; // no citation → already in uncited
+    const parsed = extractClaimValue(c.match);
+    if (!parsed) continue;
+    for (const cid of c.cited) {
+      const cell = cellById.get(cid);
+      if (!cell) continue; // already in unknown_citations
+      const haystack = `${cell.stdout}\n${cell.text_output}`;
+      if (valueAppearsInOutputs(parsed.value, parsed.precision, haystack)) continue;
+      value_mismatches.push({
+        claim: c,
+        cell_id: cid,
+        expected: parsed.value,
+        precision: parsed.precision,
+        tolerance: parsed.precision > 0 ? 0.5 * Math.pow(10, -parsed.precision) : 0,
+      });
     }
   }
 
@@ -473,7 +598,9 @@ export function validateProject(projectId: string): ValidationReport {
     claims,
     uncited_claims: uncited,
     unknown_citations: unknown,
+    value_mismatches,
     gates,
+    // value_mismatches are informational; they don't block the overall pass.
     pass: gates.every((g) => g.passed) && unknown.length === 0,
   };
 }

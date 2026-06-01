@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.8.1 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.9.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.8.1
+# Co-Scientist v4.9.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -57,7 +57,7 @@ Target total runtime: **60 minutes** (complex experiments may take up to 90 minu
 - **Docstrings**: Required for all public functions.
 - **Type hints**: Recommended.
 
-## Computational Provenance (v4.8.1)
+## Computational Provenance (v4.9.0)
 
 Every numeric claim in `report.md` / `paper.md` must be **traceable back to a specific notebook cell**. Without this, the report becomes "scientific fiction" — numbers that look computed but have no auditable derivation. AIRA captures cell-level execution traces automatically and runs a validator. **The work is not complete until the validator passes.**
 
@@ -96,28 +96,28 @@ AIRA's validator (`POST /api/projects/:id/validate`) checks four gates:
 3. **`no_error_in_cited`** — every cell cited from `report.md` / `paper.md` must have empty `stderr` and no error outputs.
 4. **`citation_coverage`** — ≥80% of detected numeric claims must have a `[cell:<id>]` citation.
 
-### Mandatory second-pass repair loop (v4.8.1)
+### Mandatory second-pass repair loop (v4.9.0 — single-batch)
 
 **Before delivering the final response, you must:**
 
-1. Call `POST /api/projects/:id/validate`.
-2. If `pass: true` → continue to the final response.
-3. If `pass: false` → call `POST /api/projects/:id/validate/repair` to get a structured violation list and a markdown repair prompt with:
-   - The exact uncited claims (file + match string).
-   - Any unknown citations and what they referenced.
-   - Failed gates with remediation hints.
-   - The list of cell ids you can cite.
-4. Apply the repair instructions in order:
-   - For each **uncited claim**, find the cell whose output is the value and add `[cell:<id>]` right after the number in `report.md` / `paper.md`.
-   - For each **unknown citation**, fix the cell id (typo) or repoint it to a real one.
-   - For each **failed gate**, run the suggested fix:
-     - `seed_presence` → re-execute `[cell:aira-seed]` (or add the missing library's seed).
-     - `env_capture` → re-execute `[cell:aira-env]`.
-     - `no_error_in_cited` → fix the cell so it produces clean output, re-execute, then re-cite.
-     - `citation_coverage` → walk through the uncited claim list above.
-5. Re-run step 1. Loop until `pass: true` OR you have attempted 3 repair iterations.
+1. **Execute `[cell:aira-env]` and `[cell:aira-seed]` early in the run** so the cheap gates (env_capture / seed_presence) pass before analysis begins. Round 10 telemetry showed agents who skipped this consumed all 3 repair iterations on these two gates alone.
+2. Call `POST /api/projects/:id/validate`.
+3. If `pass: true` → quickly scan `value_mismatches` (informational, v3.4.0). Fix the ones that are clear typos / wrong cell ids in your report, then continue to the final response.
+4. If `pass: false` → call `POST /api/projects/:id/validate/repair`. The response includes a single markdown prompt grouped into flat sections: **Failed gates**, **Uncited claims**, **Unknown citations**, **Value-presence warnings**, **Available cell ids**.
+5. **Apply EVERY fix in the prompt in a single pass before calling `/validate` again.** Iterating on subsets wastes turn budget and time. In one walk:
+   - For every **failed gate** row: run its remediation (almost always: execute `[cell:aira-env]` / `[cell:aira-seed]` again, or fix a broken cited cell).
+   - For every **uncited claim** row: append `[cell:<id>]` to that exact claim text in `report.md` / `paper.md`, picking the id from the "Available cell ids" list.
+   - For every **unknown citation** row: fix the typo or repoint to a real cell id.
+   - For every **value-presence warning** row: check whether you cited the right cell — if the value (e.g., `0.83`) does not appear in the cell's stdout/output, you probably cited the wrong cell. Fix the citation or correct the value in the report.
+6. Re-call `/validate`. Cap: 3 repair iterations. If the 3rd attempt still fails, **state in `report.md` Limitations exactly which gates / claims still fail and why a repair was infeasible** — do not hide the failure or paper over it with prose.
 
-If 3 iterations don't pass, **state explicitly in the final response** what remains uncited / which gate failed, and why a repair was not possible. **Do not hide the failure.**
+### Self-check for citation correctness (v4.9.0)
+
+Before writing `metric = X [cell:N]`, briefly **look at cell N's last output** (visible in the `/notebook/trace` API or the AIRA UI Trace tab). If the value X (or a number that rounds to X at your stated precision) does not appear there, either:
+- You have the wrong cell id (pick the right one), or
+- The value in the report doesn't match the computation (correct the value).
+
+The validator's `value_mismatches` (v3.4.0) catches this automatically and surfaces it in the repair prompt — but catching it before writing saves a full repair iteration.
 
 ### Required artifacts (in addition to existing layout)
 
