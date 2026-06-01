@@ -13,7 +13,7 @@ import {
   readLatestSnapshot,
   readAllSnapshots,
 } from '../services/notebook-trace.js';
-import { validateProject, buildRepairPayload } from '../services/provenance-validator.js';
+import { validateProject, buildRepairPayload, buildPostmortemReport } from '../services/provenance-validator.js';
 
 const projectRoutes = new Hono();
 const projectService = new ProjectService();
@@ -130,6 +130,15 @@ projectRoutes.post('/api/projects/:id/validate', (c) => {
 projectRoutes.post('/api/projects/:id/validate/repair', (c) => {
   const projectId = c.req.param('id');
   return c.json(buildRepairPayload(projectId));
+});
+
+// POST /api/projects/:id/validate/postmortem — auto-postmortem (v3.4.2 Pillar 4)
+// Called by Co-Scientist when 3 repair iterations did not converge. Writes a
+// JSON dump under workspace/.trace/postmortem-<ISO>.json and returns a
+// markdown summary suitable for pasting into report.md Limitations.
+projectRoutes.post('/api/projects/:id/validate/postmortem', (c) => {
+  const projectId = c.req.param('id');
+  return c.json(buildPostmortemReport(projectId));
 });
 
 // DELETE /api/projects/:id

@@ -16,8 +16,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { getWorkspaceDir } from '../config/paths.js';
-import { readLatestSnapshot, type TraceCell, type TraceSnapshot } from './notebook-trace.js';
+import { getWorkspaceDir, getTraceDir } from '../config/paths.js';
+import { readLatestSnapshot, readAllSnapshots, type TraceCell, type TraceSnapshot } from './notebook-trace.js';
 
 // ── Numeric-claim extraction ──────────────────────────────────────────
 //
@@ -281,6 +281,35 @@ export interface ValueMismatch {
   tolerance: number;
 }
 
+/**
+ * v3.4.2 — figure orphan: a figure file referenced from a report has no
+ * cell that produced it (i.e. no cell source mentions writing that file).
+ * Informational only — false positives possible (figure produced by an
+ * external tool, copied from data/raw/, etc.).
+ */
+export interface FigureOrphan {
+  source_file: string;
+  /** The figure path as referenced from report.md / paper.md. */
+  figure_path: string;
+  /** A short reason — usually "no cell source calls savefig/...('X.png')". */
+  reason: string;
+}
+
+/**
+ * v3.4.2 — informational notice that the report is suspiciously thin
+ * (catches cases like Round 10 SCI-073 where the agent could not produce
+ * any reportable claim).
+ */
+export interface ReportThinness {
+  source_file: string;
+  /** byte length of the file's content */
+  size_bytes: number;
+  /** number of numeric claims detected */
+  claim_count: number;
+  /** classification — 'missing' / 'tiny' / 'no_claims' */
+  level: 'missing' | 'tiny' | 'no_claims';
+}
+
 export interface ValidationReport {
   available: boolean;
   /** Reason when available=false. */
@@ -290,9 +319,60 @@ export interface ValidationReport {
   unknown_citations: Array<{ claim: NumericClaim; bad_cell_id: string }>;
   /** v3.4.0 — values cited from cells whose outputs do not contain the value. */
   value_mismatches: ValueMismatch[];
+  /** v3.4.2 — figures referenced from reports but produced by no cell. */
+  figure_orphans: FigureOrphan[];
+  /** v3.4.2 — informational notice that report.md / paper.md is thin or missing. */
+  report_thinness: ReportThinness[];
   gates: GateResult[];
   /** Overall pass = every gate passes AND no unknown citations. */
   pass: boolean;
+}
+
+// ── v3.4.2 — figure references (Pillar 2) ─────────────────────────────
+
+/**
+ * Extract paths under `figures/` referenced from a markdown body. Captures
+ * both image syntax (`![alt](figures/x.png)`) and inline text mentions like
+ * `Figure 1 (figures/roc.png)` or `[cell:viz-roc] figures/x.png`.
+ *
+ * Returns deduplicated paths preserving first-occurrence order.
+ */
+export function extractFigureReferences(markdown: string): string[] {
+  const found = new Set<string>();
+  const ordered: string[] = [];
+  // Match figures/<basename>.<ext> where ext is a known image type.
+  const re = /\bfigures\/[A-Za-z0-9_\-./]+\.(?:png|jpg|jpeg|svg|pdf|webp|gif)\b/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(markdown)) !== null) {
+    const p = m[0];
+    if (!found.has(p)) {
+      found.add(p);
+      ordered.push(p);
+    }
+  }
+  return ordered;
+}
+
+/**
+ * Check whether any cell source mentions writing the given figure path.
+ * Looks for common save calls (`savefig`, `to_image`, `write_image`,
+ * `Image.save`, `cv2.imwrite`, `imsave`, `plt.imsave`) referencing the
+ * figure path or its basename. Heuristic — false negatives possible if the
+ * agent constructs the path dynamically.
+ */
+export function figureHasProducerCell(
+  figurePath: string,
+  cells: TraceCell[],
+): boolean {
+  const basename = figurePath.split('/').pop() ?? figurePath;
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const saveCallRe = /\b(savefig|to_image|write_image|imsave|imwrite|Image\.save|fig\.write_image|joblib\.dump)\b/;
+  const pathRe = new RegExp(escape(figurePath) + '|' + escape(basename));
+  for (const c of cells) {
+    if (c.type !== 'code') continue;
+    if (saveCallRe.test(c.source) && pathRe.test(c.source)) return true;
+  }
+  return false;
 }
 
 /**
@@ -357,12 +437,158 @@ export interface RepairPayload {
   violations: Array<{
     file: string;
     claim: string;
-    /** v3.4.0 — added 'value_mismatch' (informational signal, not gate). */
-    issue: 'uncited' | 'unknown_citation' | 'gate_failed' | 'value_mismatch';
+    /**
+     * v3.4.0 — added 'value_mismatch' (informational).
+     * v3.4.2 — added 'figure_orphan' and 'report_thin' (informational).
+     */
+    issue: 'uncited' | 'unknown_citation' | 'gate_failed' | 'value_mismatch' | 'figure_orphan' | 'report_thin';
     detail: string;
   }>;
   /** Markdown prompt the agent reads to drive the second pass. */
   repair_prompt: string;
+}
+
+/**
+ * v3.4.2 Pillar 4 — Auto-postmortem.
+ *
+ * When the agent's 3 repair iterations did not converge to pass, this
+ * generates a structured failure summary that:
+ *   - lists the remaining failed gates and their offending cells,
+ *   - lists the unresolved uncited / unknown / value-mismatch / figure /
+ *     thinness signals,
+ *   - includes a snapshot count and the timestamps of the last few
+ *     trace snapshots (so the human reviewer can see what was tried),
+ *   - is written to `workspace/.trace/postmortem-<ISO>.json` for audit,
+ *   - is returned in the response so the agent can paste the summary
+ *     into `report.md` Limitations and `paper.md` Limitations.
+ */
+export interface PostmortemReport {
+  available: boolean;
+  reason?: string;
+  /** ISO timestamp at which the postmortem was generated. */
+  generated_at: string;
+  /** Where the file was written (workspace-relative). */
+  file: string;
+  /** Validation report that fed this postmortem. */
+  validation: ValidationReport;
+  /** Number of trace snapshots captured so far. */
+  trace_snapshot_count: number;
+  /** Last 5 snapshot timestamps (most recent last). */
+  recent_snapshot_timestamps: string[];
+  /** Markdown summary suitable for pasting into Limitations. */
+  markdown_summary: string;
+}
+
+export function buildPostmortemReport(projectId: string): PostmortemReport {
+  const report = validateProject(projectId);
+  if (!report.available) {
+    return {
+      available: false,
+      reason: report.reason,
+      generated_at: new Date().toISOString(),
+      file: '',
+      validation: report,
+      trace_snapshot_count: 0,
+      recent_snapshot_timestamps: [],
+      markdown_summary: '',
+    };
+  }
+
+  const snapshots = readAllSnapshots(projectId);
+  const recent = snapshots.slice(-5).map((s) => s.timestamp);
+  const generated_at = new Date().toISOString();
+
+  // Build the markdown summary
+  const md: string[] = [];
+  md.push(`## Postmortem (auto-generated ${generated_at})`);
+  md.push('');
+  md.push('The provenance validator did not reach `pass: true` after the maximum number of repair iterations. The following items remain:');
+  md.push('');
+  const failedGates = report.gates.filter((g) => !g.passed);
+  if (failedGates.length > 0) {
+    md.push('**Failed reproducibility gates**');
+    for (const g of failedGates) {
+      md.push(`- \`${g.name}\` — ${g.detail}${g.offenders ? ` (cells: ${g.offenders.slice(0, 5).join(', ')}${g.offenders.length > 5 ? '…' : ''})` : ''}`);
+    }
+    md.push('');
+  }
+  if (report.unknown_citations.length > 0) {
+    md.push(`**Unknown citations** (${report.unknown_citations.length})`);
+    for (const u of report.unknown_citations.slice(0, 5)) {
+      md.push(`- ${u.claim.source_file}: \`${u.claim.match}\` cites \`[cell:${u.bad_cell_id}]\` which does not exist`);
+    }
+    if (report.unknown_citations.length > 5) md.push(`- … +${report.unknown_citations.length - 5} more`);
+    md.push('');
+  }
+  if (report.uncited_claims.length > 0) {
+    md.push(`**Uncited numeric claims** (${report.uncited_claims.length})`);
+    for (const c of report.uncited_claims.slice(0, 5)) {
+      md.push(`- ${c.source_file}: \`${c.match}\``);
+    }
+    if (report.uncited_claims.length > 5) md.push(`- … +${report.uncited_claims.length - 5} more`);
+    md.push('');
+  }
+  if (report.value_mismatches.length > 0) {
+    md.push(`**Value-presence mismatches** (${report.value_mismatches.length}, informational)`);
+    for (const v of report.value_mismatches.slice(0, 5)) {
+      md.push(`- ${v.claim.source_file}: \`${v.claim.match}\` — value not found in [cell:${v.cell_id}]`);
+    }
+    if (report.value_mismatches.length > 5) md.push(`- … +${report.value_mismatches.length - 5} more`);
+    md.push('');
+  }
+  if (report.figure_orphans.length > 0) {
+    md.push(`**Figure orphans** (${report.figure_orphans.length}, informational)`);
+    for (const f of report.figure_orphans.slice(0, 5)) {
+      md.push(`- ${f.source_file}: \`${f.figure_path}\` has no producer cell`);
+    }
+    if (report.figure_orphans.length > 5) md.push(`- … +${report.figure_orphans.length - 5} more`);
+    md.push('');
+  }
+  if (report.report_thinness.length > 0) {
+    md.push('**Report thinness** (urgent)');
+    for (const t of report.report_thinness) {
+      md.push(`- ${t.source_file}: ${t.level} (${t.size_bytes} bytes, ${t.claim_count} claims)`);
+    }
+    md.push('');
+  }
+  md.push(`Trace snapshots captured: **${snapshots.length}**.`);
+  if (recent.length > 0) {
+    md.push(`Recent snapshots: ${recent.join(', ')}`);
+  }
+  md.push('');
+  md.push('See `workspace/.trace/execution-trace.jsonl` for the full audit log.');
+  const markdown_summary = md.join('\n');
+
+  // Write the structured file
+  let writtenPath = '';
+  try {
+    const traceDir = getTraceDir(projectId);
+    fs.mkdirSync(traceDir, { recursive: true });
+    const safeStamp = generated_at.replace(/[:.]/g, '-');
+    const filename = `postmortem-${safeStamp}.json`;
+    writtenPath = path.join(traceDir, filename);
+    const payload = {
+      generated_at,
+      validation: report,
+      trace_snapshot_count: snapshots.length,
+      recent_snapshot_timestamps: recent,
+      markdown_summary,
+    };
+    fs.writeFileSync(writtenPath, JSON.stringify(payload, null, 2), 'utf-8');
+  } catch (err) {
+    // Best-effort; return the report even if the write failed.
+    console.warn('[postmortem] failed to write file:', (err as Error).message);
+  }
+
+  return {
+    available: true,
+    generated_at,
+    file: writtenPath ? path.relative(getWorkspaceDir(projectId), writtenPath) : '',
+    validation: report,
+    trace_snapshot_count: snapshots.length,
+    recent_snapshot_timestamps: recent,
+    markdown_summary,
+  };
 }
 
 export function buildRepairPayload(projectId: string): RepairPayload {
@@ -417,6 +643,29 @@ export function buildRepairPayload(projectId: string): RepairPayload {
       detail: `Value ${v.expected} is not present in cell [cell:${v.cell_id}] outputs (tolerance ±${v.tolerance}). Either fix the citation to point at the cell that actually produced ${v.expected}, or correct the value in the report.`,
     });
   }
+  // v3.4.2 — figure orphans (informational).
+  for (const f of report.figure_orphans) {
+    violations.push({
+      file: f.source_file,
+      claim: f.figure_path,
+      issue: 'figure_orphan',
+      detail: f.reason + ' Add the cell that produces this figure (e.g. `plt.savefig("' + f.figure_path + '")`) or remove the reference if the figure is no longer used.',
+    });
+  }
+  // v3.4.2 — report thinness (informational, catches SCI-073-style cases).
+  for (const t of report.report_thinness) {
+    const detailMap = {
+      missing: `${t.source_file} is missing entirely. Write at least an Abstract / Methods / Results / Discussion skeleton before calling /validate.`,
+      tiny: `${t.source_file} is only ${t.size_bytes} bytes (${t.claim_count} claims). It probably lacks an Abstract / Methods / Results / Discussion. Expand the content before delivering.`,
+      no_claims: `${t.source_file} has ${t.size_bytes} bytes but 0 numeric claims. A scientific report should contain reportable metrics — verify you actually executed the analysis cells and that the values made it into the report.`,
+    } as const;
+    violations.push({
+      file: t.source_file,
+      claim: `(thinness: ${t.level})`,
+      issue: 'report_thin',
+      detail: detailMap[t.level],
+    });
+  }
 
   // Collect available cell ids — agent uses these to choose correct citations.
   const snapshot = readLatestSnapshot(projectId);
@@ -425,10 +674,12 @@ export function buildRepairPayload(projectId: string): RepairPayload {
     : [];
 
   // Repair is "needed" when there are blocking issues (uncited / unknown /
-  // gate_failed). value_mismatch alone is informational — the agent should
-  // still be told but the loop can declare pass=true if those are the only
-  // remaining items.
-  const blockingViolations = violations.filter(v => v.issue !== 'value_mismatch');
+  // gate_failed). v3.4.0/v3.4.2 informational signals (value_mismatch /
+  // figure_orphan / report_thin) are surfaced in the prompt but don't
+  // by themselves keep the agent in the loop — declaring pass=true is OK
+  // when only informational items remain.
+  const informationalIssues = new Set(['value_mismatch', 'figure_orphan', 'report_thin']);
+  const blockingViolations = violations.filter(v => !informationalIssues.has(v.issue));
   const needsRepair = blockingViolations.length > 0;
   const repair_prompt = (violations.length > 0)
     ? formatRepairPrompt(violations, availableCellIds)
@@ -462,6 +713,8 @@ function formatRepairPrompt(
   const unknown = violations.filter((v) => v.issue === 'unknown_citation');
   const gates = violations.filter((v) => v.issue === 'gate_failed');
   const valueMismatches = violations.filter((v) => v.issue === 'value_mismatch');
+  const figureOrphans = violations.filter((v) => v.issue === 'figure_orphan');
+  const thinness = violations.filter((v) => v.issue === 'report_thin');
 
   const lines: string[] = [];
   lines.push('# Provenance Repair — Apply ALL Fixes in ONE Pass');
@@ -512,6 +765,25 @@ function formatRepairPrompt(
     if (valueMismatches.length > 20) lines.push(`- … +${valueMismatches.length - 20} more`);
   }
 
+  if (figureOrphans.length > 0) {
+    lines.push('');
+    lines.push(`## Figure orphans (${figureOrphans.length}) — informational`);
+    lines.push('These figure paths are referenced from your report but no cell appears to produce them. Either add the cell that calls `plt.savefig(...)`, or remove the figure reference.');
+    for (const f of figureOrphans.slice(0, 20)) {
+      lines.push(`- ${f.file}: \`${f.claim}\``);
+    }
+    if (figureOrphans.length > 20) lines.push(`- … +${figureOrphans.length - 20} more`);
+  }
+
+  if (thinness.length > 0) {
+    lines.push('');
+    lines.push(`## Report thinness (${thinness.length}) — informational, urgent`);
+    lines.push('Your report is missing or suspiciously short. **Most repair iterations are wasted on these cases — fix this before anything else.**');
+    for (const t of thinness) {
+      lines.push(`- ${t.file}: ${t.detail}`);
+    }
+  }
+
   if (availableCellIds.length > 0) {
     lines.push('');
     lines.push('## Available cell ids (from the latest snapshot)');
@@ -538,18 +810,29 @@ export function validateProject(projectId: string): ValidationReport {
       uncited_claims: [],
       unknown_citations: [],
       value_mismatches: [],
+      figure_orphans: [],
+      report_thinness: [],
       gates: [],
       pass: false,
     };
   }
 
-  // Collect claims from report.md + paper.md if present
+  // Collect claims from report.md + paper.md if present.
+  // Also accumulate the raw text per file for figure-reference extraction and
+  // thinness detection below.
   const claims: NumericClaim[] = [];
+  const reportTexts: Array<{ file: string; text: string }> = [];
   for (const name of ['report.md', 'paper.md']) {
     const p = path.join(wsDir, name);
     if (fs.existsSync(p)) {
-      try { claims.push(...extractNumericClaims(fs.readFileSync(p, 'utf-8'), name)); }
-      catch { /* skip read errors */ }
+      try {
+        const text = fs.readFileSync(p, 'utf-8');
+        reportTexts.push({ file: name, text });
+        claims.push(...extractNumericClaims(text, name));
+      } catch { /* skip read errors */ }
+    } else {
+      // File missing — recorded as 'missing' in report_thinness below.
+      reportTexts.push({ file: name, text: '' });
     }
   }
 
@@ -587,6 +870,36 @@ export function validateProject(projectId: string): ValidationReport {
     }
   }
 
+  // v3.4.2 Pillar 2 — figure provenance (informational).
+  const figure_orphans: FigureOrphan[] = [];
+  for (const { file, text } of reportTexts) {
+    if (!text) continue;
+    for (const figPath of extractFigureReferences(text)) {
+      if (!figureHasProducerCell(figPath, snapshot.cells)) {
+        figure_orphans.push({
+          source_file: file,
+          figure_path: figPath,
+          reason: 'No cell source calls savefig / to_image / write_image / imsave with this path.',
+        });
+      }
+    }
+  }
+
+  // v3.4.2 — thinness detection (catches Round-10 SCI-073-style failures).
+  const report_thinness: ReportThinness[] = [];
+  for (const { file, text } of reportTexts) {
+    if (text.length === 0) {
+      report_thinness.push({ source_file: file, size_bytes: 0, claim_count: 0, level: 'missing' });
+    } else {
+      const claimCount = claims.filter((c) => c.source_file === file).length;
+      if (text.length < 800) {
+        report_thinness.push({ source_file: file, size_bytes: text.length, claim_count: claimCount, level: 'tiny' });
+      } else if (claimCount === 0) {
+        report_thinness.push({ source_file: file, size_bytes: text.length, claim_count: 0, level: 'no_claims' });
+      }
+    }
+  }
+
   const gates: GateResult[] = [
     checkSeedPresence(snapshot),
     checkEnvCapture(wsDir, snapshot),
@@ -600,8 +913,11 @@ export function validateProject(projectId: string): ValidationReport {
     uncited_claims: uncited,
     unknown_citations: unknown,
     value_mismatches,
+    figure_orphans,
+    report_thinness,
     gates,
-    // value_mismatches are informational; they don't block the overall pass.
+    // value_mismatches / figure_orphans / report_thinness are informational;
+    // they don't block the overall pass.
     pass: gates.every((g) => g.passed) && unknown.length === 0,
   };
 }

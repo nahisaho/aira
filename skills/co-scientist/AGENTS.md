@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.9.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.10.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.9.0
+# Co-Scientist v4.10.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -57,7 +57,7 @@ Target total runtime: **60 minutes** (complex experiments may take up to 90 minu
 - **Docstrings**: Required for all public functions.
 - **Type hints**: Recommended.
 
-## Computational Provenance (v4.9.0)
+## Computational Provenance (v4.10.0)
 
 Every numeric claim in `report.md` / `paper.md` must be **traceable back to a specific notebook cell**. Without this, the report becomes "scientific fiction" — numbers that look computed but have no auditable derivation. AIRA captures cell-level execution traces automatically and runs a validator. **The work is not complete until the validator passes.**
 
@@ -96,7 +96,7 @@ AIRA's validator (`POST /api/projects/:id/validate`) checks four gates:
 3. **`no_error_in_cited`** — every cell cited from `report.md` / `paper.md` must have empty `stderr` and no error outputs.
 4. **`citation_coverage`** — ≥80% of detected numeric claims must have a `[cell:<id>]` citation.
 
-### Mandatory second-pass repair loop (v4.9.0 — single-batch)
+### Mandatory second-pass repair loop (v4.10.0 — single-batch)
 
 **Before delivering the final response, you must:**
 
@@ -111,13 +111,39 @@ AIRA's validator (`POST /api/projects/:id/validate`) checks four gates:
    - For every **value-presence warning** row: check whether you cited the right cell — if the value (e.g., `0.83`) does not appear in the cell's stdout/output, you probably cited the wrong cell. Fix the citation or correct the value in the report.
 6. Re-call `/validate`. Cap: 3 repair iterations. If the 3rd attempt still fails, **state in `report.md` Limitations exactly which gates / claims still fail and why a repair was infeasible** — do not hide the failure or paper over it with prose.
 
-### Self-check for citation correctness (v4.9.0)
+### Self-check for citation correctness (v4.10.0)
 
 Before writing `metric = X [cell:N]`, briefly **look at cell N's last output** (visible in the `/notebook/trace` API or the AIRA UI Trace tab). If the value X (or a number that rounds to X at your stated precision) does not appear there, either:
 - You have the wrong cell id (pick the right one), or
 - The value in the report doesn't match the computation (correct the value).
 
 The validator's `value_mismatches` (v3.4.0) catches this automatically and surfaces it in the repair prompt — but catching it before writing saves a full repair iteration.
+
+### Figure provenance (v4.10.0)
+
+When you reference a figure from `report.md` / `paper.md` (e.g. `![ROC](figures/roc.png)` or `Figure 1 [cell:viz-roc]`), the validator (v3.4.2) checks whether **some cell source actually calls `plt.savefig("figures/roc.png")` / `fig.savefig(...)` / `imsave(...)` / `to_image(...)`** for that path. If no cell produces the figure file, it appears in `figure_orphans` (informational, not blocking).
+
+Practical rule: **every figure you cite must be produced by a code cell** in the notebook. Don't reference figures that exist only in the file system without a code cell that wrote them — that breaks reproducibility just as much as an uncited number does.
+
+### Time-budget guard (v4.10.0)
+
+Round 10 telemetry showed two experiments hit the time cap without producing `paper.md` at all because repair iterations consumed the budget. **Rule of thumb**:
+
+1. By the time you call `/validate` for the first time, **both `report.md` AND `paper.md` must already exist with at least an Abstract / Methods / Results / Discussion / Limitations skeleton**. They can have placeholder text — but they must exist.
+2. The validator will flag `report_thinness` (`missing` / `tiny` / `no_claims`) for files that are absent or under-developed. If you see these in the repair prompt, **stop fixing other issues until both reports have substantial content**. There's no point citing values if the document doesn't exist.
+3. If you're approaching the time cap and `paper.md` is still empty, **prioritise writing paper.md over repair iterations**. A complete paper with imperfect provenance is better than a perfect provenance log without a paper.
+
+### Auto-postmortem on 3-iteration failure (v4.10.0)
+
+If your 3rd `/validate` call still returns `pass: false`, instead of giving up silently:
+
+1. Call `POST /api/projects/:id/validate/postmortem`.
+2. The response includes a `markdown_summary` field.
+3. **Paste this summary verbatim into `report.md` Limitations and `paper.md` Limitations.** Do not edit it down — the structured failure list is the audit trail.
+4. The postmortem is also persisted to `workspace/.trace/postmortem-<ISO>.json` automatically (no action needed).
+5. Then continue to the final response, explicitly noting in chat that provenance gates failed and the postmortem was attached.
+
+The postmortem is **not** a substitute for fixing — it's what to do when fixing was not possible within budget. **Don't trigger postmortem before exhausting the 3 repair iterations.**
 
 ### Required artifacts (in addition to existing layout)
 

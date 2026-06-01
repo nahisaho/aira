@@ -6,9 +6,13 @@ import {
   extractNumericClaims,
   validateProject,
   buildRepairPayload,
+  buildPostmortemReport,
   extractClaimValue,
   valueAppearsInOutputs,
+  extractFigureReferences,
+  figureHasProducerCell,
 } from './provenance-validator.js';
+import { getTraceDir } from '../config/paths.js';
 import {
   captureSnapshot,
   resetEnvHashCacheForTesting,
@@ -267,7 +271,18 @@ describe('validateProject', () => {
         },
         {
           'requirements.txt': 'numpy\n',
-          'report.md': 'AUROC = 0.83 [cell:m].',
+          // v3.4.2: report.md and paper.md must be non-trivial so the
+          // thinness check stays quiet. Pad with descriptive text >= 800 bytes.
+          'report.md':
+            '# Report\n\n' +
+            '## Abstract\n' +
+            'We evaluate a classifier. AUROC = 0.83 [cell:m]. ' +
+            'word '.repeat(200),
+          'paper.md':
+            '# Paper\n\n' +
+            '## Methods\n' +
+            'We fit a model. AUROC = 0.83 [cell:m]. ' +
+            'word '.repeat(200),
         },
       );
 
@@ -441,6 +456,158 @@ describe('validateProject', () => {
       expect(repair.violations.some(v => v.issue === 'value_mismatch')).toBe(true);
       expect(repair.repair_prompt).toContain('Value-presence');
       expect(repair.repair_prompt).toContain('0.83');
+    });
+  });
+
+  // v3.4.2 — Pillar 2: figure provenance
+  describe('Figure provenance (v3.4.2 Pillar 2)', () => {
+    it('extractFigureReferences finds markdown image and inline mentions', () => {
+      const md = `
+        See ![ROC curve](figures/roc.png) and Figure 2 (figures/pr.png).
+        Also figures/box.svg is shown below.
+      `;
+      const refs = extractFigureReferences(md);
+      expect(refs).toContain('figures/roc.png');
+      expect(refs).toContain('figures/pr.png');
+      expect(refs).toContain('figures/box.svg');
+    });
+
+    it('extractFigureReferences deduplicates', () => {
+      const md = '![A](figures/a.png) ![B](figures/a.png) ![C](figures/a.png)';
+      expect(extractFigureReferences(md)).toEqual(['figures/a.png']);
+    });
+
+    it('figureHasProducerCell matches plt.savefig with same path', () => {
+      const cells = [
+        { id: 'viz', type: 'code', source: 'plt.savefig("figures/roc.png")',
+          exec_count: 1, outputs: [], stdout: '', stderr: '', has_error: false, has_image: false, text_output: '' },
+      ];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(true);
+    });
+
+    it('figureHasProducerCell matches by basename if path differs', () => {
+      const cells = [
+        { id: 'viz', type: 'code', source: 'fig.savefig("roc.png")',
+          exec_count: 1, outputs: [], stdout: '', stderr: '', has_error: false, has_image: false, text_output: '' },
+      ];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(true);
+    });
+
+    it('figureHasProducerCell rejects when no save call', () => {
+      const cells = [
+        { id: 'viz', type: 'code', source: 'plt.plot([1,2,3])',
+          exec_count: 1, outputs: [], stdout: '', stderr: '', has_error: false, has_image: false, text_output: '' },
+      ];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(false);
+    });
+
+    it('reports figure_orphans for unreferenced figures', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'seed', cell_type: 'code', source: 'random.seed(1)', outputs: [] },
+            { id: 'wrong-viz', cell_type: 'code', source: 'plt.savefig("figures/other.png")', outputs: [] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'requirements.txt': '',
+          'report.md': 'See Figure 1: ![ROC](figures/roc.png) and ![PR](figures/pr.png)',
+        },
+      );
+      const report = validateProject(PROJECT_ID);
+      const paths = report.figure_orphans.map(o => o.figure_path);
+      expect(paths).toContain('figures/roc.png');
+      expect(paths).toContain('figures/pr.png');
+      // figure_orphans are informational
+      expect(report.pass).toBe(true);
+    });
+
+    it('does NOT flag figures that have a producer cell', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'seed', cell_type: 'code', source: 'random.seed(1)', outputs: [] },
+            { id: 'viz', cell_type: 'code', source: 'plt.savefig("figures/roc.png")', outputs: [] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'requirements.txt': '',
+          'report.md': '![ROC](figures/roc.png)',
+        },
+      );
+      const report = validateProject(PROJECT_ID);
+      expect(report.figure_orphans).toEqual([]);
+    });
+  });
+
+  // v3.4.2 — SCI-073-style corner case defence
+  describe('Report thinness detection (v3.4.2)', () => {
+    it('flags missing report.md and paper.md', () => {
+      setupProject({
+        cells: [{ id: 'c', cell_type: 'code', source: 'x = 1', outputs: [] }],
+        metadata: {}, nbformat: 4, nbformat_minor: 5,
+      });
+      const report = validateProject(PROJECT_ID);
+      const missingFiles = report.report_thinness.filter(t => t.level === 'missing').map(t => t.source_file);
+      expect(missingFiles).toContain('report.md');
+      expect(missingFiles).toContain('paper.md');
+    });
+
+    it('flags tiny report.md', () => {
+      setupProject(
+        { cells: [{ id: 'c', cell_type: 'code', source: 'x = 1', outputs: [] }], metadata: {}, nbformat: 4, nbformat_minor: 5 },
+        { 'report.md': 'too short' },
+      );
+      const report = validateProject(PROJECT_ID);
+      expect(report.report_thinness.some(t => t.level === 'tiny' && t.source_file === 'report.md')).toBe(true);
+    });
+
+    it('flags no_claims when report is sized but has no numeric content', () => {
+      const filler = 'word '.repeat(300); // ~1500 chars but no metrics
+      setupProject(
+        { cells: [{ id: 'c', cell_type: 'code', source: 'x = 1', outputs: [] }], metadata: {}, nbformat: 4, nbformat_minor: 5 },
+        { 'report.md': `# Report\n\n${filler}` },
+      );
+      const report = validateProject(PROJECT_ID);
+      expect(report.report_thinness.some(t => t.level === 'no_claims' && t.source_file === 'report.md')).toBe(true);
+    });
+  });
+
+  // v3.4.2 — Pillar 4: postmortem
+  describe('Auto-postmortem (v3.4.2 Pillar 4)', () => {
+    it('returns available=false when no trace yet', () => {
+      const pm = buildPostmortemReport(PROJECT_ID);
+      expect(pm.available).toBe(false);
+      expect(pm.reason).toContain('No trace snapshot');
+    });
+
+    it('writes a JSON file and returns a markdown summary', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'broken', cell_type: 'code', source: 'import numpy as np\nnp.random.randn(5)', outputs: [] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        { 'report.md': 'short' },
+      );
+      const pm = buildPostmortemReport(PROJECT_ID);
+      expect(pm.available).toBe(true);
+      expect(pm.file).toMatch(/^\.trace\/postmortem-/);
+      expect(pm.markdown_summary).toContain('Postmortem');
+      expect(pm.markdown_summary).toMatch(/seed_presence|env_capture|tiny/);
+
+      // File on disk
+      const traceDir = getTraceDir(PROJECT_ID);
+      const files = fs.readdirSync(traceDir).filter(f => f.startsWith('postmortem-'));
+      expect(files.length).toBeGreaterThan(0);
+      const payload = JSON.parse(fs.readFileSync(`${traceDir}/${files[0]}`, 'utf-8'));
+      expect(payload.markdown_summary).toContain('Postmortem');
     });
   });
 

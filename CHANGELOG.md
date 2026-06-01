@@ -2,6 +2,66 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.4.2] — 2026-06-02 — Provenance Carry-overs
+
+v3.4.0 で「v3.5+ 候補」と書いた残課題 4 つをすべて消化。Round 10 で 1 件だけ全 gate 失敗した SCI-073 の corner case を構造化検出、figure 引用の出自検査、3 回 repair でも通らないケースの自動 postmortem、time-budget guard を導入。
+
+### Added — Pillar 2: Figure provenance
+
+- **`extractFigureReferences(md)`**: report.md / paper.md から `figures/<name>.<ext>` (png/jpg/jpeg/svg/pdf/webp/gif) のパスを重複排除して抽出
+- **`figureHasProducerCell(figPath, cells)`**: 各 figure path に対し、cell source に `savefig` / `to_image` / `write_image` / `imsave` / `imwrite` / `Image.save` / `fig.write_image` / `joblib.dump` のいずれかと、figure path or basename が含まれるか検査
+- `ValidationReport.figure_orphans: FigureOrphan[]` を追加(informational)
+- repair prompt に "Figure orphans" セクションを追加
+
+### Added — Pillar 4: Auto-postmortem
+
+- **新規 endpoint `POST /api/projects/:id/validate/postmortem`**
+- `buildPostmortemReport()` が以下を生成:
+  - 残った failed gates / unknown_citations / uncited_claims / value_mismatches / figure_orphans / report_thinness の構造化サマリ
+  - trace snapshot 数と直近 5 件のタイムスタンプ
+  - **markdown_summary** — agent が `report.md` Limitations / `paper.md` Limitations に貼り付ける用
+- `workspace/.trace/postmortem-<ISO>.json` に永続化
+
+### Added — Time-budget guard
+
+- backend: `ValidationReport.report_thinness: ReportThinness[]` を追加(`missing` / `tiny` (<800 bytes) / `no_claims`)
+- repair prompt の "Report thinness" セクションは **最優先で対処** と明示(urgent)
+- skill: 「first `/validate` 時点で report.md と paper.md 両方が骨格付きで存在すること」を必須化、paper.md 未生成のまま time cap を迎える経路を遮断
+
+### Added — SCI-073 corner case defence
+
+- 上記 `report_thinness` の `no_claims` レベル (report は size あるが numeric claim 0 件) — Round 10 で SCI-073 が陥った可能性のあるパターンを構造化検出
+- repair prompt 経路で agent に明示的に通知
+
+### Changed — Co-Scientist v4.9.0 → v4.10.0
+
+- AGENTS.md に 3 つの新セクション追加:
+  - "Figure provenance" — 引用した figure path には必ず producer cell が必要
+  - "Time-budget guard" — `/validate` を呼ぶ時点で paper.md は既に骨格付きで存在せよ。`report_thinness` を最優先で対処
+  - "Auto-postmortem on 3-iteration failure" — 3 回失敗時は `/validate/postmortem` → markdown_summary を Limitations に逐語貼付
+- copilot-instructions.md に凝縮版で同じ要旨
+- skill.json + 各ヘッダ version を v4.10.0 に bump
+
+### API 変更(完全後方互換)
+- `ValidationReport.figure_orphans: FigureOrphan[]` 追加
+- `ValidationReport.report_thinness: ReportThinness[]` 追加
+- `RepairPayload.violations[i].issue` ユニオンに `'figure_orphan'` / `'report_thin'` 追加
+- 新規 endpoint `POST /api/projects/:id/validate/postmortem`(冪等、副作用は `.trace/` への write のみ)
+
+### Tests
+- 新規 backend 12 ケース:
+  - `extractFigureReferences` — markdown image / 重複除去
+  - `figureHasProducerCell` — savefig 一致 / basename 一致 / save 呼び出し無し
+  - `figure_orphans` の report 反映 — orphan あり / 全 figure 解決時
+  - `report_thinness` — missing / tiny / no_claims の 3 レベル
+  - `buildPostmortemReport` — trace 未取得時 / 生成時にファイル書き出し + markdown_summary
+- **24 backend test files / 269 tests + 21 frontend tests all green**
+
+### Migration
+- 完全後方互換。新規フィールド・新規 endpoint の追加のみ。
+- skill 文書のみで agent 行動が変わる(Docker image rebuild で反映)。
+- v3.5+ で持ち越し: 大規模な改修なし、本リリースで Round 10 の残課題を完全消化。
+
 ## [v3.4.1] — 2026-06-02
 
 ### Fixed
