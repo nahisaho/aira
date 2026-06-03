@@ -7,6 +7,8 @@
 Microsoft Research AI for Science が開発し、Azure AI Foundry のモデルカタログから利用可能な科学研究特化モデル。
 SPReAD の研究計画において、これらのモデル活用を優先的に検討すること。
 
+> **AIRA 環境での利用方針** — 以下のモデル群は **知識リファレンスとしては自由に活用してよい**(仮説生成・先行研究・手法選択の根拠・Discussion での比較対象)。ただし **NatureLM / GALACTICA / BioBERT / PubMedBERT / ESM-2 / MolFormer / ChemBERTa 等の scientific LLM の "呼び出し" は AIRA 環境では不可** — MCP 未登録 + Jupyter での `from_pretrained` 直 load 禁止(validator が検知)。代わりに、論文値を引用 + classical baseline / 文献由来の式 / 小型モデルで実数値を出すこと。詳細は `co-scientist/AGENTS.md` の "NatureLM / GALACTICA in the AIRA environment (v4.13.0)" を参照。
+
 | モデル | 分野 | 用途 | 参照 |
 |--------|------|------|------|
 | [Aurora](https://ai.azure.com/explore/models/Aurora/version/4/registry/azureml) | 気象・大気科学 | 大規模大気基盤モデル。気象予測・大気汚染予測・気候影響評価 | [論文](https://www.nature.com/articles/s41586-025-08783-9) / [プロジェクト](https://www.microsoft.com/en-us/research/project/aurora-forecasting/) |
@@ -14,7 +16,7 @@ SPReAD の研究計画において、これらのモデル活用を優先的に�
 | [MatterSim](https://ai.azure.com/explore/models/MatterSim/version/1/registry/azureml) | 材料科学 | 材料シミュレーションの深層学習エミュレータ。DFT 計算の高速代替 | [ブログ](https://www.microsoft.com/en-us/research/blog/mattersim-a-deep-learning-model-for-materials-under-real-world-conditions/) |
 | [BioEmu](https://ai.azure.com/explore/models/BioEmu/version/2/registry/azureml) | 生命科学 | 生体分子エミュレータ。タンパク質ダイナミクスシミュレーション | [プロジェクト](https://www.microsoft.com/en-us/research/project/biomolecules/) |
 | [TamGen](https://www.microsoft.com/en-us/research/blog/accelerating-drug-discovery-with-tamgen-a-generative-ai-approach-to-target-aware-molecule-generation/) | 化学・創薬 | ターゲット認識型分子生成。標的タンパク質に対する候補分子の自動設計 | [ブログ](https://www.microsoft.com/en-us/research/blog/accelerating-drug-discovery-with-tamgen-a-generative-ai-approach-to-target-aware-molecule-generation/) |
-| [NatureLM](https://arxiv.org/abs/2502.07527) | 分野横断 | 科学基盤モデル（1B/8B/46.7B パラメータ）。テキスト指示による低分子・タンパク質・RNA・材料の生成・最適化、およびクロスドメイン設計（タンパク質→分子、タンパク質→RNA 等） | [arXiv](https://arxiv.org/abs/2502.07527) |
+| [NatureLM](https://arxiv.org/abs/2502.07527) | 分野横断 | 科学基盤モデル（1B/8B/46.7B パラメータ）。テキスト指示による低分子・タンパク質・RNA・材料の生成・最適化、およびクロスドメイン設計（タンパク質→分子、タンパク質→RNA 等） | [arXiv](https://arxiv.org/abs/2502.07527) ⚠️ **AIRA では呼び出し不可 — 知識参照のみ**(arXiv:2502.07527 の公表値・手法を Methods/Discussion で引用、ローカル計算は classical baseline) |
 | [Skala (DFT)](https://www.microsoft.com/en-us/research/project/dft/use-skala/) | 計算化学・材料 | 深層学習ベースの交換相関汎関数。DFT 計算精度を化学的精度（~1 kcal/mol）に引き上げ、分子・材料設計の予測精度を飛躍的に向上 | [論文](https://aka.ms/SkalaDFT) / [プロジェクト](https://www.microsoft.com/en-us/research/project/dft/) |
 | [AI2BMD](https://www.microsoft.com/en-us/research/blog/from-static-prediction-to-dynamic-characterization-ai2bmd-advances-protein-dynamics-with-ab-initio-accuracy/) | 生命科学 | ab initio 精度の生体分子動力学シミュレーション。タンパク質の動的挙動を第一原理精度で高速計算 | [ブログ](https://www.microsoft.com/en-us/research/blog/from-static-prediction-to-dynamic-characterization-ai2bmd-advances-protein-dynamics-with-ab-initio-accuracy/) |
 
@@ -47,7 +49,7 @@ SPReAD の研究計画において、これらのモデル活用を優先的に�
 |------------------|--------|
 | [**MatterGen**](https://ai.azure.com/explore/models/MatterGen/version/1/registry/azureml-msr) | 目的の物性（体積弾性率・磁性・電子特性等）を条件として新規安定材料を生成。従来のスクリーニングを超える探索が可能 |
 | [**MatterSim**](https://ai.azure.com/explore/models/MatterSim/version/1/registry/azureml) | DFT 計算のエミュレーションにより材料特性シミュレーションを桁違いに高速化。MatterGen と組み合わせて生成→検証のフライホイールを構築 |
-| [**NatureLM**](https://arxiv.org/abs/2502.07527) | テキスト指示による材料構造の生成・最適化。クロスドメインで分子↔材料の統合設計が可能 |
+| [**NatureLM**](https://arxiv.org/abs/2502.07527) | テキスト指示による材料構造の生成・最適化。クロスドメインで分子↔材料の統合設計が可能 ⚠️ **AIRA では呼び出し不可 — 知識参照のみ** |
 | [**Skala (DFT)**](https://www.microsoft.com/en-us/research/project/dft/use-skala/) | 深層学習 XC 汎関数により、材料の電子構造計算を化学的精度で実行。従来の DFT 近似の精度限界を突破 |
 
 ## 生命科学・医学
@@ -64,7 +66,7 @@ SPReAD の研究計画において、これらのモデル活用を優先的に�
 |------------------|--------|
 | [**BioEmu**](https://ai.azure.com/explore/models/BioEmu/version/2/registry/azureml) | タンパク質の動的コンフォメーション変化をシミュレーション。従来の分子動力学計算を大幅に加速 |
 | [**AI2BMD**](https://www.microsoft.com/en-us/research/blog/from-static-prediction-to-dynamic-characterization-ai2bmd-advances-protein-dynamics-with-ab-initio-accuracy/) | ab initio 精度のタンパク質動力学シミュレーション。BioEmu と相補的に、より高精度な動的解析が可能 |
-| [**NatureLM**](https://arxiv.org/abs/2502.07527) | テキスト指示によるタンパク質・RNA の生成・最適化。タンパク質→分子やタンパク質→RNA のクロスドメイン設計にも対応 |
+| [**NatureLM**](https://arxiv.org/abs/2502.07527) | テキスト指示によるタンパク質・RNA の生成・最適化。タンパク質→分子やタンパク質→RNA のクロスドメイン設計にも対応 ⚠️ **AIRA では呼び出し不可 — 知識参照のみ** |
 | [Azure OpenAI (GPT-4o)](https://learn.microsoft.com/en-us/azure/ai-services/openai/) | 生物医学文献のメタ解析・構造化データ抽出 |
 | [Azure AI Document Intelligence](https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/) | 臨床論文PDF・実験レポートからのデータ自動抽出 |
 
@@ -146,7 +148,7 @@ SPReAD の研究計画において、これらのモデル活用を優先的に�
 | AI Foundry モデル | 活用例 |
 |------------------|--------|
 | [**TamGen**](https://www.microsoft.com/en-us/research/blog/accelerating-drug-discovery-with-tamgen-a-generative-ai-approach-to-target-aware-molecule-generation/) | 標的タンパク質の3D構造を入力として、結合親和性の高い候補分子を自動生成。創薬リード化合物の探索を加速 |
-| [**NatureLM**](https://arxiv.org/abs/2502.07527) | テキスト指示による低分子の生成・ADMET 最適化・合成経路提案。タンパク質標的からの分子設計もクロスドメインで実行可能 |
+| [**NatureLM**](https://arxiv.org/abs/2502.07527) | テキスト指示による低分子の生成・ADMET 最適化・合成経路提案。タンパク質標的からの分子設計もクロスドメインで実行可能 ⚠️ **AIRA では呼び出し不可 — 知識参照のみ** |
 | [**MatterSim**](https://ai.azure.com/explore/models/MatterSim/version/1/registry/azureml) | 分子間相互作用エネルギーの高速推定 |
 | [**Skala (DFT)**](https://www.microsoft.com/en-us/research/project/dft/use-skala/) | 深層学習 XC 汎関数による高精度 DFT 計算。反応エネルギー・分子安定性の予測精度を化学的精度まで向上。[DFT REAP プログラム](https://aka.ms/DFT-REAP)で産学連携も可能 |
 | [Azure OpenAI (GPT-4o)](https://learn.microsoft.com/en-us/azure/ai-services/openai/) | 化学文献の構造化マイニング・反応条件の抽出

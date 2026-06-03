@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.12.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.13.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.12.0
+# Co-Scientist v4.13.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -289,40 +289,55 @@ Command: `tooluniverse-smcp --compact-mode` (stdio transport, compact mode loads
 
 ToolUniverse exposes **database query APIs** (PubMed search, gene lookup, compound retrieval, …). It does **NOT** expose model inference. Tools named `nature_lm`, `galactica`, `pubmedbert_inference`, `esm2_predict`, `alphafold_predict`, or anything that "runs a language model" **are NOT inside ToolUniverse** — do not look for them there. Probing `tooluniverse_*` tools for these will always fail.
 
-### NatureLM / GALACTICA in the AIRA environment (v4.12.0)
+### NatureLM / GALACTICA in the AIRA environment (v4.13.0)
 
-**Scientific LLMs (NatureLM, GALACTICA, BioBERT, PubMedBERT, ESM-2, etc.) are NOT available in this environment.** They are not registered in ToolUniverse, no dedicated MCP server is provided, and HuggingFace direct-load is not supported. **Do NOT attempt to invoke them via any path** — not `tooluniverse_*`, not `mcp__naturelm__*` / `mcp__galactica__*`, not `transformers.AutoModel.from_pretrained(...)` in a Jupyter cell. Each failed attempt burns repair-iteration budget.
+Scientific LLMs (NatureLM, GALACTICA, BioBERT, PubMedBERT, ESM-2, MolFormer, ChemBERTa, ESMFold, …) split cleanly into two questions: **"can I invoke them?"** (no) and **"can I use their published knowledge?"** (yes — and you should). Conflating the two leaves you over-cautious in literature review and hypothesis generation, where these models' insights are scientifically valuable.
 
-**Required alternative — literature-value verification**:
+#### What you CAN — and SHOULD — do with their knowledge
 
-If the user's request mentions one of these models (e.g. "use NatureLM to score the binding", "use GALACTICA to generate the equation"), proceed as follows:
+These models are first-class scientific references. Use them freely in:
 
-1. Search the literature with the available ToolUniverse tools (PubMed / arXiv / EuropePMC) for **published values** that the model would have produced. Cite the paper.
-2. Use a feasible local computation (classical baseline, smaller statistical model, formula from the literature) as the actual numeric pipeline.
-3. **Record both the attempt and the fallback explicitly** in `report.md` Methods AND `report.md` Results / `paper.md` Methods AND `paper.md` Results — see the template below. This is mandatory; the rubric checks for it.
+- **Hypothesis generation**: seed hypotheses from their published findings (e.g. "NatureLM (Liang et al. 2025, arXiv:2502.07527) showed cross-domain transfer from protein→molecule; we hypothesise the same approach will work for our RNA→protein task because …")
+- **Related Work / Background**: cite them as prior art with concrete results and methodology summaries
+- **Methodology selection**: justify your own algorithm by analogy ("we adopt the masked-LM objective used by GALACTICA (Taylor et al. 2022) because …")
+- **Discussion**: compare your classical-baseline numbers against their published metrics, even if you cannot re-run the model yourself
+- **Limitations**: explicitly state "the gold-standard would be to evaluate with NatureLM, which is unavailable in this environment; we approximate with a classical baseline"
+- **Reference catalogues**: tables of available models in `spread1000-assistant` (`ai-patterns-by-domain.md`, `azure-research-services.md`) are knowledge sources — read them when planning, even though the listed models are not callable here
 
-**Required Methods/Results template** (paste into both `report.md` and `paper.md`):
+When you cite, prefer the original paper (arXiv id / DOI / PMID). Quote concrete published numbers when relevant.
+
+#### What you CANNOT do — invocation is structurally and operationally banned
+
+- **`tooluniverse_*` for these models** — not in the registry, will always fail
+- **`mcp__naturelm__*` / `mcp__galactica__*` / similar** — no dedicated MCP server is configured in `.mcp.json`
+- **`from transformers import AutoModel; AutoModel.from_pretrained("facebook/galactica-*" | "microsoft/NatureLM-*" | "facebook/esm2_*" | "microsoft/BiomedNLP-*" | "allenai/scibert*" | "dmis-lab/biobert*" | "ibm/MoLFormer*" | "seyonec/ChemBERTa*")` in a Jupyter cell** — downloads gigabytes, times out, blocks the pipeline. The validator (v3.4.6) scans code cells for these patterns and flags them as `model_misuse`.
+- **Fabricating numeric outputs as if the model had run** — this is scientific misconduct, never acceptable.
+
+#### Required alternative when the request needs the model's output value
+
+If the user's request needs a numeric quantity that NatureLM/GALACTICA would have produced (e.g. "use NatureLM to score this binding"), use **literature-value verification**:
+
+1. Search ToolUniverse (PubMed / arXiv / EuropePMC) for **published values** the model has produced for similar systems. Cite the paper.
+2. Compute your own pipeline value with a **classical baseline / smaller statistical model / literature formula**.
+3. Record both the attempt and the fallback in `report.md` AND `paper.md`, both in **Methods** and in **Results**, using the template below. The rubric checks both files.
+
+**Methods/Results template** (paste into both `report.md` and `paper.md`):
 
 ```markdown
 ### Tool availability
 
-We attempted to use <MODEL_NAME> for <task>. <MODEL_NAME> is not registered
-in this environment's ToolUniverse, no dedicated MCP server is available,
-and HuggingFace direct-load is not supported in the runtime. We therefore
-adopted **literature-value verification**: for <task>, we cite the value
-of <metric> = <X> from <citation, e.g. Smith et al. 2024, [pmid:12345678]>
-and use <classical baseline / formula / smaller model> for our own
-computation. See Limitations for the impact on generalisability.
+We considered using <MODEL_NAME> for <task>. <MODEL_NAME> is not callable
+in this environment (no MCP server, HuggingFace direct-load disallowed).
+We adopted **literature-value verification**: for <task>, we cite
+<metric> = <X> from <citation, e.g. Smith et al. 2024, [pmid:12345678]>
+as the reference value the model would be expected to produce, and use
+<classical baseline / formula / smaller model> for our own numerical
+computation. The published knowledge of <MODEL_NAME>'s methodology
+informs our approach (see Methods §<N>). See Limitations for impact
+on generalisability.
 ```
 
 `<MODEL_NAME>` examples: NatureLM, GALACTICA, BioBERT, PubMedBERT, ESM-2, ESMFold, MolFormer, ChemBERTa.
-
-**Forbidden patterns**:
-- Writing "tools not registered in ToolUniverse" and stopping there — must include the literature-value fallback.
-- Invoking `tooluniverse_*` for model inference (will always fail; wastes time).
-- Probing `mcp__naturelm__*` / `mcp__galactica__*` (not configured).
-- `from transformers import AutoModel; AutoModel.from_pretrained("facebook/galactica-*")` in a Jupyter cell (downloads gigabytes, fails or times out).
-- Inventing numeric outputs as if the model had run. **Never fabricate.**
 
 AlphaFold is handled separately by the `co-scientist-alphafold-structures` sub-skill — do not load AlphaFold weights yourself.
 

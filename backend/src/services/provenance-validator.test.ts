@@ -13,6 +13,8 @@ import {
   extractNumericCandidates,
   extractFigureReferences,
   figureHasProducerCell,
+  detectModelMisuse,
+  UNAVAILABLE_SCIENTIFIC_LLM_PREFIXES,
 } from './provenance-validator.js';
 import { getTraceDir } from '../config/paths.js';
 import {
@@ -559,6 +561,126 @@ describe('validateProject', () => {
         const cell = { stdout: 'final coef = .83\n', text_output: '' };
         expect(valueAppearsInCellOutputs(0.83, 2, cell)).toBe(true);
       });
+    });
+
+    // v3.4.6 — Pillar C: model misuse detection (unavailable scientific LLMs)
+    describe('detectModelMisuse (v3.4.6 Pillar C)', () => {
+      const makeCell = (
+        id: string,
+        type: 'code' | 'markdown',
+        source: string,
+      ): import('./notebook-trace.js').TraceCell => ({
+        id,
+        type,
+        exec_count: null,
+        source,
+        stdout: '',
+        stderr: '',
+        has_error: false,
+        has_image: false,
+        text_output: '',
+      });
+      const code = (id: string, source: string) => makeCell(id, 'code', source);
+      const markdown = (id: string, source: string) => makeCell(id, 'markdown', source);
+
+      it('flags a GALACTICA from_pretrained call', () => {
+        const out = detectModelMisuse([
+          code('c1', 'from transformers import AutoModelForCausalLM\nm = AutoModelForCausalLM.from_pretrained("facebook/galactica-1.3b")'),
+        ]);
+        expect(out).toHaveLength(1);
+        expect(out[0]!.cell_id).toBe('c1');
+        expect(out[0]!.model_id).toBe('facebook/galactica-1.3b');
+        expect(out[0]!.loader).toBe('from_pretrained');
+      });
+
+      it('flags a NatureLM from_pretrained call with single quotes', () => {
+        const out = detectModelMisuse([
+          code('c2', "tok = AutoTokenizer.from_pretrained('microsoft/NatureLM-8x7B-Inst')"),
+        ]);
+        expect(out).toHaveLength(1);
+        expect(out[0]!.model_id).toBe('microsoft/NatureLM-8x7B-Inst');
+      });
+
+      it('flags multiple banned models across multiple cells', () => {
+        const out = detectModelMisuse([
+          code('c1', 'AutoModel.from_pretrained("facebook/esm2_t33_650M_UR50D")'),
+          code('c2', 'AutoModel.from_pretrained("dmis-lab/biobert-v1.1")'),
+          code('c3', 'x = 1'), // clean cell
+        ]);
+        expect(out).toHaveLength(2);
+        expect(out.map(m => m.cell_id).sort()).toEqual(['c1', 'c2']);
+      });
+
+      it('deduplicates within a single cell that loads the same model twice', () => {
+        const out = detectModelMisuse([
+          code('c1', 'm = AutoModel.from_pretrained("facebook/galactica-125m")\nm2 = AutoModel.from_pretrained("facebook/galactica-125m")'),
+        ]);
+        expect(out).toHaveLength(1);
+      });
+
+      it('does NOT flag markdown cells that merely mention the model name', () => {
+        // Related Work / Discussion content must NOT trigger the warning.
+        const out = detectModelMisuse([
+          markdown('c1', '## Related Work\nNatureLM (arXiv:2502.07527) demonstrates from_pretrained("microsoft/NatureLM-8B-Inst") style usage in their reference implementation.'),
+        ]);
+        expect(out).toHaveLength(0);
+      });
+
+      it('does NOT flag code cells that mention the model in a comment without loading it', () => {
+        const out = detectModelMisuse([
+          code('c1', '# We considered facebook/galactica-1.3b but use sklearn baseline instead\nfrom sklearn.linear_model import LogisticRegression'),
+        ]);
+        expect(out).toHaveLength(0);
+      });
+
+      it('does NOT flag a sibling-namespace model load (e.g. unrelated facebook/* model)', () => {
+        const out = detectModelMisuse([
+          code('c1', 'AutoModel.from_pretrained("facebook/bart-large")'),
+        ]);
+        expect(out).toHaveLength(0);
+      });
+
+      it('covers all documented prefixes', () => {
+        // Sanity check the export — adding a prefix without testing should not slip through
+        expect(UNAVAILABLE_SCIENTIFIC_LLM_PREFIXES.length).toBeGreaterThanOrEqual(8);
+        // Smoke test each prefix triggers a match
+        for (const prefix of UNAVAILABLE_SCIENTIFIC_LLM_PREFIXES) {
+          const out = detectModelMisuse([
+            code('c', `AutoModel.from_pretrained("${prefix}example")`),
+          ]);
+          expect(out, `prefix ${prefix} should be detected`).toHaveLength(1);
+        }
+      });
+    });
+
+    // v3.4.6 — Pillar C: model_misuse surfaces in repair prompt
+    it('surfaces model_misuse in the repair prompt with the STRONG warning header', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'seed', cell_type: 'code', source: 'import numpy as np\nnp.random.seed(0)', outputs: [] },
+            { id: 'env', cell_type: 'code', source: '!pip freeze > requirements.txt', outputs: [] },
+            {
+              id: 'bad-load',
+              cell_type: 'code',
+              source: 'from transformers import AutoModelForCausalLM\nm = AutoModelForCausalLM.from_pretrained("facebook/galactica-1.3b")',
+              outputs: [],
+            },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        { 'report.md': '# Report\n\nNo numeric claims here, but a clean structure.\n' },
+      );
+      const payload = buildRepairPayload(PROJECT_ID);
+      expect(payload.available).toBe(true);
+      const misuse = payload.violations!.filter(v => v.issue === 'model_misuse');
+      expect(misuse).toHaveLength(1);
+      expect(misuse[0]!.detail).toContain('not callable in the AIRA environment');
+      expect(misuse[0]!.detail).toContain('literature-value verification');
+      // model_misuse is informational — alone should not force a repair iteration
+      expect(payload.needs_repair).toBe(false);
+      expect(payload.repair_prompt).toContain('Unavailable scientific LLM loads');
+      expect(payload.repair_prompt).toContain('STRONG WARNING');
     });
 
     it('repair prompt surfaces value mismatches as informational', () => {
