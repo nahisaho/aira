@@ -415,27 +415,49 @@ export function valueAppearsInOutputs(
 }
 
 /**
- * v3.4.4 Pillar B — extract numeric candidates from a text fragment, with
- * format normalisation that catches common variants the agent might use:
- *   - "0.8316"   → 0.8316
- *   - "83.16%"   → 83.16 AND 0.8316   (also try the /100 interpretation)
- *   - "8.316e-1" → 0.8316             (scientific notation)
- *   - "8316e-4"  → 0.8316
+ * v3.4.4 Pillar B / v3.4.5 — extract numeric candidates from a text fragment,
+ * with format normalisation that catches common variants the agent might use:
+ *   - "0.8316"      → 0.8316
+ *   - ".83"         → 0.83                   (leading-dot, v3.4.5)
+ *   - "83.16%"      → 83.16 AND 0.8316       (also try the /100 interpretation)
+ *   - "8.316e-1"    → 0.8316                 (scientific notation)
+ *   - "1,234"       → 1234                   (thousand separators, v3.4.5)
+ *   - "1,234,567.5" → 1234567.5              (multi-group thousand separators)
  *
- * Round 11 telemetry showed agents would frequently write `0.83` in their
- * reports while cells printed `83.0%` or `8.3e-1`; these are semantically
- * the same value but the v3.4.0 numeric regex missed the equivalence.
+ * Round 11 telemetry showed agents would frequently write `0.83` in reports
+ * while cells printed `83.0%` or `8.3e-1`; v3.4.4 added %/exp. Round 12
+ * telemetry then surfaced uncovered cases: dataset sizes printed with comma
+ * separators (`n=1,234`) and leading-dot decimals (`.83` from numpy stringify).
  */
 export function extractNumericCandidates(text: string): number[] {
   const out: number[] = [];
-  // Decimal / integer
-  const decRe = /-?\d+(?:\.\d+)?/g;
+  let working = text;
+  // Thousand-separated numbers first, then mask the match so the plain regex
+  // below doesn't re-emit each `\d{1,3}` group as a separate candidate.
+  const commaRe = /-?\d{1,3}(?:,\d{3})+(?:\.\d+)?/g;
   let m: RegExpExecArray | null;
-  while ((m = decRe.exec(text)) !== null) {
+  while ((m = commaRe.exec(text)) !== null) {
+    const raw = m[0].replace(/,/g, '');
+    const v = parseFloat(raw);
+    if (Number.isFinite(v)) {
+      out.push(v);
+      // %-variant
+      const tail = text.slice(m.index + m[0].length, m.index + m[0].length + 2);
+      if (/^\s*%/.test(tail)) out.push(v / 100);
+    }
+    // Mask the matched span in `working` so decRe doesn't re-scan it.
+    working =
+      working.slice(0, m.index) +
+      ' '.repeat(m[0].length) +
+      working.slice(m.index + m[0].length);
+  }
+  // Decimal / integer (including leading-dot like ".83")
+  const decRe = /-?(?:\d+(?:\.\d+)?|\.\d+)/g;
+  while ((m = decRe.exec(working)) !== null) {
     const v = parseFloat(m[0]);
     if (Number.isFinite(v)) out.push(v);
     // Percentage variant: if the next non-space char is '%', also push /100
-    const tail = text.slice(m.index + m[0].length, m.index + m[0].length + 2);
+    const tail = working.slice(m.index + m[0].length, m.index + m[0].length + 2);
     if (/^\s*%/.test(tail)) out.push(v / 100);
   }
   // Scientific notation — JS parseFloat handles "8.316e-1" natively but the

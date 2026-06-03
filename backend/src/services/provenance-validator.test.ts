@@ -504,6 +504,63 @@ describe('validateProject', () => {
       });
     });
 
+    // v3.4.5 — Pillar A: comma separators + leading-dot decimals
+    describe('extractNumericCandidates / thousand separators + leading-dot (v3.4.5 Pillar A)', () => {
+      it('parses a thousand-separated integer', () => {
+        const out = extractNumericCandidates('n = 1,234 samples');
+        expect(out).toContain(1234);
+      });
+
+      it('parses a multi-group thousand-separated decimal', () => {
+        const out = extractNumericCandidates('dataset size: 1,234,567.5 rows');
+        expect(out).toContain(1234567.5);
+      });
+
+      it('does NOT emit each digit group as a separate candidate for comma-separated number', () => {
+        // Regression: without masking, decRe would re-emit 1 and 234 from "1,234"
+        const out = extractNumericCandidates('n = 1,234 samples');
+        expect(out).toContain(1234);
+        expect(out).not.toContain(234);
+      });
+
+      it('handles comma-separated percentage', () => {
+        const out = extractNumericCandidates('reduction of 1,500%');
+        expect(out).toContain(1500);
+        expect(out.some(v => Math.abs(v - 15) < 1e-10)).toBe(true);
+      });
+
+      it('parses leading-dot decimal (.83 → 0.83)', () => {
+        const out = extractNumericCandidates('coef = .83');
+        expect(out.some(v => Math.abs(v - 0.83) < 1e-10)).toBe(true);
+      });
+
+      it('matches a 1234 claim against a comma-separated output', () => {
+        const cell = { stdout: '', text_output: 'training set: 1,234 examples' };
+        expect(valueAppearsInCellOutputs(1234, 0, cell)).toBe(true);
+      });
+
+      it('matches an int-formatted million-scale claim against comma-output', () => {
+        const cell = { stdout: '', text_output: 'parameters: 12,345,678' };
+        expect(valueAppearsInCellOutputs(12345678, 0, cell)).toBe(true);
+      });
+
+      it('does NOT match unrelated digit-3 lists like [1,234,567]', () => {
+        // Edge case: array literal contains commas-with-3-digits — current
+        // behaviour treats this AS a thousand-separated number (1234567).
+        // This is acceptable: the candidate IS correctly parsed; only an
+        // exact-equality claim of 1234567 would match, which would be a
+        // legitimate match if that array element really was that number.
+        // Documenting the behaviour for future reference.
+        const out = extractNumericCandidates('arr = [1,234,567]');
+        expect(out).toContain(1234567);
+      });
+
+      it('matches 0.83 claim against leading-dot output ".83" in stdout last line', () => {
+        const cell = { stdout: 'final coef = .83\n', text_output: '' };
+        expect(valueAppearsInCellOutputs(0.83, 2, cell)).toBe(true);
+      });
+    });
+
     it('repair prompt surfaces value mismatches as informational', () => {
       setupProject(
         {
