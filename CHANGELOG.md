@@ -2,6 +2,46 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.4.4] — 2026-05-29 — Value Match Precision
+
+Round 11 (v3.4.3) telemetry showed 100% gate pass / 97.6% citation coverage を達成した一方で、informational な **`value_mismatches` が 88% の実験で発生(平均 20.1件/実験)** という新しい問題が表面化した。根本原因は false positive — cell 中間 `print()` との誤一致、`%` ↔ 小数表記差、指数表記、再実行値ドリフト。本リリースは検出を **cell の最終出力位置に絞り、表記を正規化** することで、警告の信号性を高める。
+
+### Changed — Pillar A: Last-output bias
+
+- **`valueAppearsInCellOutputs(claimedValue, precision, cell)` を新規追加** し `validateProject()` の value-match 経路を切替:
+  - **Priority 1**: `text_output` (Jupyter の `execute_result` + `display_data` を結合した値) を最優先で照合
+  - **Priority 2**: `stdout` の **最終非空行のみ** を照合
+  - **意図的に Priority 3 を持たない** — stdout 全文走査(従来挙動)を廃止し、cell 中間 `print()` との誤一致を構造的に排除
+- これにより `print(0.50); print(0.60); print(0.83)` のような cell に対し、レポートが `AUROC=0.50 [cell:X]` と書いていれば(従来は通っていた)正しく不一致が検出される。逆に `AUROC=0.83 [cell:X]` であれば通過する。
+
+### Changed — Pillar B: Format normalisation
+
+- **`extractNumericCandidates(text)` を新規 export** し `valueAppearsInOutputs` を delegate に refactor:
+  - 通常小数(`0.83`)に加え、直後が `%` であれば `value / 100` も候補化 (`83.0%` → 83 と 0.83 の両方)
+  - 指数表記(`8.316e-1`)を独立に抽出
+- これにより report 側が `0.83` と書いていても、cell 出力が `83.0%` / `8.3e-1` / `0.8316` のいずれでも tolerance 内で一致する。
+- backward-compatible: 既存の `valueAppearsInOutputs(value, precision, text)` 公開 API は維持。
+
+### Skill — Co-Scientist v4.10.0 → v4.11.0 (Pillar C)
+
+- 「Self-check for citation correctness」を v4.11.0 に更新:
+  - validator が **`text_output` と stdout 最終行のみ** を見ることを明示。中間 `print()` の値を引用する場合は cell を分割するか、最終 print に持ってくるよう指示。
+  - **format equivalence** (% / 指数) が validator 側で自動処理されることを明示。
+  - `value_mismatches` は **informational であり repair iteration を消費しない**(blocking gate / uncited claims / unknown citations を優先)— 1 回の repair で残った場合は受容 + Limitations 記述、を明文化。
+- top-level version header と `copilot-instructions.md` を v4.11.0 にバンプ。
+
+### Tests
+
+- `extractNumericCandidates` の decimal / `%` 二系統 / 指数 を網羅(3 ケース)
+- `valueAppearsInCellOutputs` の text_output 優先 / stdout 最終行マッチ / **中間 stdout 値の非マッチ(回帰防止の核)** / text_output が stdout を上書きする priority / 末尾空白行スキップ(計 5 ケース)
+- `%` 正規化の end-to-end(`text_output: "83.0%"` で `AUROC=0.83` が一致)(2 ケース)
+- 全 54 tests グリーン。
+
+### Notes
+
+- v3.4.0 で導入された `value_mismatches` の **意味は変わっていない**(precision-aware tolerance + 1e-10 FP epsilon)。本リリースは「どこを見るか」と「何を等価とみなすか」の改善のみで、レポート構造 (`ValidationReport`) は不変。
+- Round 12 (v3.4.4) で `value_mismatches` 発生率が大幅に下がっていれば本変更の効果が確認できる想定。
+
 ## [v3.4.3] — 2026-06-02
 
 ### Fixed

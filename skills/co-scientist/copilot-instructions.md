@@ -1,4 +1,4 @@
-# Co-Scientist — Copilot Instructions (v4.10.0)
+# Co-Scientist — Copilot Instructions (v4.11.0)
 
 ## Identity
 

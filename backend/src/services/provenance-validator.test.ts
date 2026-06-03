@@ -9,6 +9,8 @@ import {
   buildPostmortemReport,
   extractClaimValue,
   valueAppearsInOutputs,
+  valueAppearsInCellOutputs,
+  extractNumericCandidates,
   extractFigureReferences,
   figureHasProducerCell,
 } from './provenance-validator.js';
@@ -431,6 +433,75 @@ describe('validateProject', () => {
       );
       const report = validateProject(PROJECT_ID);
       expect(report.value_mismatches.length).toBe(0);
+    });
+
+    // v3.4.4 — Pillar A: last-output bias
+    describe('valueAppearsInCellOutputs (v3.4.4 Pillar A)', () => {
+      it('matches values found in text_output (execute_result)', () => {
+        const cell = { stdout: '', text_output: '0.8316' };
+        expect(valueAppearsInCellOutputs(0.83, 2, cell)).toBe(true);
+      });
+
+      it('matches values in the last stdout line', () => {
+        const cell = { stdout: 'iter 1\niter 2\nfinal: 0.83\n', text_output: '' };
+        expect(valueAppearsInCellOutputs(0.83, 2, cell)).toBe(true);
+      });
+
+      it('does NOT match intermediate stdout values when last line differs', () => {
+        // Round 11 false positive: cell prints intermediate values 0.50/0.60/...
+        // and a final 0.92. A claim of 0.83 should NOT match 0.50 anymore.
+        const cell = {
+          stdout: 'epoch 1: 0.50\nepoch 2: 0.60\nepoch 3: 0.70\nfinal: 0.92\n',
+          text_output: '',
+        };
+        expect(valueAppearsInCellOutputs(0.83, 2, cell)).toBe(false);
+        // But the actual final value DOES match
+        expect(valueAppearsInCellOutputs(0.92, 2, cell)).toBe(true);
+      });
+
+      it('checks text_output before stdout (execute_result takes priority)', () => {
+        // stdout has 0.50 anywhere, text_output has 0.83 — should match 0.83
+        const cell = {
+          stdout: 'progress: 0.50\nstep: 0.60\n',
+          text_output: '0.8316',
+        };
+        expect(valueAppearsInCellOutputs(0.83, 2, cell)).toBe(true);
+      });
+
+      it('skips trailing blank lines when finding last stdout line', () => {
+        const cell = { stdout: 'final: 0.83\n\n\n', text_output: '' };
+        expect(valueAppearsInCellOutputs(0.83, 2, cell)).toBe(true);
+      });
+    });
+
+    // v3.4.4 — Pillar B: format normalisation
+    describe('extractNumericCandidates / percentage + scientific notation (v3.4.4 Pillar B)', () => {
+      it('returns plain numbers', () => {
+        const out = extractNumericCandidates('AUROC was 0.83 on test');
+        expect(out).toContain(0.83);
+      });
+
+      it('emits BOTH percentage and divided-by-100 variants', () => {
+        const out = extractNumericCandidates('Accuracy reached 83.0% on validation');
+        expect(out).toContain(83);
+        // 0.83 (not exactly equal due to FP; use closeTo)
+        expect(out.some(v => Math.abs(v - 0.83) < 1e-10)).toBe(true);
+      });
+
+      it('parses scientific notation', () => {
+        const out = extractNumericCandidates('Coefficient = 8.316e-1');
+        expect(out.some(v => Math.abs(v - 0.8316) < 1e-10)).toBe(true);
+      });
+
+      it('matches a 0.83 claim against an 83% output (cell-aware)', () => {
+        const cell = { stdout: '', text_output: 'accuracy: 83.0%' };
+        expect(valueAppearsInCellOutputs(0.83, 2, cell)).toBe(true);
+      });
+
+      it('matches a 0.0083 claim against a 0.83% output', () => {
+        const cell = { stdout: '', text_output: 'rate: 0.83%' };
+        expect(valueAppearsInCellOutputs(0.0083, 4, cell)).toBe(true);
+      });
     });
 
     it('repair prompt surfaces value mismatches as informational', () => {

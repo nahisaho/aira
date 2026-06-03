@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.10.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.11.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.10.0
+# Co-Scientist v4.11.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -111,13 +111,22 @@ AIRA's validator (`POST /api/projects/:id/validate`) checks four gates:
    - For every **value-presence warning** row: check whether you cited the right cell — if the value (e.g., `0.83`) does not appear in the cell's stdout/output, you probably cited the wrong cell. Fix the citation or correct the value in the report.
 6. Re-call `/validate`. Cap: 3 repair iterations. If the 3rd attempt still fails, **state in `report.md` Limitations exactly which gates / claims still fail and why a repair was infeasible** — do not hide the failure or paper over it with prose.
 
-### Self-check for citation correctness (v4.10.0)
+### Self-check for citation correctness (v4.11.0)
 
-Before writing `metric = X [cell:N]`, briefly **look at cell N's last output** (visible in the `/notebook/trace` API or the AIRA UI Trace tab). If the value X (or a number that rounds to X at your stated precision) does not appear there, either:
-- You have the wrong cell id (pick the right one), or
+Before writing `metric = X [cell:N]`, briefly **look at cell N's last output** (visible in the `/notebook/trace` API or the AIRA UI Trace tab). The validator's `value_mismatches` check (v3.4.0, refined in v3.4.4) examines only:
+
+1. **`execute_result` / `display_data`** (the cell's "return value" — what shows after the prompt)
+2. **The LAST line of `stdout`** (typically the final `print()` of a metric)
+
+So if a cell does `print(0.50); print(0.60); print(0.83)`, the validator looks at `0.83` only — intermediate values do NOT count as matches. **Cite the cell whose final output is the value you report.** If your value comes from an intermediate `print`, refactor the cell to put it last, or create a dedicated cell that emits only that value.
+
+If the value (or a number that rounds to it at your stated precision) does not appear in those positions, either:
+- You have the wrong cell id (pick the cell whose final output produced the value), or
 - The value in the report doesn't match the computation (correct the value).
 
-The validator's `value_mismatches` (v3.4.0) catches this automatically and surfaces it in the repair prompt — but catching it before writing saves a full repair iteration.
+**Format equivalence is handled automatically (v3.4.4 Pillar B)**: writing `0.83` matches outputs like `83.0%`, `8.3e-1`, `0.8316` (within rounding tolerance). You don't have to manually convert percent ↔ decimal or scientific ↔ decimal.
+
+**`value_mismatches` is informational, not blocking.** If after one repair pass the only remaining issues are `value_mismatches`, **do NOT spend another repair iteration on them**. Either accept the warning (common-cause false positives: intermediate cell value, re-execution drift on stochastic models, format your value extractor didn't catch) and note in `report.md` **Limitations** with the cell id and your interpretation, or fix what you can opportunistically in the next regular edit. Repair iterations are budgeted; spend them on blocking issues (failed gates, uncited claims, unknown citations) first.
 
 ### Figure provenance (v4.10.0)
 

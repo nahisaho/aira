@@ -408,12 +408,83 @@ export function valueAppearsInOutputs(
   const tolerance = precision > 0
     ? 0.5 * Math.pow(10, -precision) + 1e-10
     : 0;
-  const numRe = /-?\d+(?:\.\d+)?/g;
-  let m: RegExpExecArray | null;
-  while ((m = numRe.exec(outputText)) !== null) {
-    const v = parseFloat(m[0]);
-    if (Number.isNaN(v)) continue;
+  for (const v of extractNumericCandidates(outputText)) {
     if (Math.abs(v - claimedValue) <= tolerance) return true;
+  }
+  return false;
+}
+
+/**
+ * v3.4.4 Pillar B — extract numeric candidates from a text fragment, with
+ * format normalisation that catches common variants the agent might use:
+ *   - "0.8316"   → 0.8316
+ *   - "83.16%"   → 83.16 AND 0.8316   (also try the /100 interpretation)
+ *   - "8.316e-1" → 0.8316             (scientific notation)
+ *   - "8316e-4"  → 0.8316
+ *
+ * Round 11 telemetry showed agents would frequently write `0.83` in their
+ * reports while cells printed `83.0%` or `8.3e-1`; these are semantically
+ * the same value but the v3.4.0 numeric regex missed the equivalence.
+ */
+export function extractNumericCandidates(text: string): number[] {
+  const out: number[] = [];
+  // Decimal / integer
+  const decRe = /-?\d+(?:\.\d+)?/g;
+  let m: RegExpExecArray | null;
+  while ((m = decRe.exec(text)) !== null) {
+    const v = parseFloat(m[0]);
+    if (Number.isFinite(v)) out.push(v);
+    // Percentage variant: if the next non-space char is '%', also push /100
+    const tail = text.slice(m.index + m[0].length, m.index + m[0].length + 2);
+    if (/^\s*%/.test(tail)) out.push(v / 100);
+  }
+  // Scientific notation — JS parseFloat handles "8.316e-1" natively but the
+  // simple regex above wouldn't capture the exponent. Match explicitly.
+  const sciRe = /-?\d+(?:\.\d+)?[eE][-+]?\d+/g;
+  while ((m = sciRe.exec(text)) !== null) {
+    const v = parseFloat(m[0]);
+    if (Number.isFinite(v)) out.push(v);
+  }
+  return out;
+}
+
+/**
+ * v3.4.4 Pillar A — cell-aware value match with last-output bias.
+ *
+ * The flat regex scan used in v3.4.0 found ANY number anywhere in a cell's
+ * combined output. Round 11 telemetry showed this produced an average of
+ * 20.1 value_mismatches per experiment — mostly false positives where an
+ * intermediate `print()` value happened to mismatch while the cell's real
+ * "return" value was correct.
+ *
+ * v3.4.4 prioritises:
+ *   1. text_output  — the concatenation of execute_result + display_data
+ *                     text/plain. This is the cell's "final value" — the
+ *                     thing a notebook user sees as the cell's answer.
+ *   2. last line of stdout — usually the final printed metric.
+ *   3. (NEW) stop here. We do NOT fall through to scanning the full stdout,
+ *      so intermediate print noise no longer triggers spurious matches.
+ *
+ * If both priorities miss, the claim is reported as a mismatch.
+ */
+export function valueAppearsInCellOutputs(
+  claimedValue: number,
+  precision: number,
+  cell: { stdout: string; text_output: string },
+): boolean {
+  // Priority 1: execute_result / display_data text (high-confidence)
+  if (cell.text_output && valueAppearsInOutputs(claimedValue, precision, cell.text_output)) {
+    return true;
+  }
+  // Priority 2: last non-empty line of stdout
+  if (cell.stdout) {
+    const lines = cell.stdout.replace(/\s+$/, '').split('\n');
+    // Walk backwards to skip trailing blank lines defensively.
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i]!;
+      if (line.trim() === '') continue;
+      return valueAppearsInOutputs(claimedValue, precision, line);
+    }
   }
   return false;
 }
@@ -846,10 +917,9 @@ export function validateProject(projectId: string): ValidationReport {
     }
   }
 
-  // v3.4.0 — value-presence check (informational). Only meaningful for
-  // claim patterns that name a numeric value (metric-assignment / metric-of /
-  // p-value / sample-size). For each cited claim, see if the value appears
-  // in the cited cell's outputs.
+  // v3.4.0/v3.4.4 — value-presence check (informational).
+  // v3.4.4 uses cell-aware matching with last-output bias so intermediate
+  // print() noise no longer generates false positives.
   const value_mismatches: ValueMismatch[] = [];
   for (const c of claims) {
     if (c.cited.length === 0) continue; // no citation → already in uncited
@@ -858,8 +928,7 @@ export function validateProject(projectId: string): ValidationReport {
     for (const cid of c.cited) {
       const cell = cellById.get(cid);
       if (!cell) continue; // already in unknown_citations
-      const haystack = `${cell.stdout}\n${cell.text_output}`;
-      if (valueAppearsInOutputs(parsed.value, parsed.precision, haystack)) continue;
+      if (valueAppearsInCellOutputs(parsed.value, parsed.precision, cell)) continue;
       value_mismatches.push({
         claim: c,
         cell_id: cid,
