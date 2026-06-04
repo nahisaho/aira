@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.12.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.11.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.12.0
+# Co-Scientist v4.11.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -128,17 +128,11 @@ If the value (or a number that rounds to it at your stated precision) does not a
 
 **`value_mismatches` is informational, not blocking.** If after one repair pass the only remaining issues are `value_mismatches`, **do NOT spend another repair iteration on them**. Either accept the warning (common-cause false positives: intermediate cell value, re-execution drift on stochastic models, format your value extractor didn't catch) and note in `report.md` **Limitations** with the cell id and your interpretation, or fix what you can opportunistically in the next regular edit. Repair iterations are budgeted; spend them on blocking issues (failed gates, uncited claims, unknown citations) first.
 
-### Figure provenance (v4.10.0, refined v4.12.0)
+### Figure provenance (v4.10.0)
 
 When you reference a figure from `report.md` / `paper.md` (e.g. `![ROC](figures/roc.png)` or `Figure 1 [cell:viz-roc]`), the validator (v3.4.2) checks whether **some cell source actually calls `plt.savefig("figures/roc.png")` / `fig.savefig(...)` / `imsave(...)` / `to_image(...)`** for that path. If no cell produces the figure file, it appears in `figure_orphans` (informational, not blocking).
 
 Practical rule: **every figure you cite must be produced by a code cell** in the notebook. Don't reference figures that exist only in the file system without a code cell that wrote them — that breaks reproducibility just as much as an uncited number does.
-
-**v4.12.0 — bidirectional rule (Round 12 telemetry showed `figure_orphans` rose 3.6 → 4.5 alongside the +84% file-count growth)**:
-
-- **Every figure you generate must be referenced somewhere in `report.md` or `paper.md` body text.** If you `savefig("figures/roc.png")` and never cite it, that's wasted artifact and inflates `figure_orphans`.
-- Before writing the final report, list the files in `figures/` and cross-check against `grep -E 'figures/' report.md paper.md`. Anything in the directory but not in the text is a candidate for either (a) referencing it or (b) deleting the savefig call.
-- If a cell generates an exploratory figure you don't end up using, **remove the `savefig` call** before the final `/validate` rather than leaving the orphan.
 
 ### Time-budget guard (v4.10.0)
 
@@ -289,42 +283,76 @@ Command: `tooluniverse-smcp --compact-mode` (stdio transport, compact mode loads
 
 ToolUniverse exposes **database query APIs** (PubMed search, gene lookup, compound retrieval, …). It does **NOT** expose model inference. Tools named `nature_lm`, `galactica`, `pubmedbert_inference`, `esm2_predict`, `alphafold_predict`, or anything that "runs a language model" **are NOT inside ToolUniverse** — do not look for them there. Probing `tooluniverse_*` tools for these will always fail.
 
-### NatureLM / GALACTICA in the AIRA environment (v4.12.0)
+### Where to actually call NatureLM / GALACTICA / scientific LLMs
 
-**Scientific LLMs (NatureLM, GALACTICA, BioBERT, PubMedBERT, ESM-2, etc.) are NOT available in this environment.** They are not registered in ToolUniverse, no dedicated MCP server is provided, and HuggingFace direct-load is not supported. **Do NOT attempt to invoke them via any path** — not `tooluniverse_*`, not `mcp__naturelm__*` / `mcp__galactica__*`, not `transformers.AutoModel.from_pretrained(...)` in a Jupyter cell. Each failed attempt burns repair-iteration budget.
+Each science model can be reached in one of two ways. **Check which MCP servers your project has enabled (Settings → MCP) before picking the path.**
 
-**Required alternative — literature-value verification**:
+**Path 1 — Dedicated MCP server (preferred when configured)**
 
-If the user's request mentions one of these models (e.g. "use NatureLM to score the binding", "use GALACTICA to generate the equation"), proceed as follows:
+If the project has a dedicated MCP server for the model (these are **separate MCP entries**, not part of ToolUniverse), call its tools **directly**:
 
-1. Search the literature with the available ToolUniverse tools (PubMed / arXiv / EuropePMC) for **published values** that the model would have produced. Cite the paper.
-2. Use a feasible local computation (classical baseline, smaller statistical model, formula from the literature) as the actual numeric pipeline.
-3. **Record both the attempt and the fallback explicitly** in `report.md` Methods AND `report.md` Results / `paper.md` Methods AND `paper.md` Results — see the template below. This is mandatory; the rubric checks for it.
+| Model | Dedicated MCP name | When it's available |
+|---|---|---|
+| **NatureLM** | `nature-mcp` / `naturelm` | When the operator has added the entry under Settings → MCP |
+| **GALACTICA** | `galactica-mcp` / `galactica` | Same |
 
-**Required Methods/Results template** (paste into both `report.md` and `paper.md`):
+The MCP server name appears in the tool prefix when you list available tools — e.g. `mcp__naturelm__generate`, `mcp__galactica__generate`. If you see them in the tool list, **use them directly**. **Do NOT route the request through `tooluniverse_*` tools — ToolUniverse will never serve these.**
 
-```markdown
-### Tool availability
+**Path 2 — Direct invocation in the Jupyter kernel (fallback when no dedicated MCP)**
 
-We attempted to use <MODEL_NAME> for <task>. <MODEL_NAME> is not registered
-in this environment's ToolUniverse, no dedicated MCP server is available,
-and HuggingFace direct-load is not supported in the runtime. We therefore
-adopted **literature-value verification**: for <task>, we cite the value
-of <metric> = <X> from <citation, e.g. Smith et al. 2024, [pmid:12345678]>
-and use <classical baseline / formula / smaller model> for our own
-computation. See Limitations for the impact on generalisability.
+If the dedicated MCP server is not configured, fall back to loading the model from HuggingFace inside the Jupyter kernel:
+
+| Asset | HuggingFace id | Notes |
+|---|---|---|
+| **GALACTICA** | `facebook/galactica-*` (125m / 1.3b / 6.7b / 30b / 120b) | CPU-only viable up to 1.3b |
+| **NatureLM** | `microsoft/NatureLM-*-Inst` (8B / 8x7B / 46.7B) | 8B needs ~16 GB RAM, 8x7B+ needs GPU |
+| **PubMedBERT / SciBERT / BioBERT** | `microsoft/BiomedNLP-*`, `allenai/scibert_*`, `dmis-lab/biobert-*` | Small, CPU OK |
+| **ESM-2 / ESMFold** | `facebook/esm2_*` | Protein language models |
+| **MolFormer / ChemBERTa** | `ibm/MoLFormer-XL-both-10pct`, `seyonec/ChemBERTa-zinc-base-v1` | Small chemistry models |
+| **AlphaFold (raw weights)** | — | Use the dedicated `co-scientist-alphafold-structures` sub-skill instead. Do not load AlphaFold weights yourself. |
+
+```python
+# Inside a notebook cell (after use_notebook("notebook.ipynb")):
+from transformers import AutoModelForCausalLM, AutoTokenizer
+model_id = "facebook/galactica-1.3b"  # pick the size that fits available memory
+tok = AutoTokenizer.from_pretrained(model_id)
+model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", torch_dtype="auto")
+inputs = tok("Q: What is the binding affinity of aspirin to COX-1?\n\nA:",
+             return_tensors="pt").to(model.device)
+out = model.generate(**inputs, max_new_tokens=200)
+print(tok.decode(out[0], skip_special_tokens=True))
 ```
 
-`<MODEL_NAME>` examples: NatureLM, GALACTICA, BioBERT, PubMedBERT, ESM-2, ESMFold, MolFormer, ChemBERTa.
+**Decision flowchart**
 
-**Forbidden patterns**:
-- Writing "tools not registered in ToolUniverse" and stopping there — must include the literature-value fallback.
-- Invoking `tooluniverse_*` for model inference (will always fail; wastes time).
-- Probing `mcp__naturelm__*` / `mcp__galactica__*` (not configured).
-- `from transformers import AutoModel; AutoModel.from_pretrained("facebook/galactica-*")` in a Jupyter cell (downloads gigabytes, fails or times out).
-- Inventing numeric outputs as if the model had run. **Never fabricate.**
+```
+User request mentions NatureLM / GALACTICA / etc.
+        │
+        ▼
+List your available MCP tools (whatever the harness exposes).
+        │
+        ├── Found `mcp__naturelm__*` / `mcp__galactica__*` / similar?
+        │       → Path 1: call them DIRECTLY. Done.
+        │
+        └── Not found?
+                → Path 2: load from HuggingFace in Jupyter.
+                  If too heavy for the env, pick a smaller variant
+                  OR cite-only and state the constraint in Limitations.
 
-AlphaFold is handled separately by the `co-scientist-alphafold-structures` sub-skill — do not load AlphaFold weights yourself.
+Either way: NEVER route the request through `tooluniverse_*` tools.
+NEVER write "tools not registered in ToolUniverse" as if that ended
+the matter — the dedicated MCP / HuggingFace path is the next step.
+```
+
+**Hardware reality check** (state this in `report.md` Limitations if it matters):
+- 125M–2B params: CPU-only OK, slow (minutes per generation)
+- 7B–8B params: needs ~16 GB RAM, much faster with GPU
+- 13B+ params: GPU required for practical use; if unavailable, state "model not exercised due to hardware constraints" and proceed with a smaller variant or cite-only treatment.
+
+**When the model is too heavy for the available environment**, do NOT invent results. Either:
+1. Use a smaller variant of the same family.
+2. Cite the model in `paper.md` Related Work / Methods as a reference and use a feasible alternative (smaller LM, classical baseline) for actual computation.
+3. State the constraint explicitly in Limitations.
 
 ## Routing Rules
 

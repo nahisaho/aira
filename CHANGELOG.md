@@ -2,45 +2,6 @@
 
 All notable changes to AIRA are documented in this file.
 
-## [v3.4.5] — 2026-06-04 — Format Equivalence + Tooling Guidance
-
-Round 12 (v3.4.4) で成功率 100% / 引用密度 +4.3% / 初回 `vm=0` 件数 22→28 を達成した一方、`value_mismatches` 平均が 20.1→30.7 に増加(特に `vm≥50` が 8→21)。原因は v3.4.4 の Pillar B(% / 指数)で未カバーの表記(**カンマ区切り**、**leading-dot decimal**)が修復時の追加引用で露呈したこと。同時に Round 12 では NatureLM / GALACTICA 系 scientific LLM への試行が引き続き観測され、これらは AIRA 環境では利用不可のため Skill 側で全面禁止する。
-
-### Changed — Pillar A: Format normalisation 拡張 (provenance-validator.ts)
-
-- **`extractNumericCandidates(text)` を拡張**:
-  - **千の位カンマ区切り**: `1,234` / `12,345,678` / `1,234.5` を正しく単一の数値として候補化
-  - **leading-dot decimal**: `.83` を `0.83` として候補化(numpy stringify などで頻出)
-  - カンマ区切り + 直後 `%` の組み合わせも `/100` variant を emit(`1,500%` → 1500 と 15)
-- 実装メモ: カンマ規則を **最初に** スキャン、マッチ範囲を空白でマスクしてから decimal regex を走らせる。これにより `1,234` が `1` と `234` の 2 候補に分解されるバグを構造的に防ぐ。
-- backward-compatible: 公開 API シグネチャ不変。
-
-### Skill — Co-Scientist v4.11.0 → v4.12.0 (Pillar B)
-
-- **NatureLM / GALACTICA / 全 scientific LLM への試行を全面禁止**(ユーザー直接指示):
-  - 旧「Where to actually call NatureLM / GALACTICA / scientific LLMs」セクションを削除(ToolUniverse 経路 / dedicated MCP 経路 / HuggingFace direct-load 経路、全て撤回)
-  - 新セクション「NatureLM / GALACTICA in the AIRA environment (v4.12.0)」: これらは AIRA 環境では一切利用不可、と明示。失敗試行が repair iteration を浪費するため、最初から試行禁止
-  - **代替: 文献値検証パターン**を必須化 — ToolUniverse (PubMed/arXiv/EuropePMC) で公表値を引用、ローカル計算は classical baseline / smaller statistical model で代替
-  - **試行記録の必須化**: `report.md` Methods / Results + `paper.md` Methods / Results の両方に試行 + フォールバックを記録するテンプレを提供
-- **figure_orphans 双方向ルール (refined v4.12.0)**: Round 12 で ファイル数 +84% に伴い orphan も 3.6→4.5 に増加。「生成した図は本文で必ず引用する」を明文化、`/validate` 直前に `figures/` ディレクトリと本文の cross-check を指示
-- `copilot-instructions.md` / `AGENTS.md` のトップレベル version を v4.12.0 にバンプ
-
-### Deferred (本リリース範囲外)
-
-- **Validation API の高負荷時 0/4 異常**: Round 11 / 12 で再現したが、サーバー負荷に起因する一過性問題。コード変更ではなく並列度オペレーション側の課題として分離
-- **4 並列推奨**: 運用設定変更であり、ドキュメント側で別途記載予定
-
-### Tests
-
-- `extractNumericCandidates` のカンマ区切り(integer / multi-group / 千の位非分解の regression / `%` 組み合わせ)+ leading-dot を網羅(計 5 ケース)
-- `valueAppearsInCellOutputs` の end-to-end(`text_output: "1,234"` で claim 1234 一致、`text_output: "12,345,678"` で claim 12345678 一致、stdout 最終行 `.83` で claim 0.83 一致)(計 4 ケース)
-- 全 63 tests グリーン(+9 from v3.4.4)
-
-### Notes
-
-- v3.4.0 で導入された `value_mismatches` の意味は変わらず、本リリースは「等価とみなす表記範囲」の拡張のみ。`ValidationReport` 構造不変。
-- Round 13 で `vm≥50` 件数が下がっていれば本変更の効果が確認できる想定。
-
 ## [v3.4.4] — 2026-05-29 — Value Match Precision
 
 Round 11 (v3.4.3) telemetry showed 100% gate pass / 97.6% citation coverage を達成した一方で、informational な **`value_mismatches` が 88% の実験で発生(平均 20.1件/実験)** という新しい問題が表面化した。根本原因は false positive — cell 中間 `print()` との誤一致、`%` ↔ 小数表記差、指数表記、再実行値ドリフト。本リリースは検出を **cell の最終出力位置に絞り、表記を正規化** することで、警告の信号性を高める。

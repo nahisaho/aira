@@ -1,4 +1,4 @@
-# Co-Scientist — Copilot Instructions (v4.12.0)
+# Co-Scientist — Copilot Instructions (v4.11.0)
 
 ## Identity
 
@@ -157,19 +157,12 @@ Server config is in `.mcp.json`. Install ToolUniverse: `pip install tooluniverse
 
 ToolUniverse only exposes **database query APIs**. Tools named `nature_lm`, `galactica`, `pubmedbert_inference`, `esm2_predict`, `alphafold_predict`, or anything that runs a language model are **not** inside ToolUniverse. Probing `tooluniverse_*` for these will always fail.
 
-### Scientific LLMs are NOT available in this environment (v4.12.0)
+**Two paths to actually use NatureLM / GALACTICA / scientific LLMs** (pick by checking what your project has):
 
-**NatureLM, GALACTICA, BioBERT, PubMedBERT, ESM-2 and similar scientific LLMs are not available — at all.** Not via ToolUniverse, not via a dedicated MCP server, not via HuggingFace direct-load in a Jupyter cell. **Do not attempt any of those paths.** Each failed attempt wastes time and repair-iteration budget without producing usable output.
+1. **Dedicated MCP server (preferred when configured)** — these models often have their own MCP servers registered as **separate entries** in Settings → MCP (names like `naturelm`, `nature-mcp`, `galactica-mcp`). When you see tools prefixed with the model name (e.g. `mcp__naturelm__generate`) in your tool list, **call them directly**. Do not route through `tooluniverse_*`.
+2. **Direct invocation in Jupyter kernel (fallback)** — if no dedicated MCP server is configured, load the model from HuggingFace in a notebook cell (`from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained("facebook/galactica-1.3b", ...)`). Size matters: 125M–2B = CPU OK, 7B+ = needs ≥16 GB RAM, 13B+ = GPU. If too heavy, pick a smaller variant or cite-only and state the constraint in `report.md` Limitations.
 
-**When the user asks for one of these models**, switch to **literature-value verification**:
-
-1. Use ToolUniverse (PubMed / arXiv / EuropePMC) to find published values the model would have produced. Cite the paper.
-2. Use a classical baseline / smaller statistical model / literature formula for the actual local computation.
-3. Record the attempt AND the fallback in `report.md` **Methods** + `report.md` **Results** AND `paper.md` **Methods** + `paper.md` **Results**. The rubric checks both files.
-
-See AGENTS.md → "NatureLM / GALACTICA in the AIRA environment (v4.12.0)" for the exact paste-in template.
-
-**Forbidden patterns**: do not write `tooluniverse_<model>`, do not invoke `mcp__naturelm__*` / `mcp__galactica__*`, do not `AutoModel.from_pretrained("facebook/galactica-*")`, do not fabricate numeric outputs as if the model had run.
+**Forbidden pattern** — do not write "tools not registered in ToolUniverse" as the final answer and proceed without the model. The dedicated MCP / HuggingFace fallback is the next step. See AGENTS.md → "Where to actually call NatureLM / GALACTICA / scientific LLMs" for the full decision flow.
 
 ## Verification Loop
 
