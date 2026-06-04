@@ -2,6 +2,52 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.4.7] — 2026-06-04 — VM as Examples, Not Count (Direction 1)
+
+v3.4.5 / v3.4.6 で「検出範囲を広げる」方向に進めたところ、Round 13 で **value_mismatches 平均 30.7 → 54.8 (+78%)** と退行(特に v3.4.4 で VM=0 だった 6 実験が v3.4.5 で VM>0 に新規発生)。原因分析の結果、退行の本質は検出ロジックでなく **agent が「VM の数」を最適化対象とみなしてしまう perverse incentive loop**(数を減らそうとして引用追加 → 余計な再実行 → stochastic ドリフト → さらに VM 増)。両リリースを revert(c2156dc / c15b1f6)した上で、本リリースでは **検出ロジックを v3.4.4 のまま据え置き、agent から見える表現だけ変更**する。
+
+### Changed — Pillar A: repair prompt の VM 表示を spot-check に再定義 (provenance-validator.ts)
+
+- **`formatRepairPrompt()` の "Value-presence warnings (N)" セクションを書き換え**:
+  - **count を一切表示しない**(`(N)` / `+M more` を撤去)
+  - **上位 3 件の examples のみ提示**(従来は 20 件)
+  - section header を `## Value-presence spot-check (sampled examples — do NOT chase a count)` に変更
+  - 説明文に「3 件だけ verify、stochastic な値は Limitations に逃がせ、count を 0 にすることは不毛」を明示
+- **検出ロジック (`validateProject` / `valueAppearsInCellOutputs` / `extractNumericCandidates`) は不変** — v3.4.4 と完全に同一の検出精度
+- **API 応答 (`ValidationReport.value_mismatches: ValueMismatch[]`) は不変** — 配列の完全形は telemetry として `.trace/` に残り、外部ツールからも読める
+- **postmortem (`buildPostmortemReport`) は不変** — 3 iteration 失敗後の診断用なので count を残す
+
+### Skill — Co-Scientist v4.11.0 → v4.12.0 (Pillar B)
+
+- 旧「Self-check for citation correctness (v4.11.0)」末尾の `value_mismatches is informational, not blocking` 段落を削除し、新セクション **「`value_mismatches` is telemetry-only since v3.4.7 — do NOT optimise its length」** に置換:
+  1. `/validate` API 応答の `value_mismatches` 配列の `.length` を絶対に reasoning に使わない
+  2. spot-check の 3 件だけ verify、それ以外には extrapolate しない
+  3. stochastic 値(bootstrap CI / KFold avg / sampling)は Limitations へ
+  4. VM を消すためだけのセル再実行を禁止(再実行で値が変わると、過去 paper 記述が真の不一致になる)
+  5. spot-check 以外残っていなければ done
+- Mandatory repair loop の VM 行を「spot-check の 3 件だけ verify、extrapolate するな」に簡素化
+- `copilot-instructions.md` にも対応する短縮版を反映
+- skill version v4.11.0 → v4.12.0(top-level / skill.json / copilot-instructions.md ヘッダ)
+
+### What was explicitly NOT changed (rationale: avoid Round 13-style regressions)
+
+- 検出パターン / format normalisation の追加(v3.4.5 で試した comma + leading-dot)→ **見送り**
+- NatureLM/GALACTICA 系の skill 制限(v3.4.6 で試した invocation ban + validator scan)→ **見送り**
+- Validation API 0/4 異常の修正 → **v3.4.6 (Direction 2) として別途**(本リリースは表現のみ変更)
+
+### Tests
+
+- 既存 "repair prompt surfaces value mismatches as informational" を v3.4.7 仕様に更新(`Value-presence` → `spot-check` 検査)
+- 新規 `VM as spot-check examples (v3.4.7 Pillar A)` describe block:
+  - 7 個の VM があっても prompt に出る例は **最大 3 件**、count 数値が出ない、`spot-check` 文言と `do not chase` 文言が含まれることを確認
+  - API 応答の `value_mismatches.length` は telemetry として残ることを確認
+- 全 56 tests グリーン(provenance suite; v3.4.4 の 54 + v3.4.7 の +2)
+
+### Notes
+
+- Round 14 で **VM の見かけ上の数字が消える** ことで、agent の repair iteration が VM-chasing に消費されなくなる想定。観測すべきは「VM 個別件数」ではなく「repair iterations 平均」「実行時間」「uncited_claims」「paper [cell:] 引用数」
+- 検出ロジック不変なので、`.trace/` の VM 数値推移は Round 12-14 で連続的に比較可能(検証精度の段階的変化は出ない)
+
 ## [v3.4.4] — 2026-05-29 — Value Match Precision
 
 Round 11 (v3.4.3) telemetry showed 100% gate pass / 97.6% citation coverage を達成した一方で、informational な **`value_mismatches` が 88% の実験で発生(平均 20.1件/実験)** という新しい問題が表面化した。根本原因は false positive — cell 中間 `print()` との誤一致、`%` ↔ 小数表記差、指数表記、再実行値ドリフト。本リリースは検出を **cell の最終出力位置に絞り、表記を正規化** することで、警告の信号性を高める。

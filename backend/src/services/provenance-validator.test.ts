@@ -504,7 +504,7 @@ describe('validateProject', () => {
       });
     });
 
-    it('repair prompt surfaces value mismatches as informational', () => {
+    it('repair prompt surfaces value mismatches as informational (v3.4.7 spot-check format)', () => {
       setupProject(
         {
           cells: [
@@ -525,8 +525,99 @@ describe('validateProject', () => {
       expect(repair.pass).toBe(true);
       // But it IS surfaced in violations + prompt
       expect(repair.violations.some(v => v.issue === 'value_mismatch')).toBe(true);
-      expect(repair.repair_prompt).toContain('Value-presence');
+      // v3.4.7 — spot-check phrasing instead of count-based "warnings (N)"
+      expect(repair.repair_prompt).toContain('spot-check');
       expect(repair.repair_prompt).toContain('0.83');
+    });
+
+    // v3.4.7 — Pillar A: repair prompt shows VM as spot-check examples (top 3), no count
+    describe('VM as spot-check examples (v3.4.7 Pillar A)', () => {
+      it('hides the count and shows AT MOST 3 examples even when there are many VM', () => {
+        // Construct a project with 7 cited claims, each pointing at a cell
+        // whose output does NOT contain the claimed value → 7 value_mismatches.
+        setupProject(
+          {
+            cells: [
+              { id: 'seed', cell_type: 'code', source: 'import numpy as np\nnp.random.seed(0)', outputs: [] },
+              { id: 'env', cell_type: 'code', source: '!pip freeze > requirements.txt', outputs: [] },
+              // 7 cells, each prints a value DIFFERENT from what report.md claims
+              { id: 'm1', cell_type: 'code', source: 'a=1', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.10\n' }] },
+              { id: 'm2', cell_type: 'code', source: 'a=2', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.20\n' }] },
+              { id: 'm3', cell_type: 'code', source: 'a=3', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.30\n' }] },
+              { id: 'm4', cell_type: 'code', source: 'a=4', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.40\n' }] },
+              { id: 'm5', cell_type: 'code', source: 'a=5', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.50\n' }] },
+              { id: 'm6', cell_type: 'code', source: 'a=6', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.60\n' }] },
+              { id: 'm7', cell_type: 'code', source: 'a=7', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.70\n' }] },
+            ],
+            metadata: {}, nbformat: 4, nbformat_minor: 5,
+          },
+          {
+            'report.md': `
+              AUROC = 0.91 [cell:m1]
+              precision = 0.92 [cell:m2]
+              recall = 0.93 [cell:m3]
+              F1 = 0.94 [cell:m4]
+              accuracy = 0.95 [cell:m5]
+              MAE = 0.96 [cell:m6]
+              RMSE = 0.97 [cell:m7]
+            `,
+          },
+        );
+        const repair = buildRepairPayload(PROJECT_ID);
+        // Confirm we really have many underlying VMs in telemetry — the
+        // extractor may emit multiple claims per line (overlapping patterns).
+        const vmViolations = repair.violations.filter(v => v.issue === 'value_mismatch');
+        expect(vmViolations.length).toBeGreaterThanOrEqual(5);
+        // ── But the repair PROMPT must hide the count and show at most 3 ──
+        const prompt = repair.repair_prompt;
+        // No count number rendered (e.g. "(7)", "7 mismatches", "7 warnings")
+        expect(prompt).not.toMatch(/Value-presence warnings\s*\(\d+\)/i);
+        expect(prompt).not.toMatch(/\(\s*7\s*,/);
+        // Spot-check phrasing is present
+        expect(prompt).toContain('spot-check');
+        expect(prompt.toLowerCase()).toContain('do not chase');
+        // Examples for at most 3 of the 7 claims should appear
+        const claimMatches = [/0\.91/, /0\.92/, /0\.93/, /0\.94/, /0\.95/, /0\.96/, /0\.97/];
+        const shownCount = claimMatches.filter(r => r.test(prompt)).length;
+        expect(shownCount).toBeGreaterThanOrEqual(1);
+        expect(shownCount).toBeLessThanOrEqual(3);
+        // And no "+N more" footer (the count is intentionally not surfaced)
+        expect(prompt).not.toMatch(/\+\s*\d+\s+more/i);
+      });
+
+      it('passes the API response value_mismatches array through unchanged (telemetry preserved)', () => {
+        // Verify Direction 1 design: skill instructions tell the agent to look
+        // only at the repair prompt's spot-check; the underlying API still
+        // carries full telemetry so callers / users can inspect everything.
+        setupProject(
+          {
+            cells: [
+              { id: 'seed', cell_type: 'code', source: 'import numpy as np\nnp.random.seed(0)', outputs: [] },
+              { id: 'env', cell_type: 'code', source: '!pip freeze > requirements.txt', outputs: [] },
+              { id: 'm1', cell_type: 'code', source: 'a=1', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.10\n' }] },
+              { id: 'm2', cell_type: 'code', source: 'a=2', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.20\n' }] },
+              { id: 'm3', cell_type: 'code', source: 'a=3', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.30\n' }] },
+              { id: 'm4', cell_type: 'code', source: 'a=4', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.40\n' }] },
+              { id: 'm5', cell_type: 'code', source: 'a=5', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.50\n' }] },
+            ],
+            metadata: {}, nbformat: 4, nbformat_minor: 5,
+          },
+          {
+            'report.md': `
+              AUROC = 0.91 [cell:m1]
+              precision = 0.92 [cell:m2]
+              recall = 0.93 [cell:m3]
+              F1 = 0.94 [cell:m4]
+              accuracy = 0.95 [cell:m5]
+            `,
+          },
+        );
+        const report = validateProject(PROJECT_ID);
+        // Full array still available for telemetry / external tools.
+        // The extractor may produce multiple claims per line via overlapping
+        // patterns (metric-assignment + metric-of); that's expected.
+        expect(report.value_mismatches.length).toBeGreaterThanOrEqual(5);
+      });
     });
   });
 

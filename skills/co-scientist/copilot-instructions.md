@@ -1,4 +1,4 @@
-# Co-Scientist — Copilot Instructions (v4.11.0)
+# Co-Scientist — Copilot Instructions (v4.12.0)
 
 ## Identity
 
@@ -83,12 +83,14 @@ Up to 400 chars between claim and citation is OK (v3.3.0). DOIs, `(Smith et al.,
 **Mandatory single-batch repair loop** (v4.9.0): before delivering the final response —
 1. **Execute `[cell:aira-env]` and `[cell:aira-seed]` early in the run** (Round 10 telemetry: agents who skip this burn all 3 repair iterations on the two cheap gates).
 2. `POST /api/projects/:id/validate`
-3. If `pass: true` → quickly scan `value_mismatches` (v3.4.0 informational); fix clear typos; done.
-4. If `pass: false` → `POST /api/projects/:id/validate/repair` → read the markdown `repair_prompt` (flat sections: Failed gates / Uncited claims / Unknown citations / Value-presence warnings / Available cell ids).
+3. If `pass: true` → done. Do NOT iterate on the `value_mismatches` array length (telemetry-only since v3.4.7).
+4. If `pass: false` → `POST /api/projects/:id/validate/repair` → read the markdown `repair_prompt` (flat sections: Failed gates / Uncited claims / Unknown citations / **Value-presence spot-check** (top 3 examples, no count) / Available cell ids).
 5. **Apply EVERY fix in ONE pass before re-calling `/validate`.** Walk every row of every section once. Do not partially fix and re-validate — that wastes turn budget.
 6. Cap: 3 repair iterations. If the 3rd attempt still fails, **state the remaining failures in `report.md` Limitations** — do not hide them.
 
 **Self-check before writing `metric = X [cell:N]`**: glance at cell N's output (via `/notebook/trace` or AIRA UI). If X (or a number that rounds to X at your stated precision) is not there, you have the wrong cell id or the value in the report is wrong. v3.4.0's `value_mismatches` catches this — but doing it pre-write saves an iteration.
+
+**`value_mismatches` is telemetry, not a metric (v3.4.7)**: the repair prompt shows only 3 spot-check examples and hides the count. Verify those 3, fix obvious typos / wrong cell-ids, leave stochastic-varying values alone. **Never count the array, never re-execute cells just to shrink it** — that loop made things worse in Round 13. Full guidance in AGENTS.md → "`value_mismatches` is telemetry-only since v3.4.7".
 
 **Figure provenance (v3.4.2)**: every figure path you reference (e.g. `figures/roc.png`) must be produced by some cell that calls `plt.savefig`/`fig.savefig`/`imsave`/`to_image`/`write_image` for that path. Orphan figures appear in `figure_orphans` (informational). Don't reference figures that have no producing cell.
 

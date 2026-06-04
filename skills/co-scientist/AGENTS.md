@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.11.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.12.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.11.0
+# Co-Scientist v4.12.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -102,16 +102,16 @@ AIRA's validator (`POST /api/projects/:id/validate`) checks four gates:
 
 1. **Execute `[cell:aira-env]` and `[cell:aira-seed]` early in the run** so the cheap gates (env_capture / seed_presence) pass before analysis begins. Round 10 telemetry showed agents who skipped this consumed all 3 repair iterations on these two gates alone.
 2. Call `POST /api/projects/:id/validate`.
-3. If `pass: true` → quickly scan `value_mismatches` (informational, v3.4.0). Fix the ones that are clear typos / wrong cell ids in your report, then continue to the final response.
-4. If `pass: false` → call `POST /api/projects/:id/validate/repair`. The response includes a single markdown prompt grouped into flat sections: **Failed gates**, **Uncited claims**, **Unknown citations**, **Value-presence warnings**, **Available cell ids**.
+3. If `pass: true` → done. Do NOT iterate on the `value_mismatches` array length (telemetry-only since v3.4.7 — see below).
+4. If `pass: false` → call `POST /api/projects/:id/validate/repair`. The response includes a single markdown prompt grouped into flat sections: **Failed gates**, **Uncited claims**, **Unknown citations**, **Value-presence spot-check** (top 3 examples only since v3.4.7), **Available cell ids**.
 5. **Apply EVERY fix in the prompt in a single pass before calling `/validate` again.** Iterating on subsets wastes turn budget and time. In one walk:
    - For every **failed gate** row: run its remediation (almost always: execute `[cell:aira-env]` / `[cell:aira-seed]` again, or fix a broken cited cell).
    - For every **uncited claim** row: append `[cell:<id>]` to that exact claim text in `report.md` / `paper.md`, picking the id from the "Available cell ids" list.
    - For every **unknown citation** row: fix the typo or repoint to a real cell id.
-   - For every **value-presence warning** row: check whether you cited the right cell — if the value (e.g., `0.83`) does not appear in the cell's stdout/output, you probably cited the wrong cell. Fix the citation or correct the value in the report.
+   - For the **value-presence spot-check** (max 3 examples): verify ONLY those 3 specific pairs — fix obvious wrong cell-ids, leave stochastic-varying values alone. Do not extrapolate to the rest of the report.
 6. Re-call `/validate`. Cap: 3 repair iterations. If the 3rd attempt still fails, **state in `report.md` Limitations exactly which gates / claims still fail and why a repair was infeasible** — do not hide the failure or paper over it with prose.
 
-### Self-check for citation correctness (v4.11.0)
+### Self-check for citation correctness (v4.12.0)
 
 Before writing `metric = X [cell:N]`, briefly **look at cell N's last output** (visible in the `/notebook/trace` API or the AIRA UI Trace tab). The validator's `value_mismatches` check (v3.4.0, refined in v3.4.4) examines only:
 
@@ -126,7 +126,17 @@ If the value (or a number that rounds to it at your stated precision) does not a
 
 **Format equivalence is handled automatically (v3.4.4 Pillar B)**: writing `0.83` matches outputs like `83.0%`, `8.3e-1`, `0.8316` (within rounding tolerance). You don't have to manually convert percent ↔ decimal or scientific ↔ decimal.
 
-**`value_mismatches` is informational, not blocking.** If after one repair pass the only remaining issues are `value_mismatches`, **do NOT spend another repair iteration on them**. Either accept the warning (common-cause false positives: intermediate cell value, re-execution drift on stochastic models, format your value extractor didn't catch) and note in `report.md` **Limitations** with the cell id and your interpretation, or fix what you can opportunistically in the next regular edit. Repair iterations are budgeted; spend them on blocking issues (failed gates, uncited claims, unknown citations) first.
+### `value_mismatches` is telemetry-only since v3.4.7 — do NOT optimise its length
+
+The validator continues to compute `value_mismatches` for **server-side telemetry** (saved to `.trace/` for human inspection). The repair prompt deliberately shows **only the top 3 examples and hides the total count**. This is a Round 13 lesson learnt: previously the prompt exposed "Value-presence warnings (54)", and agents fell into a perverse loop — adding citations / re-running cells to shrink the number, which introduced stochastic drift and made the number *larger*.
+
+**Rules**:
+
+1. **Never count `value_mismatches`** from the `/validate` API response. The array exists for telemetry; reasoning over its `.length` is wrong by construction.
+2. **Verify only the 3 spot-check examples** shown in the repair prompt's "Value-presence spot-check" section. If one is a clear typo / wrong cell-id, fix it. If one is a stochastic value (bootstrap CI, KFold avg, random sampling), leave it and note in Limitations.
+3. **Do not extrapolate** from the 3 examples to "fix everything similar". The remaining mismatches are sampled noise; chasing them wastes iterations and degrades the report through re-execution drift.
+4. **Never re-execute a cell solely to make a VM warning go away.** Re-execution of stochastic cells changes values without changing correctness — and the new value is now what's in the cell, so any earlier paper text that quoted the previous value now genuinely mismatches.
+5. **If the spot-check section is the only remaining content in the repair prompt, you are done.** Treat it as informational. The blocking conditions are: failed gates, uncited claims, unknown citations — those are what gate `pass`.
 
 ### Figure provenance (v4.10.0)
 

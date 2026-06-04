@@ -826,14 +826,20 @@ function formatRepairPrompt(
     }
   }
 
+  // v3.4.7 — VM as spot-check examples, NOT a count metric.
+  //
+  // Round 13 telemetry showed the previous "Value-presence warnings (N)"
+  // header triggered a perverse incentive loop: agents tried to minimise N
+  // by adding citations / re-running cells, which introduced stochastic
+  // drift and inflated VM further. We now show only the top 3 examples,
+  // hide the count, and explicitly tell the agent not to chase the array.
   if (valueMismatches.length > 0) {
     lines.push('');
-    lines.push(`## Value-presence warnings (${valueMismatches.length}) — informational, not blocking`);
-    lines.push('The cited cell\'s outputs do not contain the value you wrote in the report. Either you cited the wrong cell or the value in the report is wrong. Fix if you can, otherwise document the mismatch in Limitations.');
-    for (const v of valueMismatches.slice(0, 20)) {
+    lines.push('## Value-presence spot-check (sampled examples — do NOT chase a count)');
+    lines.push('A few cited values were not found in their cited cell\'s outputs. **Verify only the specific (claim, cell) pairs listed below**; the full count is intentionally not shown because optimising for it leads to spurious re-runs and worse outputs. Fix what looks like a clear typo or wrong cell-id; if a value naturally varies on re-run (bootstrap CI, stochastic models), document it in Limitations and move on. Spending repair iterations to drive this list to empty is wasteful.');
+    for (const v of valueMismatches.slice(0, 3)) {
       lines.push(`- ${v.file}: \`${v.claim}\` — ${v.detail}`);
     }
-    if (valueMismatches.length > 20) lines.push(`- … +${valueMismatches.length - 20} more`);
   }
 
   if (figureOrphans.length > 0) {
