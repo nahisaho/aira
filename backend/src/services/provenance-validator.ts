@@ -396,20 +396,50 @@ export function extractFigureReferences(markdown: string): string[] {
  * Check whether any cell source mentions writing the given figure path.
  * Looks for common save calls (`savefig`, `to_image`, `write_image`,
  * `Image.save`, `cv2.imwrite`, `imsave`, `plt.imsave`) referencing the
- * figure path or its basename. Heuristic — false negatives possible if the
- * agent constructs the path dynamically.
+ * figure path or its basename.
+ *
+ * v3.4.10 — Round 15 telemetry showed FigOrp avg jumped to 7.2 (worst in 5
+ * rounds). Root cause: agents construct paths dynamically
+ * (`f"figures/{var}.png"`, `os.path.join("figures", x)`, looped names) so
+ * the literal `figures/roc.png` string never appears in any cell's source.
+ * The original `pathRe` then missed real producers and flagged false
+ * positive orphans. We now run three matchers per cell, all gated on a
+ * save call to keep noise down:
+ *   1. Literal: cell source contains the full path or basename verbatim.
+ *   2. Dynamic template + stem: source contains an `f"figures/…"` or
+ *      `os.path.join("figures", …)` template AND the basename stem
+ *      (filename without extension) appears somewhere in the source —
+ *      catching `name="roc"; plt.savefig(f"figures/{name}.png")`.
+ *   3. Runtime echo: the cell's stdout contains the basename, indicating
+ *      the path was printed at execution time (a common "Saved: X" pattern).
+ * Heuristic — fully variable names (`f"figures/plot_{i}.png"` in a loop
+ * with no stem hint) are still missed.
  */
 export function figureHasProducerCell(
   figurePath: string,
   cells: TraceCell[],
 ): boolean {
   const basename = figurePath.split('/').pop() ?? figurePath;
+  const basenameNoExt = basename.replace(/\.[^.]+$/, '');
   const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const saveCallRe = /\b(savefig|to_image|write_image|imsave|imwrite|Image\.save|fig\.write_image|joblib\.dump)\b/;
-  const pathRe = new RegExp(escape(figurePath) + '|' + escape(basename));
+  const literalPathRe = new RegExp(escape(figurePath) + '|' + escape(basename));
+  const dynamicTemplateRe = /f["']figures\/|os\.path\.join\(["']figures["']/;
+  // Stem requires at least one char so that pathological basenames like ".png"
+  // (basenameNoExt = "") don't degenerate into a regex that matches everything.
+  const stemRe = basenameNoExt.length > 0
+    ? new RegExp(escape(basenameNoExt), 'i')
+    : null;
+
   for (const c of cells) {
     if (c.type !== 'code') continue;
-    if (saveCallRe.test(c.source) && pathRe.test(c.source)) return true;
+    if (!saveCallRe.test(c.source)) continue;
+    // (1) Literal path or basename in source.
+    if (literalPathRe.test(c.source)) return true;
+    // (2) Dynamic-path template plus the basename stem somewhere in the source.
+    if (stemRe && dynamicTemplateRe.test(c.source) && stemRe.test(c.source)) return true;
+    // (3) Runtime echo: the cell printed the basename at execution time.
+    if (c.stdout && c.stdout.includes(basename)) return true;
   }
   return false;
 }
@@ -884,7 +914,8 @@ function formatRepairPrompt(
   if (figureOrphans.length > 0) {
     lines.push('');
     lines.push(`## Figure orphans (${figureOrphans.length}) — informational`);
-    lines.push('These figure paths are referenced from your report but no cell appears to produce them. Either add the cell that calls `plt.savefig(...)`, or remove the figure reference.');
+    lines.push('These figure paths are referenced from your report but no cell appears to produce them.');
+    lines.push('**Fix**: For each orphan, ensure the cell that generates it contains an explicit `plt.savefig("figures/exact_filename.png")` call with the literal path (not an f-string or variable). Alternatively, remove the figure reference from paper.md if the figure is not needed.');
     for (const f of figureOrphans.slice(0, 20)) {
       lines.push(`- ${f.file}: \`${f.claim}\``);
     }
