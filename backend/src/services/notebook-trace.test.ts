@@ -180,4 +180,80 @@ describe('notebook-trace capture / read snapshots', () => {
     fs.writeFileSync(nbPath, '{ this is not json');
     expect(captureSnapshot(PROJECT_ID)).toBeNull();
   });
+
+  // v3.4.8 — readLatestSnapshot resiliency (Direction 2: API 0/4 fix)
+  describe('readLatestSnapshot resiliency (v3.4.8)', () => {
+    const writeRaw = (lines: string[]) => {
+      const tracePath = getTracePath(PROJECT_ID);
+      fs.mkdirSync(path.dirname(tracePath), { recursive: true });
+      fs.writeFileSync(tracePath, lines.join('\n'));
+    };
+    const makeSnap = (runId: string, ts = '2026-06-04T00:00:00.000Z') =>
+      JSON.stringify({
+        timestamp: ts,
+        run_id: runId,
+        env_hash: 'sha256:test',
+        cells: [{ id: 'c1', type: 'code', exec_count: 1, source: 'x=1', stdout: '', stderr: '', has_error: false, has_image: false, text_output: '' }],
+      });
+
+    it('returns null for missing trace file', () => {
+      expect(readLatestSnapshot(PROJECT_ID)).toBeNull();
+    });
+
+    it('returns null for empty trace file', () => {
+      writeRaw([]);
+      expect(readLatestSnapshot(PROJECT_ID)).toBeNull();
+    });
+
+    it('returns the last valid snapshot when last line is empty (stray newline)', () => {
+      writeRaw([makeSnap('good'), '', '']); // trailing empty lines
+      const got = readLatestSnapshot(PROJECT_ID);
+      expect(got?.run_id).toBe('good');
+    });
+
+    it('falls back to previous line when last line is unrecoverably corrupt', () => {
+      writeRaw([makeSnap('older'), '{{ garbage }}']);
+      const got = readLatestSnapshot(PROJECT_ID);
+      expect(got?.run_id).toBe('older');
+    });
+
+    it('recovers the most recent snapshot from an interleaved last line (Round 13 bug pattern)', () => {
+      // Simulate the actual Round 13 corruption: two snapshots written by
+      // different processes with O_APPEND, concatenated without a newline.
+      // Part 1 = Python-style spacing, Part 2 = Node-style spacing.
+      const pythonStyleSnap = '{"timestamp": "2026-06-04T00:00:00.123456Z", "run_id": "python-writer", "env_hash": "sha256:py", "cells": [{"id": "c1", "type": "code", "exec_count": 1, "source": "y=2", "stdout": "", "stderr": "", "has_error": false, "has_image": false, "text_output": ""}]}';
+      const nodeStyleSnap = makeSnap('node-writer-recent');
+      const interleaved = pythonStyleSnap + nodeStyleSnap; // No \n between
+      writeRaw([makeSnap('earliest'), interleaved]);
+
+      const got = readLatestSnapshot(PROJECT_ID);
+      // Should recover the LAST (Node-style) snapshot from the interleaved line
+      expect(got?.run_id).toBe('node-writer-recent');
+    });
+
+    it('returns null only when ALL lines are unrecoverable', () => {
+      writeRaw(['{{ junk1', '!! junk2', 'no-json-here-at-all']);
+      expect(readLatestSnapshot(PROJECT_ID)).toBeNull();
+    });
+
+    it('skips empty middle lines without affecting recovery', () => {
+      writeRaw([makeSnap('a'), '', '', makeSnap('b'), '']);
+      const got = readLatestSnapshot(PROJECT_ID);
+      expect(got?.run_id).toBe('b');
+    });
+
+    it('handles the exact SCI-005 R13 file pattern (1 valid, 1 empty, 1 interleaved-corrupt)', () => {
+      // Regression test built directly from the Round 13 SCI-005 evidence.
+      const earlySnap = makeSnap('early', '2026-06-04T00:27:34.419Z');
+      const pythonPart = '{"timestamp": "2026-06-04T00:43:16.599898Z", "run_id": "py-writer", "env_hash": "sha256:x", "cells": [{"id": "c", "type": "code", "exec_count": 1, "source": "a=1", "stdout": "", "stderr": "", "has_error": false, "has_image": false, "text_output": ""}]}';
+      const nodePart = makeSnap('node-latest', '2026-06-04T00:44:19.617Z');
+      writeRaw([earlySnap, '', pythonPart + nodePart]);
+
+      const got = readLatestSnapshot(PROJECT_ID);
+      // Should NOT fall back all the way to `early` — must recover `node-latest`
+      // from the interleaved last line.
+      expect(got?.run_id).toBe('node-latest');
+      expect(got?.timestamp).toBe('2026-06-04T00:44:19.617Z');
+    });
+  });
 });

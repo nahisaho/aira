@@ -207,6 +207,25 @@ export function captureSnapshot(projectId: string, runId?: string): TraceSnapsho
 /**
  * Return the most recent snapshot (last JSONL line). Used by the citation
  * linter and frontend trace viewer.
+ *
+ * v3.4.8 — Resilient to corrupted lines. Round 13 telemetry surfaced cases
+ * (8–13 % of experiments) where the last JSONL line was either:
+ *   (a) empty (a stray "\n" appended by an unknown writer), or
+ *   (b) two snapshots concatenated without a newline separator (interleaved
+ *       O_APPEND writes from different writers — observed mix of Python
+ *       `json.dumps(snapshot)` and Node `appendFileSync`).
+ * Previously these returned `null` and the validator answered `available:
+ * false → gates: []`, which the experiment runner displays as the spurious
+ * "0/4 gates" failure that triggered re-runs.
+ *
+ * Recovery strategy: walk lines from end to start. For each line:
+ *   1. Try a direct `JSON.parse`. Success → return that snapshot.
+ *   2. On failure, look for the LAST `{"timestamp"` substring within the line
+ *      (handles both Node-style `{"timestamp":` and Python-style
+ *      `{"timestamp": "..."`) and try to parse from there. This recovers the
+ *      most recent write in an interleaved line.
+ *   3. Still failing → skip to the previous line.
+ * If every line is unrecoverable, return `null` (the original behaviour).
  */
 export function readLatestSnapshot(projectId: string): TraceSnapshot | null {
   const tracePath = getTracePath(projectId);
@@ -216,9 +235,34 @@ export function readLatestSnapshot(projectId: string): TraceSnapshot | null {
   const content = fs.readFileSync(tracePath, 'utf-8');
   const lines = content.trimEnd().split('\n').filter(Boolean);
   if (lines.length === 0) return null;
-  try {
-    return JSON.parse(lines[lines.length - 1]!) as TraceSnapshot;
-  } catch { return null; }
+
+  const tsRe = /\{"timestamp"/g;
+
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]!;
+    // (1) Direct parse — the happy path.
+    try {
+      return JSON.parse(line) as TraceSnapshot;
+    } catch { /* fall through to recovery */ }
+
+    // (2) Interleaved-line recovery: find the LAST `{"timestamp"` boundary
+    //     in the line and parse from there. The trailing object is the most
+    //     recent write, which is what the caller wants.
+    let lastIdx = -1;
+    tsRe.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = tsRe.exec(line)) !== null) lastIdx = m.index;
+    if (lastIdx > 0) {
+      try {
+        const recovered = JSON.parse(line.slice(lastIdx)) as TraceSnapshot;
+        console.warn(`[notebook-trace] recovered snapshot from interleaved JSONL line (project ${projectId.slice(0, 8)})`);
+        return recovered;
+      } catch { /* skip line */ }
+    }
+    // (3) Skip and try the previous line.
+  }
+  console.warn(`[notebook-trace] all snapshots unparseable (project ${projectId.slice(0, 8)}, ${lines.length} lines)`);
+  return null;
 }
 
 /** Read all snapshots (for the audit log viewer). */

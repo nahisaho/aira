@@ -2,6 +2,53 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.4.8] — 2026-06-04 — Resilient Snapshot Read (Direction 2)
+
+Round 11 / 12 / 13 で一貫して 8〜13% の実験が「Gates 0/4 + claims=0」になり再実行が必要だった。この異常は **`validateProject` が `available: false / reason: "No trace snapshot"` を返す** ことで起きていた。実フィールドの corrupted JSONL を解析した結果、**`execution-trace.jsonl` への書き込みが Node の `captureSnapshot` 以外にも発生**しており(Python `json.dumps()` 形式のスナップショットが混在 — spaces + microsecond timestamp が決定的)、O_APPEND の非アトミック動作で 2 つのスナップショットが 1 行に結合され、`JSON.parse` が失敗していた。
+
+### 観測された corruption パターン (Round 13 SCI-005)
+
+```
+line 1: 1346 bytes — valid (Node 形式、3 cells)
+line 2: 0 bytes  — 空行
+line 3: 66663 bytes — parse fail at byte 33480
+        bytes 0-33480  = Python 形式の snapshot (spaces, .599898Z)
+        bytes 33480-   = Node 形式の snapshot   (no-space, .617Z)
+```
+
+`readLatestSnapshot()` は最終行のみ try-parse して失敗 → null → validateProject early-return → 全 gates / claims 配列空。Experiment runner は表示用 hardcode で "0/4" を出していた。
+
+### Changed — Pillar A: readLatestSnapshot を resilient に (notebook-trace.ts)
+
+- **末尾から先頭へ全行を walk** し、最初に parse 成功した snapshot を返す
+- 直 `JSON.parse` 失敗時の **interleaved 行 recovery**: 行内の最後の `{"timestamp"` 部分文字列(Node-style `{"timestamp":` / Python-style `{"timestamp": ` 両対応)を見つけて、そこから parse 試行。最後の書き込みが取れる
+- 全行 unparseable のみ null を返す(従来挙動を維持)
+- 復旧 / 全滅時に `console.warn` を出して telemetry に残す
+- captureSnapshot 側 / API 構造 / 上流の挙動は不変
+
+### What was explicitly NOT changed (理由)
+
+- **書き込み側の atomic 化(temp + rename / mutex)** → 見送り。実体は別プロセス(Python)が同時書込みしている問題で、AIRA 側のロックでは止められない。読み出し側で防御するのが正しい
+- **第三者の Python writer 抑止**(skill 強化 / ファイル名変更) → 別途検討。本リリースは validator 側で穴を塞ぐ最小修正
+
+### Tests (+8)
+
+- `readLatestSnapshot resiliency (v3.4.8)` describe block:
+  - missing trace / empty file → null
+  - 末尾に空行が残る場合 → 直前の valid snapshot を返す
+  - 末尾の line が完全 corrupt → 一つ前の line にフォールバック
+  - **interleaved last line (Round 13 bug pattern) → 行内で recovery して最新側 (Node 書込み) を返す**
+  - 全行 unparseable → null
+  - 空行を間に挟んでも walk が壊れない
+  - **SCI-005 R13 の実ファイルパターン回帰テスト**(1 valid + 1 empty + 1 interleaved-corrupt → `node-latest` 取得)
+- 全 21/21 グリーン(notebook-trace suite)、global 全 289/289
+
+### Notes
+
+- Round 14 で「Gates 0/4」が消失するはず。観測すべき副次指標: 再実行率、experiment runner の異常率
+- もし Round 14 でも残るようなら、別の corruption source(例: notebook.ipynb 自体の race)が残っている可能性 → 別途 v3.4.9 で対処
+- `console.warn` ログを backend で観察することで、Python writer の頻度を継続モニター可能
+
 ## [v3.4.7] — 2026-06-04 — VM as Examples, Not Count (Direction 1)
 
 v3.4.5 / v3.4.6 で「検出範囲を広げる」方向に進めたところ、Round 13 で **value_mismatches 平均 30.7 → 54.8 (+78%)** と退行(特に v3.4.4 で VM=0 だった 6 実験が v3.4.5 で VM>0 に新規発生)。原因分析の結果、退行の本質は検出ロジックでなく **agent が「VM の数」を最適化対象とみなしてしまう perverse incentive loop**(数を減らそうとして引用追加 → 余計な再実行 → stochastic ドリフト → さらに VM 増)。両リリースを revert(c2156dc / c15b1f6)した上で、本リリースでは **検出ロジックを v3.4.4 のまま据え置き、agent から見える表現だけ変更**する。
