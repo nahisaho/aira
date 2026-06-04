@@ -740,6 +740,78 @@ describe('validateProject', () => {
       expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(false);
     });
 
+    // v3.4.10 — dynamic path detection (Round 15 FigOrp false-positive fix)
+    describe('figureHasProducerCell dynamic paths (v3.4.10)', () => {
+      const makeCell = (id: string, source: string, stdout = '') => ({
+        id,
+        type: 'code' as const,
+        exec_count: 1,
+        source,
+        stdout,
+        stderr: '',
+        has_error: false,
+        has_image: false,
+        text_output: '',
+        outputs: [],
+      });
+
+      it('matches f-string template + basename stem in source', () => {
+        // The literal "roc.png" never appears, but `name = "roc"` carries the stem
+        // and the f-string template targets figures/.
+        const src = 'name = "roc"\nplt.savefig(f"figures/{name}.png")';
+        const cells = [makeCell('viz', src)];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(true);
+      });
+
+      it('matches os.path.join("figures", …) + stem in source', () => {
+        const src = 'fname = "roc"\npath = os.path.join("figures", fname + ".png")\nplt.savefig(path)';
+        const cells = [makeCell('viz', src)];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(true);
+      });
+
+      it('matches when stdout echoes the basename at runtime', () => {
+        const src = 'fig.savefig(out_path)';
+        const stdout = 'Saved figure to: figures/roc.png\n';
+        const cells = [makeCell('viz', src, stdout)];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(true);
+      });
+
+      it('rejects f-string template without a basename stem hint', () => {
+        // The truly-variable case — the stem `roc` is not anywhere in the source
+        const src = 'for i in range(3):\n  plt.savefig(f"figures/plot_{i}.png")';
+        const cells = [makeCell('viz', src)];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(false);
+      });
+
+      it('rejects when the dynamic template targets a different directory', () => {
+        // Targets `outputs/`, not `figures/`. Even with the stem present,
+        // dynamicTemplateRe should not match, so this is a miss.
+        const src = 'fname = "roc"\nplt.savefig(f"outputs/{fname}.png")';
+        const cells = [makeCell('viz', src)];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(false);
+      });
+
+      it('rejects stdout-echo when no save call is present', () => {
+        // The save-call gate keeps printed paths from auto-counting as producers.
+        const src = 'print("figures/roc.png")';
+        const cells = [makeCell('viz', src, 'figures/roc.png\n')];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(false);
+      });
+
+      it('regression: still matches the original literal-path pattern', () => {
+        const src = 'plt.savefig("figures/roc.png")';
+        const cells = [makeCell('viz', src)];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(true);
+      });
+    });
+
     it('reports figure_orphans for unreferenced figures', () => {
       setupProject(
         {

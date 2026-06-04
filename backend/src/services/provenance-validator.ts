@@ -396,37 +396,50 @@ export function extractFigureReferences(markdown: string): string[] {
  * Check whether any cell source mentions writing the given figure path.
  * Looks for common save calls (`savefig`, `to_image`, `write_image`,
  * `Image.save`, `cv2.imwrite`, `imsave`, `plt.imsave`) referencing the
- * figure path or its basename. Heuristic — false negatives possible if the
- * agent constructs the path dynamically.
+ * figure path or its basename.
+ *
+ * v3.4.10 — Round 15 telemetry showed FigOrp avg jumped to 7.2 (worst in 5
+ * rounds). Root cause: agents construct paths dynamically
+ * (`f"figures/{var}.png"`, `os.path.join("figures", x)`, looped names) so
+ * the literal `figures/roc.png` string never appears in any cell's source.
+ * The original `pathRe` then missed real producers and flagged false
+ * positive orphans. We now run three matchers per cell, all gated on a
+ * save call to keep noise down:
+ *   1. Literal: cell source contains the full path or basename verbatim.
+ *   2. Dynamic template + stem: source contains an `f"figures/…"` or
+ *      `os.path.join("figures", …)` template AND the basename stem
+ *      (filename without extension) appears somewhere in the source —
+ *      catching `name="roc"; plt.savefig(f"figures/{name}.png")`.
+ *   3. Runtime echo: the cell's stdout contains the basename, indicating
+ *      the path was printed at execution time (a common "Saved: X" pattern).
+ * Heuristic — fully variable names (`f"figures/plot_{i}.png"` in a loop
+ * with no stem hint) are still missed.
  */
 export function figureHasProducerCell(
   figurePath: string,
   cells: TraceCell[],
 ): boolean {
   const basename = figurePath.split('/').pop() ?? figurePath;
+  const basenameNoExt = basename.replace(/\.[^.]+$/, '');
   const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const saveCallRe = /\b(savefig|to_image|write_image|imsave|imwrite|Image\.save|fig\.write_image|joblib\.dump)\b/;
-  const pathRe = new RegExp(escape(figurePath) + '|' + escape(basename));
-  // Also detect dynamic path construction (f-strings, .format, concat)
-  const basenameNoExt = basename.replace(/\.[^.]+$/, '');
-  const dynamicPathRe = new RegExp(
-    escape(basenameNoExt) + '|' +
-    // Match f-string patterns like f"figures/{var}.png"
-    'f["\']figures/' + '|' +
-    // Match os.path.join("figures", ...)
-    'os\\.path\\.join\\(["\']figures["\']',
-  );
+  const literalPathRe = new RegExp(escape(figurePath) + '|' + escape(basename));
+  const dynamicTemplateRe = /f["']figures\/|os\.path\.join\(["']figures["']/;
+  // Stem requires at least one char so that pathological basenames like ".png"
+  // (basenameNoExt = "") don't degenerate into a regex that matches everything.
+  const stemRe = basenameNoExt.length > 0
+    ? new RegExp(escape(basenameNoExt), 'i')
+    : null;
+
   for (const c of cells) {
     if (c.type !== 'code') continue;
-    // Original heuristic: save call + exact path
-    if (saveCallRe.test(c.source) && pathRe.test(c.source)) return true;
-    // Extended: save call + dynamic path construction with basename stem
-    if (saveCallRe.test(c.source) && dynamicPathRe.test(c.source)) {
-      // Extra check: the basename stem appears somewhere in the cell
-      if (new RegExp(escape(basenameNoExt), 'i').test(c.source)) return true;
-    }
-    // Extended: cell output contains the figure path (produced at runtime)
-    if (saveCallRe.test(c.source) && c.stdout && c.stdout.includes(basename)) return true;
+    if (!saveCallRe.test(c.source)) continue;
+    // (1) Literal path or basename in source.
+    if (literalPathRe.test(c.source)) return true;
+    // (2) Dynamic-path template plus the basename stem somewhere in the source.
+    if (stemRe && dynamicTemplateRe.test(c.source) && stemRe.test(c.source)) return true;
+    // (3) Runtime echo: the cell printed the basename at execution time.
+    if (c.stdout && c.stdout.includes(basename)) return true;
   }
   return false;
 }
@@ -532,17 +545,14 @@ export function valueAppearsInCellOutputs(
   if (cell.text_output && valueAppearsInOutputs(claimedValue, precision, cell.text_output)) {
     return true;
   }
-  // Priority 2: last 5 non-empty lines of stdout (catches values printed
-  // via print() that are not the very last line, while still avoiding
-  // intermediate noise from earlier in the output).
+  // Priority 2: last non-empty line of stdout
   if (cell.stdout) {
     const lines = cell.stdout.replace(/\s+$/, '').split('\n');
-    let checked = 0;
-    for (let i = lines.length - 1; i >= 0 && checked < 5; i--) {
+    // Walk backwards to skip trailing blank lines defensively.
+    for (let i = lines.length - 1; i >= 0; i--) {
       const line = lines[i]!;
       if (line.trim() === '') continue;
-      if (valueAppearsInOutputs(claimedValue, precision, line)) return true;
-      checked++;
+      return valueAppearsInOutputs(claimedValue, precision, line);
     }
   }
   return false;

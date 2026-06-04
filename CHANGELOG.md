@@ -2,6 +2,55 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.4.10] — 2026-06-05 — Figure Producer Detection — Dynamic Paths
+
+Round 15 telemetry で **FigOrp avg が 2.5 → 7.2 と 5 ラウンド中ワースト**に悪化。原因調査の結果、Round 14→15 で agent の図生成パターンが `plt.savefig("figures/roc.png")` 型から **動的パス構築型**(f-string, `os.path.join`, ループ生成)に shift していたが、`figureHasProducerCell()` が literal 文字列比較しかしておらず大量の **false-positive orphan** が発生していた。
+
+PR #1 (`fix/figorp-dynamic-paths-and-vm-stdout`) を元に **Option A の方針で修正**:Change 1 (動的パス検出) と Change 3 (repair guidance) は採用、**Change 2 (VM stdout を 1 行 → 5 行) は撤回**(v3.4.4 Pillar A の "last-line bias" を維持、`Citation Ledger` cell パターンに揃える)。
+
+### Changed — Pillar A: `figureHasProducerCell()` の動的パス検出 (provenance-validator.ts)
+
+`saveCallRe` がヒットした cell に対し、以下の 3 系統で producer 判定:
+
+1. **Literal**: source に `figures/roc.png` か basename `roc.png` が含まれる(従来挙動)
+2. **Dynamic template + stem**: source に `f"figures/…"` または `os.path.join("figures", …)` テンプレートが含まれ、かつ basename stem (`roc`) が source のどこかに登場(例:`name = "roc"; plt.savefig(f"figures/{name}.png")`)
+3. **Runtime echo**: `cell.stdout` に basename が含まれる(例:`print(f"Saved {out_path}")` で stdout に `figures/roc.png` が出力されたケース)
+
+実装メモ:
+- 旧 PR では `dynamicPathRe` の中に basename stem を 1 alternative として入れた後、改めて inner `if` で basename stem を再検査していて冗長 / 意味不明。`dynamicTemplateRe`(テンプレートのみ)と `stemRe`(stem のみ)に分離してロジックを明示化
+- 病的な basenameNoExt(空文字、`.png` だけのファイル名から派生)が "全てにマッチ" する regex に degenerate しないよう、`stemRe.length > 0` ガードを追加
+- 完全に変数化されたパス(`f"figures/plot_{i}.png"` で stem hint なし)は依然検出不可 — その場合は agent 側で literal path にするか、別 cell で path を `print()` するよう repair prompt で誘導
+
+### Changed — Pillar B: repair prompt の図 fix ガイダンス改善
+
+「リテラルパスを使え、f-string ではなく」を明示。Pillar A で f-string も検出するようになったが、確実性のため agent には依然 literal path を推奨。
+
+### Reverted — Change 2: VM stdout を 5 行に拡張する提案を撤回
+
+PR #1 にあった `valueAppearsInCellOutputs` の stdout スキャン拡張(1 行 → 5 行)は **採用しない**。理由:
+
+- v3.4.4 Pillar A の "last-line bias" は Round 12 で **20.1 件の false positive(中間 print 誤一致)を構造的に消すための意図的な設計**。5 行に広げると Round 12-13 の perverse incentive 退行を 1 ラウンドで再現するリスク
+- v4.13.0 skill の **Citation Ledger cell** パターン(report に書く文字列を print するだけの cell を用意 → cite)と方向が真逆。Skill 側で agent の出力フォーマットを正す方が筋が良い
+- R15 の VM avg=25.8 は **5 ラウンド中ベスト**で、現状の 1-line scan が VM のボトルネックではないことを実データが示している
+
+### Tests (+7)
+
+- 既存 3 件(literal path / basename / 非 save-call reject)は不変
+- 新規 `figureHasProducerCell dynamic paths (v3.4.10)` describe block:
+  - f-string + stem 一致 → 検出
+  - `os.path.join("figures", …)` + stem 一致 → 検出
+  - stdout の runtime echo → 検出
+  - **f-string あるが stem hint なし(`plot_{i}.png` loop)→ 不検出**(false positive 防止)
+  - **異なるディレクトリ(`outputs/`)へのテンプレート → 不検出**
+  - **save-call がない `print(path)` だけの cell → 不検出**(stdout のみではダメ)
+  - **回帰**: 旧 literal pattern は引き続き検出
+- 全 71/71 グリーン(provenance suite)、global 全 304/304
+
+### Notes
+
+- Round 16 で FigOrp avg が 7.2 → 期待 3 台に戻れば本変更の効果確認
+- 完全変数化パス(loop / 配列インデックス)は依然 false positive 残るが、これは skill 側 v4.14.0 の "literal path を強く推奨" ガイドで対処予定
+
 ## [v3.4.9] — 2026-06-04 — Normalised VM telemetry + value transcription rules
 
 Round 11〜14 + マルチラン外れ値分析 (n=4×4) で **claims と value_mismatches に 0.728 の正相関** が判明:論文が長いほど VM が増える構造があり、絶対値 VM はバージョン比較に不公平。同時にマルチランで **VM の CV(変動係数)が 61〜165%** と判明し、単一実行の VM は信頼性が低い。本リリースは(1) **paper サイズで正規化した VM grade を API に追加**(分析側で公平比較できる)、(2) **値転記時の reformatting** を抑制する skill ガイドを追加(マルチラン分散の構造要因の一つを潰す)。
