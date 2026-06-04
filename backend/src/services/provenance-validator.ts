@@ -310,6 +310,19 @@ export interface ReportThinness {
   level: 'missing' | 'tiny' | 'no_claims';
 }
 
+/**
+ * v3.4.9 — paper-size-normalised VM grade. Round 14 telemetry showed a
+ * 0.728 correlation between `claims` and `value_mismatches`, meaning longer
+ * papers naturally accrue more VMs without lower per-claim accuracy. The
+ * ratio and grade let external analysis compare versions fairly.
+ *
+ * **API-only field — NOT surfaced in the repair prompt.** v3.4.7
+ * deliberately hides VM counts from the agent to avoid the perverse loop
+ * where the agent optimises for the number. The grade is for the
+ * experiment runner / telemetry, not for the agent's decision-making.
+ */
+export type VmGrade = 'A' | 'B' | 'C' | 'D';
+
 export interface ValidationReport {
   available: boolean;
   /** Reason when available=false. */
@@ -319,6 +332,17 @@ export interface ValidationReport {
   unknown_citations: Array<{ claim: NumericClaim; bad_cell_id: string }>;
   /** v3.4.0 — values cited from cells whose outputs do not contain the value. */
   value_mismatches: ValueMismatch[];
+  /**
+   * v3.4.9 — VM normalised by claim count (= `value_mismatches.length /
+   * claims.length`). `0` when `claims.length === 0`. Telemetry only —
+   * never shown to the agent.
+   */
+  vm_ratio: number;
+  /**
+   * v3.4.9 — letter grade derived from `vm_ratio`:
+   * `A` ≤ 0.5, `B` ≤ 1.0, `C` ≤ 2.0, `D` > 2.0. Telemetry only.
+   */
+  vm_grade: VmGrade;
   /** v3.4.2 — figures referenced from reports but produced by no cell. */
   figure_orphans: FigureOrphan[];
   /** v3.4.2 — informational notice that report.md / paper.md is thin or missing. */
@@ -326,6 +350,21 @@ export interface ValidationReport {
   gates: GateResult[];
   /** Overall pass = every gate passes AND no unknown citations. */
   pass: boolean;
+}
+
+/**
+ * v3.4.9 — derive `vm_grade` from `vm_ratio`. Exported so analysis scripts
+ * and tests can reuse the exact boundaries. Inputs: `vmCount`, `claimCount`.
+ */
+export function computeVmRatioAndGrade(vmCount: number, claimCount: number): { vm_ratio: number; vm_grade: VmGrade } {
+  if (claimCount <= 0) return { vm_ratio: 0, vm_grade: 'A' };
+  const ratio = vmCount / claimCount;
+  let grade: VmGrade;
+  if (ratio <= 0.5) grade = 'A';
+  else if (ratio <= 1.0) grade = 'B';
+  else if (ratio <= 2.0) grade = 'C';
+  else grade = 'D';
+  return { vm_ratio: ratio, vm_grade: grade };
 }
 
 // ── v3.4.2 — figure references (Pillar 2) ─────────────────────────────
@@ -887,6 +926,8 @@ export function validateProject(projectId: string): ValidationReport {
       uncited_claims: [],
       unknown_citations: [],
       value_mismatches: [],
+      vm_ratio: 0,
+      vm_grade: 'A',
       figure_orphans: [],
       report_thinness: [],
       gates: [],
@@ -982,12 +1023,16 @@ export function validateProject(projectId: string): ValidationReport {
     checkCitationCoverage(claims),
   ];
 
+  const { vm_ratio, vm_grade } = computeVmRatioAndGrade(value_mismatches.length, claims.length);
+
   return {
     available: true,
     claims,
     uncited_claims: uncited,
     unknown_citations: unknown,
     value_mismatches,
+    vm_ratio,
+    vm_grade,
     figure_orphans,
     report_thinness,
     gates,

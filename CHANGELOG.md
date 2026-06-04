@@ -2,6 +2,53 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.4.9] — 2026-06-04 — Normalised VM telemetry + value transcription rules
+
+Round 11〜14 + マルチラン外れ値分析 (n=4×4) で **claims と value_mismatches に 0.728 の正相関** が判明:論文が長いほど VM が増える構造があり、絶対値 VM はバージョン比較に不公平。同時にマルチランで **VM の CV(変動係数)が 61〜165%** と判明し、単一実行の VM は信頼性が低い。本リリースは(1) **paper サイズで正規化した VM grade を API に追加**(分析側で公平比較できる)、(2) **値転記時の reformatting** を抑制する skill ガイドを追加(マルチラン分散の構造要因の一つを潰す)。
+
+実験スクリプト側で実装される項目(3x median, Figure Manifest を Golden Rule に昇格, Claims 適正化, ドメイン分岐, temperature=0)は **本リリース範囲外**(AIRA コード変更ではなく Round 15 ベンチマーク runner / プロンプトで実装される)。
+
+### Added — Pillar A: `vm_ratio` + `vm_grade` を ValidationReport に追加 (provenance-validator.ts)
+
+- **`VmGrade = 'A' | 'B' | 'C' | 'D'`** type を新規 export
+- **`ValidationReport.vm_ratio: number`** — `value_mismatches.length / claims.length`、claims=0 は 0
+- **`ValidationReport.vm_grade: VmGrade`** — A (ratio≤0.5) / B (≤1.0) / C (≤2.0) / D (>2.0)
+- **`computeVmRatioAndGrade(vmCount, claimCount)` を export** — 分析スクリプト / 外部ツールが同じ境界で grade 計算できる
+- 早期 return パス(snapshot=null)では `vm_ratio: 0, vm_grade: 'A'` を返す(defensive default)
+- **v3.4.7 invariant 維持**: `vm_grade` / `vm_ratio` は API 応答にのみ出る。**repair prompt / postmortem には絶対に出さない** — agent が grade を "下げる" 行動最適化に走るのを防ぐ。telemetry 専用フィールド
+
+### Skill — Pillar B: Co-Scientist v4.12.0 → v4.13.0 値転記ルール
+
+- **「Value transcription rules (v4.13.0)」** セクションを新設:
+  1. 丸めない(cell 出力が `0.8734` なら `0.8734`、`0.87` にしない)
+  2. 単位変換しない(`0.8734` を `87.34%` に書き換えない)
+  3. reformat しない(`1234` を `1,234`、`8.3e-1` を `8.3 × 10⁻¹` 等にしない)
+  4. **異なる表現が必要なら cell 内で完結**させる:変換ロジックを cell に入れ、cell の最終出力 IS the desired form。それを引用する
+  5. **Citation Ledger cell** パターンを推奨:report に書く文字列を print するだけの cell を用意して引用する → 転記ステップそのものが消える
+- copilot-instructions.md に短縮版を追加
+- top-level / skill.json / copilot-instructions.md ヘッダを v4.13.0 にバンプ
+
+### Deferred (本リリース範囲外)
+
+- **P1 3x median**: experiment runner 側で実装(`run-experiments-round15.js`)
+- **P3 Figure Manifest を Golden Rule に**: experiment prompt 側
+- **P4 Claims 適正化ガイダンス**: experiment prompt 側
+- **P6 ドメイン別プロンプト分岐**: experiment prompt generator 側
+- **P8 temperature=0**: Copilot CLI の設定サポート要調査、Round 15 のスコープ外
+
+### Tests (+8)
+
+- `computeVmRatioAndGrade` の境界(A/B/C/D)+ claims=0 防御
+- end-to-end で `ValidationReport.vm_ratio` / `vm_grade` が出ることを確認
+- snapshot=null の早期 return パスでも default 値が入ることを確認
+- **回帰防止**: `repair_prompt` に `vm_grade` / `vm_ratio` / `Grade: A` 等が含まれないことを assert(v3.4.7 invariant)
+- 全 289 + 8 = 297/297 グリーン
+
+### Notes
+
+- Round 15 で **`vm_grade` 分布** を観測できる。Round 14 では VM/Claims 比 > 2.0 が 27% だったので、A/B が増えれば改善信号
+- 値転記ルールの効果は、マルチラン CV の縮小として見える(同じ実験を 3 回回すと CV が下がる、つまり再現性向上)
+
 ## [v3.4.8] — 2026-06-04 — Resilient Snapshot Read (Direction 2)
 
 Round 11 / 12 / 13 で一貫して 8〜13% の実験が「Gates 0/4 + claims=0」になり再実行が必要だった。この異常は **`validateProject` が `available: false / reason: "No trace snapshot"` を返す** ことで起きていた。実フィールドの corrupted JSONL を解析した結果、**`execution-trace.jsonl` への書き込みが Node の `captureSnapshot` 以外にも発生**しており(Python `json.dumps()` 形式のスナップショットが混在 — spaces + microsecond timestamp が決定的)、O_APPEND の非アトミック動作で 2 つのスナップショットが 1 行に結合され、`JSON.parse` が失敗していた。

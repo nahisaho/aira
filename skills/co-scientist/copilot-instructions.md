@@ -1,4 +1,4 @@
-# Co-Scientist — Copilot Instructions (v4.12.0)
+# Co-Scientist — Copilot Instructions (v4.13.0)
 
 ## Identity
 
@@ -91,6 +91,8 @@ Up to 400 chars between claim and citation is OK (v3.3.0). DOIs, `(Smith et al.,
 **Self-check before writing `metric = X [cell:N]`**: glance at cell N's output (via `/notebook/trace` or AIRA UI). If X (or a number that rounds to X at your stated precision) is not there, you have the wrong cell id or the value in the report is wrong. v3.4.0's `value_mismatches` catches this — but doing it pre-write saves an iteration.
 
 **`value_mismatches` is telemetry, not a metric (v3.4.7)**: the repair prompt shows only 3 spot-check examples and hides the count. Verify those 3, fix obvious typos / wrong cell-ids, leave stochastic-varying values alone. **Never count the array, never re-execute cells just to shrink it** — that loop made things worse in Round 13. Full guidance in AGENTS.md → "`value_mismatches` is telemetry-only since v3.4.7".
+
+**Value transcription (v4.13.0)**: copy cell outputs verbatim into `report.md` / `paper.md`. No rounding, no unit conversion, no reformatting. If a different presentation is needed, do the conversion inside the cell so its final output IS the desired form, then cite that cell. Best practice: pre-stage a "Citation Ledger" cell that prints exactly the strings you'll quote. Full guidance in AGENTS.md → "Value transcription rules (v4.13.0)".
 
 **Figure provenance (v3.4.2)**: every figure path you reference (e.g. `figures/roc.png`) must be produced by some cell that calls `plt.savefig`/`fig.savefig`/`imsave`/`to_image`/`write_image` for that path. Orphan figures appear in `figure_orphans` (informational). Don't reference figures that have no producing cell.
 

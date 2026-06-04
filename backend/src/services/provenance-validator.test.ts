@@ -13,6 +13,7 @@ import {
   extractNumericCandidates,
   extractFigureReferences,
   figureHasProducerCell,
+  computeVmRatioAndGrade,
 } from './provenance-validator.js';
 import { getTraceDir } from '../config/paths.js';
 import {
@@ -617,6 +618,79 @@ describe('validateProject', () => {
         // The extractor may produce multiple claims per line via overlapping
         // patterns (metric-assignment + metric-of); that's expected.
         expect(report.value_mismatches.length).toBeGreaterThanOrEqual(5);
+      });
+    });
+
+    // v3.4.9 — Pillar A: vm_ratio + vm_grade in API (telemetry, NOT in repair prompt)
+    describe('vm_ratio + vm_grade (v3.4.9 Pillar A)', () => {
+      // Unit tests on the grade boundary function
+      it('grades A when ratio ≤ 0.5', () => {
+        expect(computeVmRatioAndGrade(0, 10)).toEqual({ vm_ratio: 0, vm_grade: 'A' });
+        expect(computeVmRatioAndGrade(5, 10)).toEqual({ vm_ratio: 0.5, vm_grade: 'A' });
+      });
+      it('grades B when 0.5 < ratio ≤ 1.0', () => {
+        expect(computeVmRatioAndGrade(6, 10)).toEqual({ vm_ratio: 0.6, vm_grade: 'B' });
+        expect(computeVmRatioAndGrade(10, 10)).toEqual({ vm_ratio: 1.0, vm_grade: 'B' });
+      });
+      it('grades C when 1.0 < ratio ≤ 2.0', () => {
+        expect(computeVmRatioAndGrade(15, 10)).toEqual({ vm_ratio: 1.5, vm_grade: 'C' });
+        expect(computeVmRatioAndGrade(20, 10)).toEqual({ vm_ratio: 2.0, vm_grade: 'C' });
+      });
+      it('grades D when ratio > 2.0', () => {
+        expect(computeVmRatioAndGrade(21, 10)).toEqual({ vm_ratio: 2.1, vm_grade: 'D' });
+        expect(computeVmRatioAndGrade(180, 58)).toEqual({ vm_ratio: 180 / 58, vm_grade: 'D' });
+      });
+      it('returns {0, A} when claims is zero (avoid divide-by-zero)', () => {
+        expect(computeVmRatioAndGrade(0, 0)).toEqual({ vm_ratio: 0, vm_grade: 'A' });
+        // VM>0 with claims=0 shouldn't happen in practice, but guard anyway
+        expect(computeVmRatioAndGrade(5, 0)).toEqual({ vm_ratio: 0, vm_grade: 'A' });
+      });
+
+      // End-to-end: fields appear in ValidationReport
+      it('exposes vm_ratio and vm_grade on the validation report', () => {
+        setupProject(
+          {
+            cells: [
+              { id: 'seed', cell_type: 'code', source: 'import numpy as np\nnp.random.seed(0)', outputs: [] },
+              { id: 'env', cell_type: 'code', source: '!pip freeze > requirements.txt', outputs: [] },
+              { id: 'm', cell_type: 'code', source: 'x = 0.5', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.5\n' }] },
+            ],
+            metadata: {}, nbformat: 4, nbformat_minor: 5,
+          },
+          { 'report.md': 'AUROC = 0.91 [cell:m]' }, // mismatch — cell prints 0.5, claim 0.91
+        );
+        const report = validateProject(PROJECT_ID);
+        expect(typeof report.vm_ratio).toBe('number');
+        expect(['A', 'B', 'C', 'D']).toContain(report.vm_grade);
+        // sanity: ratio matches the underlying counts
+        expect(report.vm_ratio).toBe(report.value_mismatches.length / report.claims.length);
+      });
+
+      it('returns vm_ratio=0 / vm_grade=A when no trace snapshot exists (early return path)', () => {
+        const report = validateProject(PROJECT_ID);
+        expect(report.available).toBe(false);
+        expect(report.vm_ratio).toBe(0);
+        expect(report.vm_grade).toBe('A');
+      });
+
+      it('does NOT leak vm_grade / vm_ratio into the repair prompt (v3.4.7 invariant preserved)', () => {
+        setupProject(
+          {
+            cells: [
+              { id: 'seed', cell_type: 'code', source: 'import numpy as np\nnp.random.seed(0)', outputs: [] },
+              { id: 'env', cell_type: 'code', source: '!pip freeze > requirements.txt', outputs: [] },
+              { id: 'm', cell_type: 'code', source: 'a=1', outputs: [{ output_type: 'stream', name: 'stdout', text: '0.10\n' }] },
+            ],
+            metadata: {}, nbformat: 4, nbformat_minor: 5,
+          },
+          { 'report.md': 'AUROC = 0.91 [cell:m]' },
+        );
+        const repair = buildRepairPayload(PROJECT_ID);
+        // The grade letter and the ratio must not appear in the prompt text
+        expect(repair.repair_prompt).not.toMatch(/vm_grade/i);
+        expect(repair.repair_prompt).not.toMatch(/vm_ratio/i);
+        // No "Grade: A/B/C/D" exposure either
+        expect(repair.repair_prompt).not.toMatch(/grade\s*[:=]\s*[ABCD]\b/i);
       });
     });
   });

@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.12.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.13.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.12.0
+# Co-Scientist v4.13.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -125,6 +125,20 @@ If the value (or a number that rounds to it at your stated precision) does not a
 - The value in the report doesn't match the computation (correct the value).
 
 **Format equivalence is handled automatically (v3.4.4 Pillar B)**: writing `0.83` matches outputs like `83.0%`, `8.3e-1`, `0.8316` (within rounding tolerance). You don't have to manually convert percent ↔ decimal or scientific ↔ decimal.
+
+### Value transcription rules (v4.13.0)
+
+When you write a metric in `report.md` / `paper.md`, **copy the cell output value verbatim**. Round 14 multi-run analysis showed transcription-time formatting changes (rounding, unit conversion, percent rewriting) account for a measurable share of `value_mismatches`. The validator can tolerate format equivalence (above), but only when the output IS one of the recognised forms — agent-imposed rewrites bypass it.
+
+**Rules**:
+
+1. **Do not round.** If the cell prints `0.8734`, write `0.8734`, not `0.87` or `0.873`. Rounding belongs to the cell, not the report.
+2. **Do not change units.** If the cell prints `0.8734`, write `0.8734`, not `87.34%`. (And vice versa — match what the cell emits.)
+3. **Do not reformat.** Cell output `1234` → write `1234`, not `1,234`. Cell output `8.3e-1` → write `8.3e-1` or `0.83`, not `8.3·10⁻¹` or `8.3 × 10⁻¹`.
+4. **If you need a different presentation** (e.g. you want `87.34%` in the body), **do the conversion inside the cell** so the cell's final output IS `87.34%`. Then cite that cell. The validator looks at the cell's `text_output` / last stdout line; whatever the cell emits is what counts as the canonical form.
+5. **Citation Ledger cell**: pre-stage a cell whose only job is to print the exact strings you'll quote in the report. Cite that ledger cell. This eliminates the entire class of "agent reformatted the value on the way into the report" mismatches.
+
+The goal isn't to be rigid — it's to **make the cell, not the agent, the source of truth for the value's textual form**. Then no transcription step exists to drift through.
 
 ### `value_mismatches` is telemetry-only since v3.4.7 — do NOT optimise its length
 
