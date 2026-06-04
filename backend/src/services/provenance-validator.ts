@@ -407,9 +407,26 @@ export function figureHasProducerCell(
   const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const saveCallRe = /\b(savefig|to_image|write_image|imsave|imwrite|Image\.save|fig\.write_image|joblib\.dump)\b/;
   const pathRe = new RegExp(escape(figurePath) + '|' + escape(basename));
+  // Also detect dynamic path construction (f-strings, .format, concat)
+  const basenameNoExt = basename.replace(/\.[^.]+$/, '');
+  const dynamicPathRe = new RegExp(
+    escape(basenameNoExt) + '|' +
+    // Match f-string patterns like f"figures/{var}.png"
+    'f["\']figures/' + '|' +
+    // Match os.path.join("figures", ...)
+    'os\\.path\\.join\\(["\']figures["\']',
+  );
   for (const c of cells) {
     if (c.type !== 'code') continue;
+    // Original heuristic: save call + exact path
     if (saveCallRe.test(c.source) && pathRe.test(c.source)) return true;
+    // Extended: save call + dynamic path construction with basename stem
+    if (saveCallRe.test(c.source) && dynamicPathRe.test(c.source)) {
+      // Extra check: the basename stem appears somewhere in the cell
+      if (new RegExp(escape(basenameNoExt), 'i').test(c.source)) return true;
+    }
+    // Extended: cell output contains the figure path (produced at runtime)
+    if (saveCallRe.test(c.source) && c.stdout && c.stdout.includes(basename)) return true;
   }
   return false;
 }
@@ -515,14 +532,17 @@ export function valueAppearsInCellOutputs(
   if (cell.text_output && valueAppearsInOutputs(claimedValue, precision, cell.text_output)) {
     return true;
   }
-  // Priority 2: last non-empty line of stdout
+  // Priority 2: last 5 non-empty lines of stdout (catches values printed
+  // via print() that are not the very last line, while still avoiding
+  // intermediate noise from earlier in the output).
   if (cell.stdout) {
     const lines = cell.stdout.replace(/\s+$/, '').split('\n');
-    // Walk backwards to skip trailing blank lines defensively.
-    for (let i = lines.length - 1; i >= 0; i--) {
+    let checked = 0;
+    for (let i = lines.length - 1; i >= 0 && checked < 5; i--) {
       const line = lines[i]!;
       if (line.trim() === '') continue;
-      return valueAppearsInOutputs(claimedValue, precision, line);
+      if (valueAppearsInOutputs(claimedValue, precision, line)) return true;
+      checked++;
     }
   }
   return false;
@@ -884,7 +904,8 @@ function formatRepairPrompt(
   if (figureOrphans.length > 0) {
     lines.push('');
     lines.push(`## Figure orphans (${figureOrphans.length}) — informational`);
-    lines.push('These figure paths are referenced from your report but no cell appears to produce them. Either add the cell that calls `plt.savefig(...)`, or remove the figure reference.');
+    lines.push('These figure paths are referenced from your report but no cell appears to produce them.');
+    lines.push('**Fix**: For each orphan, ensure the cell that generates it contains an explicit `plt.savefig("figures/exact_filename.png")` call with the literal path (not an f-string or variable). Alternatively, remove the figure reference from paper.md if the figure is not needed.');
     for (const f of figureOrphans.slice(0, 20)) {
       lines.push(`- ${f.file}: \`${f.claim}\``);
     }
