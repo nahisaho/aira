@@ -1,4 +1,4 @@
-# Co-Scientist — Copilot Instructions (v4.13.0)
+# Co-Scientist — Copilot Instructions (v4.12.0)
 
 ## Identity
 
@@ -157,23 +157,19 @@ Server config is in `.mcp.json`. Install ToolUniverse: `pip install tooluniverse
 
 ToolUniverse only exposes **database query APIs**. Tools named `nature_lm`, `galactica`, `pubmedbert_inference`, `esm2_predict`, `alphafold_predict`, or anything that runs a language model are **not** inside ToolUniverse. Probing `tooluniverse_*` for these will always fail.
 
-### Scientific LLMs: knowledge YES, invocation NO (v4.13.0)
+### Scientific LLMs are NOT available in this environment (v4.12.0)
 
-NatureLM, GALACTICA, BioBERT, PubMedBERT, ESM-2 and similar models are **not callable** in this environment (no MCP server, no HuggingFace direct-load). They ARE **fully available as scientific knowledge**: cite their papers in Related Work / Background, seed hypotheses from their findings, justify your methodology by analogy, compare against their published numbers. The `spread1000-assistant` reference catalogues (`ai-patterns-by-domain.md`, `azure-research-services.md`) list these models for exactly this purpose — read them when planning.
+**NatureLM, GALACTICA, BioBERT, PubMedBERT, ESM-2 and similar scientific LLMs are not available — at all.** Not via ToolUniverse, not via a dedicated MCP server, not via HuggingFace direct-load in a Jupyter cell. **Do not attempt any of those paths.** Each failed attempt wastes time and repair-iteration budget without producing usable output.
 
-**Do NOT invoke** (these all waste time without producing output):
-- `tooluniverse_<model>` — not in the registry
-- `mcp__naturelm__*` / `mcp__galactica__*` — no MCP server configured
-- `AutoModel.from_pretrained("facebook/galactica-*" | "microsoft/NatureLM-*" | "facebook/esm2_*" | "microsoft/BiomedNLP-*" | "allenai/scibert*" | "dmis-lab/biobert*" | "ibm/MoLFormer*" | "seyonec/ChemBERTa*")` in a Jupyter cell — the validator (v3.4.6) flags these as `model_misuse`
-- Fabricating numeric outputs as if the model had run
+**When the user asks for one of these models**, switch to **literature-value verification**:
 
-**When the request needs the model's NUMERIC output**, use **literature-value verification**:
-
-1. Search ToolUniverse (PubMed / arXiv / EuropePMC) for published values the model has produced. Cite the paper.
+1. Use ToolUniverse (PubMed / arXiv / EuropePMC) to find published values the model would have produced. Cite the paper.
 2. Use a classical baseline / smaller statistical model / literature formula for the actual local computation.
-3. Record both attempt and fallback in `report.md` **Methods** + **Results** AND `paper.md` **Methods** + **Results**. The rubric checks both files.
+3. Record the attempt AND the fallback in `report.md` **Methods** + `report.md` **Results** AND `paper.md` **Methods** + `paper.md` **Results**. The rubric checks both files.
 
-See AGENTS.md → "NatureLM / GALACTICA in the AIRA environment (v4.13.0)" for the paste-in template and the full DO/DON'T list.
+See AGENTS.md → "NatureLM / GALACTICA in the AIRA environment (v4.12.0)" for the exact paste-in template.
+
+**Forbidden patterns**: do not write `tooluniverse_<model>`, do not invoke `mcp__naturelm__*` / `mcp__galactica__*`, do not `AutoModel.from_pretrained("facebook/galactica-*")`, do not fabricate numeric outputs as if the model had run.
 
 ## Verification Loop
 

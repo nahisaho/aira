@@ -2,45 +2,6 @@
 
 All notable changes to AIRA are documented in this file.
 
-## [v3.4.6] — 2026-06-04 — Scientific LLM: Knowledge YES, Invocation NO
-
-v3.4.5 では NatureLM / GALACTICA 等 scientific LLM の **呼び出し** を全面禁止した。本リリースは「呼び出し禁止」と「知識参照は奨励」を明確に分離する。Skill 上の指示が呼び出し禁止に偏っていた結果、agent が仮説生成・先行研究・Discussion で当該モデルの公表知見も参照しなくなる過剰自粛リスクが顕在化していたため。同時に、Skill 指示だけでは Jupyter 経由の HuggingFace 直 load を構造的に防げないため、**validator に notebook cell スキャン**を追加して真の enforcement 層を設ける。
-
-### Changed — Pillar A: Co-Scientist v4.12.0 → v4.13.0 — DO / DON'T carve-out
-
-- `AGENTS.md` の NatureLM/GALACTICA セクションを全面書き換え:
-  - **「What you CAN — and SHOULD — do with their knowledge」** を明示的に追加 — 仮説生成 / Related Work / Methodology / Discussion / Limitations / Reference catalogue での参照を奨励
-  - **「What you CANNOT do — invocation」** で呼び出し禁止経路を列挙(MCP 経由 / ToolUniverse / `from_pretrained()`)
-  - **「Required alternative when the request needs the model's NUMERIC output」** で literature-value verification と Methods/Results テンプレを提供
-- `copilot-instructions.md` も同じ DO/DON'T 構造に書き換え
-- skill version v4.12.0 → v4.13.0
-
-### Changed — Pillar B: spread1000-assistant reference annotation
-
-- Round 12 で参照された 2 ファイルの NatureLM 行に `⚠️ AIRA では呼び出し不可 — 知識参照のみ` を inline annotate(削除はしない、knowledge ref として残す)
-- 該当ファイル: `skills/spread1000-assistant/skills/spread1000-research-planner/references/ai-patterns-by-domain.md` (4 箇所)、`spread1000-azure-architect/references/azure-research-services.md` (1 箇所)
-- Microsoft AI Foundry セクション冒頭に環境方針 callout を追加(forward-pointer → `co-scientist/AGENTS.md` v4.13.0)
-
-### Added — Pillar C: Validator notebook cell scan (provenance-validator.ts)
-
-- **`UNAVAILABLE_SCIENTIFIC_LLM_PREFIXES` を export**: `facebook/galactica-` / `microsoft/NatureLM-` / `facebook/esm2_` / `facebook/esmfold_` / `microsoft/BiomedNLP-` / `allenai/scibert` / `dmis-lab/biobert` / `ibm/MoLFormer` / `seyonec/ChemBERTa`
-- **`detectModelMisuse(cells)` を新規追加**: code cell の source に `from_pretrained(` トークン + 上記 prefix の文字列リテラルが両方ある場合のみ flag(markdown cell とコメントは false positive を出さない)
-- **`ValidationReport.model_misuse: ModelMisuse[]`** を追加(informational、`pass` ゲートには影響しない)
-- **`buildRepairPayload()`** に "Unavailable scientific LLM loads (STRONG WARNING)" セクションを追加 — agent に literature-value verification への切替えを強警告
-- **`buildPostmortemReport()`** にも model_misuse セクションを追加
-- backward-compatible: 既存の `ValidationReport` 構造に optional ではなく必須 field として追加(空配列 default)。早期 return 経路もすべて空配列で埋める
-
-### Tests
-
-- `detectModelMisuse` 単体: GALACTICA / NatureLM 検出(7 ケース、各種 quote 形式、複数 cell、deduplication、markdown 除外、コメント除外、無関係 facebook/* 除外、全 prefix smoke test)
-- end-to-end: repair prompt に "STRONG WARNING" + "literature-value verification" が含まれることを確認、`needs_repair=false`(informational 単独では block しない)を確認
-- 全 72 tests グリーン(+9 from v3.4.5)
-
-### Notes
-
-- 構造的にすでに不可能な経路(MCP 未登録 / ToolUniverse 未登録)は引き続き skill 指示で念押し。今回新たに enforce されたのは **Jupyter 経由の HuggingFace 直 load** のみ
-- Skill 知識参照の活用は Round 13 で `paper.md` の Related Work / Discussion 充実度として観測可能
-
 ## [v3.4.5] — 2026-06-04 — Format Equivalence + Tooling Guidance
 
 Round 12 (v3.4.4) で成功率 100% / 引用密度 +4.3% / 初回 `vm=0` 件数 22→28 を達成した一方、`value_mismatches` 平均が 20.1→30.7 に増加(特に `vm≥50` が 8→21)。原因は v3.4.4 の Pillar B(% / 指数)で未カバーの表記(**カンマ区切り**、**leading-dot decimal**)が修復時の追加引用で露呈したこと。同時に Round 12 では NatureLM / GALACTICA 系 scientific LLM への試行が引き続き観測され、これらは AIRA 環境では利用不可のため Skill 側で全面禁止する。

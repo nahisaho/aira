@@ -310,22 +310,6 @@ export interface ReportThinness {
   level: 'missing' | 'tiny' | 'no_claims';
 }
 
-/**
- * v3.4.6 — model misuse: a notebook code cell attempts to load a scientific
- * LLM that AIRA's environment cannot serve (NatureLM, GALACTICA, BioBERT,
- * PubMedBERT, ESM-2, MolFormer, ChemBERTa, …). Wastes time without producing
- * usable output. Informational warning (not a hard gate), surfaced
- * prominently in the repair prompt so the agent refactors to literature-
- * value verification (see co-scientist AGENTS.md v4.13.0).
- */
-export interface ModelMisuse {
-  cell_id: string;
-  /** The model id (or prefix) detected in the cell source. */
-  model_id: string;
-  /** Short hint about the load mechanism, e.g. "from_pretrained". */
-  loader: string;
-}
-
 export interface ValidationReport {
   available: boolean;
   /** Reason when available=false. */
@@ -339,8 +323,6 @@ export interface ValidationReport {
   figure_orphans: FigureOrphan[];
   /** v3.4.2 — informational notice that report.md / paper.md is thin or missing. */
   report_thinness: ReportThinness[];
-  /** v3.4.6 — code cells that attempt to load unavailable scientific LLMs. */
-  model_misuse: ModelMisuse[];
   gates: GateResult[];
   /** Overall pass = every gate passes AND no unknown citations. */
   pass: boolean;
@@ -391,67 +373,6 @@ export function figureHasProducerCell(
     if (saveCallRe.test(c.source) && pathRe.test(c.source)) return true;
   }
   return false;
-}
-
-// ── v3.4.6 — model misuse detection (scientific LLMs unavailable in AIRA) ──
-
-/**
- * Prefixes of HuggingFace model ids that AIRA's environment cannot serve.
- * Loading these via `transformers.AutoModel.from_pretrained(...)` downloads
- * gigabytes, times out, and burns repair-iteration budget without producing
- * usable output. Co-Scientist v4.13.0 mandates literature-value verification
- * instead — see skills/co-scientist/AGENTS.md.
- *
- * Exported so the tests (and potentially the repair payload formatter) can
- * inspect the list. Prefer extending here over hard-coding patterns elsewhere.
- */
-export const UNAVAILABLE_SCIENTIFIC_LLM_PREFIXES = [
-  'facebook/galactica-',
-  'microsoft/NatureLM-',
-  'facebook/esm2_',
-  'facebook/esmfold_',
-  'microsoft/BiomedNLP-',
-  'allenai/scibert',
-  'dmis-lab/biobert',
-  'ibm/MoLFormer',
-  'seyonec/ChemBERTa',
-] as const;
-
-/**
- * Scan a notebook trace's code cells for attempts to load one of the
- * unavailable scientific LLMs. Detects the two common patterns:
- *
- *   AutoModelForCausalLM.from_pretrained("facebook/galactica-1.3b", ...)
- *   AutoTokenizer.from_pretrained("microsoft/NatureLM-8x7B-Inst")
- *
- * Match conditions (both must hold per occurrence):
- *   1. The token `from_pretrained(` appears in the cell source.
- *   2. A string literal in that cell starts with one of the banned prefixes.
- *
- * One ModelMisuse record per (cell, model_id) pair. The agent gets a single
- * concrete remediation hint per cell rather than dozens of duplicates.
- */
-export function detectModelMisuse(cells: TraceCell[]): ModelMisuse[] {
-  const out: ModelMisuse[] = [];
-  // Match python string literals — single OR double quoted, no embedded quotes.
-  // Enough for the from_pretrained("...") and from_pretrained('...') idioms.
-  const strRe = /["']([^"'\n]+)["']/g;
-  for (const cell of cells) {
-    if (cell.type !== 'code') continue;
-    if (!/\bfrom_pretrained\s*\(/.test(cell.source)) continue;
-    const seen = new Set<string>();
-    let m: RegExpExecArray | null;
-    while ((m = strRe.exec(cell.source)) !== null) {
-      const lit = m[1]!;
-      for (const prefix of UNAVAILABLE_SCIENTIFIC_LLM_PREFIXES) {
-        if (lit.startsWith(prefix) && !seen.has(lit)) {
-          seen.add(lit);
-          out.push({ cell_id: cell.id, model_id: lit, loader: 'from_pretrained' });
-        }
-      }
-    }
-  }
-  return out;
 }
 
 /**
@@ -613,7 +534,7 @@ export interface RepairPayload {
      * v3.4.0 — added 'value_mismatch' (informational).
      * v3.4.2 — added 'figure_orphan' and 'report_thin' (informational).
      */
-    issue: 'uncited' | 'unknown_citation' | 'gate_failed' | 'value_mismatch' | 'figure_orphan' | 'report_thin' | 'model_misuse';
+    issue: 'uncited' | 'unknown_citation' | 'gate_failed' | 'value_mismatch' | 'figure_orphan' | 'report_thin';
     detail: string;
   }>;
   /** Markdown prompt the agent reads to drive the second pass. */
@@ -723,14 +644,6 @@ export function buildPostmortemReport(projectId: string): PostmortemReport {
     }
     md.push('');
   }
-  if (report.model_misuse.length > 0) {
-    md.push(`**Unavailable scientific LLM loads** (${report.model_misuse.length}, STRONG WARNING)`);
-    for (const mm of report.model_misuse.slice(0, 5)) {
-      md.push(`- [cell:${mm.cell_id}]: \`${mm.loader}("${mm.model_id}")\` — model not callable in AIRA env, switch to literature-value verification`);
-    }
-    if (report.model_misuse.length > 5) md.push(`- … +${report.model_misuse.length - 5} more`);
-    md.push('');
-  }
   md.push(`Trace snapshots captured: **${snapshots.length}**.`);
   if (recent.length > 0) {
     md.push(`Recent snapshots: ${recent.join(', ')}`);
@@ -832,15 +745,6 @@ export function buildRepairPayload(projectId: string): RepairPayload {
       detail: f.reason + ' Add the cell that produces this figure (e.g. `plt.savefig("' + f.figure_path + '")`) or remove the reference if the figure is no longer used.',
     });
   }
-  // v3.4.6 — model misuse (informational, STRONG warning).
-  for (const mm of report.model_misuse) {
-    violations.push({
-      file: '(notebook)',
-      claim: `[cell:${mm.cell_id}] ${mm.loader}("${mm.model_id}")`,
-      issue: 'model_misuse',
-      detail: `Model "${mm.model_id}" is not callable in the AIRA environment (no MCP server, no HuggingFace direct-load). Remove the ${mm.loader}() call from [cell:${mm.cell_id}] and switch to literature-value verification: cite the model's published values via PubMed/arXiv and compute your own numbers with a classical baseline. See co-scientist AGENTS.md "NatureLM / GALACTICA in the AIRA environment (v4.13.0)" for the paste-in Methods/Results template.`,
-    });
-  }
   // v3.4.2 — report thinness (informational, catches SCI-073-style cases).
   for (const t of report.report_thinness) {
     const detailMap = {
@@ -867,7 +771,7 @@ export function buildRepairPayload(projectId: string): RepairPayload {
   // figure_orphan / report_thin) are surfaced in the prompt but don't
   // by themselves keep the agent in the loop — declaring pass=true is OK
   // when only informational items remain.
-  const informationalIssues = new Set(['value_mismatch', 'figure_orphan', 'report_thin', 'model_misuse']);
+  const informationalIssues = new Set(['value_mismatch', 'figure_orphan', 'report_thin']);
   const blockingViolations = violations.filter(v => !informationalIssues.has(v.issue));
   const needsRepair = blockingViolations.length > 0;
   const repair_prompt = (violations.length > 0)
@@ -904,7 +808,6 @@ function formatRepairPrompt(
   const valueMismatches = violations.filter((v) => v.issue === 'value_mismatch');
   const figureOrphans = violations.filter((v) => v.issue === 'figure_orphan');
   const thinness = violations.filter((v) => v.issue === 'report_thin');
-  const modelMisuses = violations.filter((v) => v.issue === 'model_misuse');
 
   const lines: string[] = [];
   lines.push('# Provenance Repair — Apply ALL Fixes in ONE Pass');
@@ -974,16 +877,6 @@ function formatRepairPrompt(
     }
   }
 
-  if (modelMisuses.length > 0) {
-    lines.push('');
-    lines.push(`## Unavailable scientific LLM loads (${modelMisuses.length}) — STRONG WARNING`);
-    lines.push('A code cell tries to load a scientific LLM (NatureLM / GALACTICA / BioBERT / PubMedBERT / ESM-2 / MolFormer / ChemBERTa / …) via `from_pretrained(...)`. These models are NOT callable in the AIRA environment — the download will time out and consume your budget without producing usable output. **Remove the call and switch to literature-value verification**: cite the model\'s published numbers from PubMed/arXiv, then use a classical baseline / smaller statistical model / literature formula for your own computation. The model\'s scientific knowledge can still be used in Related Work / Methods / Discussion / Hypothesis generation — only the runtime invocation is banned. See co-scientist AGENTS.md "NatureLM / GALACTICA in the AIRA environment (v4.13.0)" for the paste-in Methods/Results template.');
-    for (const mm of modelMisuses.slice(0, 20)) {
-      lines.push(`- ${mm.claim} — ${mm.detail}`);
-    }
-    if (modelMisuses.length > 20) lines.push(`- … +${modelMisuses.length - 20} more`);
-  }
-
   if (availableCellIds.length > 0) {
     lines.push('');
     lines.push('## Available cell ids (from the latest snapshot)');
@@ -1012,7 +905,6 @@ export function validateProject(projectId: string): ValidationReport {
       value_mismatches: [],
       figure_orphans: [],
       report_thinness: [],
-      model_misuse: [],
       gates: [],
       pass: false,
     };
@@ -1106,8 +998,6 @@ export function validateProject(projectId: string): ValidationReport {
     checkCitationCoverage(claims),
   ];
 
-  const model_misuse = detectModelMisuse(snapshot.cells);
-
   return {
     available: true,
     claims,
@@ -1116,10 +1006,9 @@ export function validateProject(projectId: string): ValidationReport {
     value_mismatches,
     figure_orphans,
     report_thinness,
-    model_misuse,
     gates,
-    // value_mismatches / figure_orphans / report_thinness / model_misuse are
-    // informational; they don't block the overall pass.
+    // value_mismatches / figure_orphans / report_thinness are informational;
+    // they don't block the overall pass.
     pass: gates.every((g) => g.passed) && unknown.length === 0,
   };
 }
