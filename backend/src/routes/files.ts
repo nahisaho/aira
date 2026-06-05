@@ -305,7 +305,8 @@ fileRoutes.post('/api/projects/:id/files/upload', async (c) => {
 
   for (const file of fileList) {
     if (!(file instanceof File)) continue;
-    const filename = file.name.replace(/[\/\\:<>"|?*\x00-\x1f]/g, '_');
+    // eslint-disable-next-line no-control-regex -- intentionally strip ASCII control chars from uploaded filenames
+    const filename = file.name.replace(/[/\\:<>"|?*\x00-\x1f]/g, '_');
     if (!filename || filename === '.' || filename === '..') continue;
     // Truncate to 200 chars to stay within FS limits, preserving extension
     const MAX_NAME = 200;

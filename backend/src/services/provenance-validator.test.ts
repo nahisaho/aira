@@ -812,6 +812,70 @@ describe('validateProject', () => {
       });
     });
 
+    // v3.4.12 — Figure Ledger cell accepted as producer via existence assertion.
+    describe('figureHasProducerCell figure-ledger attestation (v3.4.12)', () => {
+      const makeCell = (id: string, source: string, stdout = '', text_output = '') => ({
+        id,
+        type: 'code' as const,
+        exec_count: 1,
+        source,
+        stdout,
+        stderr: '',
+        has_error: false,
+        has_image: false,
+        text_output,
+        outputs: [],
+      });
+
+      it('accepts a ledger cell with os.path.exists + literal path, no savefig', () => {
+        const src = [
+          'import os',
+          'FIGURES_IN_PAPER = ["figures/roc.png", "figures/calibration.png"]',
+          'for p in FIGURES_IN_PAPER:',
+          '    assert os.path.exists(p), f"MISSING: {p}"',
+          'print("Figure ledger OK:", FIGURES_IN_PAPER)',
+        ].join('\n');
+        const cells = [makeCell('figure-ledger', src)];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(true);
+      });
+
+      it('accepts a pathlib ledger (Path(...).exists()) with literal path', () => {
+        const src = [
+          'from pathlib import Path',
+          'figures = {"Figure 1": "figures/roc.png"}',
+          'for name, path in figures.items():',
+          '    assert Path(path).exists()',
+        ].join('\n');
+        const cells = [makeCell('figure-ledger', src)];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(true);
+      });
+
+      it('accepts a ledger that echoes the path only at runtime', () => {
+        // Paths come from a variable, but the printed ledger output names them.
+        const src = 'for p in FIGURES:\n    assert os.path.exists(p)\nprint("Figure ledger OK:", FIGURES)';
+        const stdout = "Figure ledger OK: ['figures/roc.png', 'figures/calibration.png']\n";
+        const cells = [makeCell('figure-ledger', src, stdout)];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(true);
+      });
+
+      it('rejects an existence check that names a different figure', () => {
+        const src = 'assert os.path.exists("figures/other.png")';
+        const cells = [makeCell('figure-ledger', src)];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(false);
+      });
+
+      it('rejects a bare printed path with no existence check (guards the gate)', () => {
+        const src = 'print("figures/roc.png")';
+        const cells = [makeCell('note', src, 'figures/roc.png\n')];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect(figureHasProducerCell('figures/roc.png', cells as any)).toBe(false);
+      });
+    });
+
     it('reports figure_orphans for unreferenced figures', () => {
       setupProject(
         {

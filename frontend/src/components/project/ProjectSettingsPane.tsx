@@ -87,6 +87,7 @@ function SkillsTab({ projectId }: { projectId: string }) {
     }
   };
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- load() fetches project data on mount / projectId change
   useEffect(() => { load(); }, [projectId]);
 
   const assignedIds = new Set(projectSkills.map((s) => s.id));
@@ -214,6 +215,7 @@ function McpTab({ projectId }: { projectId: string }) {
     setConfigs(await mcpApi.list(projectId));
   };
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- load() fetches project data on mount / projectId change
   useEffect(() => { load(); }, [projectId]);
 
   const handleAdd = async () => {
@@ -668,6 +670,7 @@ function RagTab({ projectId }: { projectId: string }) {
     }
   };
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- load() fetches project data on mount / projectId change
   useEffect(() => { load(); }, [projectId]);
 
   const handleToggle = async () => {

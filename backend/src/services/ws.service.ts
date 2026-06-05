@@ -138,7 +138,7 @@ function handleChatMessage(client: WSClient, content: string, messageId?: string
         onStatus: (runId, status) => {
           broadcastToProject(client.projectId, { type: 'status', runId, status });
         },
-        onComplete: (_runId, _exitCode) => {
+        onComplete: () => {
           // Clients can fetch updated state via REST
         },
         onFileCreated: (file) => {

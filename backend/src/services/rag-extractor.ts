@@ -135,7 +135,8 @@ function extractWithLlm(
       clearTimeout(timeout);
 
       if (code !== 0) {
-        console.warn(`[rag-extractor] CLI exited with code ${code}`);
+        const detail = stderr.trim().slice(0, 500);
+        console.warn(`[rag-extractor] CLI exited with code ${code}${detail ? `: ${detail}` : ''}`);
         resolve(null);
         return;
       }

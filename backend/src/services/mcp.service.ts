@@ -449,7 +449,7 @@ export class McpService {
       }
     }
 
-    const { config_json: _, ...rest } = row;
+    const { config_json, ...rest } = row;
     return { ...rest, config };
   }
 }

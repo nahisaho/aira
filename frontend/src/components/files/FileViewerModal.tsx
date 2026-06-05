@@ -29,6 +29,7 @@ export function FileViewerModal({ projectId, fileId, filePath, onClose }: FileVi
 
   useEffect(() => {
     if (isImage || isPdf) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- images/PDFs need no fetch; clear the initial loading flag
       setLoading(false);
       return;
     }

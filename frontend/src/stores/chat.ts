@@ -5,9 +5,6 @@ import { wsClient } from '../api/ws';
 // Chunk buffer for batching rapid WebSocket updates into single React renders
 let chunkBuffer = '';
 let rafId: number | null = null;
-// Track how many chars have been streamed for the current assistant message.
-// When fetchMessages reloads from DB, we skip chunks already present in DB content.
-let streamedCharCount = 0;
 
 function flushChunkBuffer() {
   rafId = null;
@@ -18,7 +15,6 @@ function flushChunkBuffer() {
 }
 
 function queueChunk(content: string) {
-  streamedCharCount += content.length;
   chunkBuffer += content;
   if (rafId === null) {
     rafId = requestAnimationFrame(flushChunkBuffer);
@@ -58,10 +54,6 @@ export const useChatStore = create<ChatStore>((set) => ({
       // After this, future WS chunks will be appended normally.
       chunkBuffer = '';
       if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
-      // Reset streamed char count so appendToLast works correctly
-      // if streaming is still in progress after reload.
-      const lastMsg = messages[messages.length - 1];
-      streamedCharCount = (lastMsg?.role === 'assistant') ? lastMsg.content.length : 0;
       set({ messages, loading: false });
     } catch {
       set({ loading: false });
@@ -135,7 +127,6 @@ wsClient.onEvent((event) => {
     case 'status':
       if (event.status === 'running') {
         // Reset streaming state for new run
-        streamedCharCount = 0;
         chunkBuffer = '';
         if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
         store.setRunStatus('running');

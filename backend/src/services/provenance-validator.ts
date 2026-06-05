@@ -414,6 +414,19 @@ export function extractFigureReferences(markdown: string): string[] {
  *      the path was printed at execution time (a common "Saved: X" pattern).
  * Heuristic — fully variable names (`f"figures/plot_{i}.png"` in a loop
  * with no stem hint) are still missed.
+ *
+ * v3.4.12 — Round 19 telemetry: the Figure Ledger pattern reached 46%
+ * adoption (0% in R18) once embedded in the prompt, yet FigOrp did not fall.
+ * Root cause: a ledger cell attests a figure exists via an existence check
+ * (`assert os.path.exists("figures/roc.png")`) and prints `Figure ledger OK:
+ * [...]`, but it never calls savefig — so the save-call gate below skipped it
+ * entirely and the figure was still flagged orphan. A *passing* existence
+ * assertion is stronger evidence the figure was produced than a savefig
+ * source match (the file provably exists on disk at validation time), so we
+ * now accept an attestation cell as a producer independently of the save
+ * gate. The literal-path requirement keeps this from degenerating into "any
+ * printed path counts" (a bare `print("figures/x.png")` with no existence
+ * check is still rejected).
  */
 export function figureHasProducerCell(
   figurePath: string,
@@ -425,6 +438,9 @@ export function figureHasProducerCell(
   const saveCallRe = /\b(savefig|to_image|write_image|imsave|imwrite|Image\.save|fig\.write_image|joblib\.dump)\b/;
   const literalPathRe = new RegExp(escape(figurePath) + '|' + escape(basename));
   const dynamicTemplateRe = /f["']figures\/|os\.path\.join\(["']figures["']/;
+  // v3.4.12 — a Figure Ledger cell proves existence with os.path.exists /
+  // Path(...).exists() / <var>.exists() instead of a save call.
+  const existsCheckRe = /os\.path\.(?:exists|isfile)\s*\(|Path\([^)]*\)\.(?:exists|is_file)\s*\(|\.(?:exists|is_file)\(\)/;
   // Stem requires at least one char so that pathological basenames like ".png"
   // (basenameNoExt = "") don't degenerate into a regex that matches everything.
   const stemRe = basenameNoExt.length > 0
@@ -433,6 +449,17 @@ export function figureHasProducerCell(
 
   for (const c of cells) {
     if (c.type !== 'code') continue;
+
+    // (0) Figure Ledger / existence-attestation cell — NOT gated on a save
+    // call. Requires a real existence check AND the literal path/basename to
+    // appear in the source or be echoed at runtime (the ledger prints
+    // `Figure ledger OK: ['figures/roc.png', …]`).
+    if (existsCheckRe.test(c.source)) {
+      if (literalPathRe.test(c.source)) return true;
+      if (c.stdout && c.stdout.includes(basename)) return true;
+      if (c.text_output && c.text_output.includes(basename)) return true;
+    }
+
     if (!saveCallRe.test(c.source)) continue;
     // (1) Literal path or basename in source.
     if (literalPathRe.test(c.source)) return true;
@@ -440,6 +467,7 @@ export function figureHasProducerCell(
     if (stemRe && dynamicTemplateRe.test(c.source) && stemRe.test(c.source)) return true;
     // (3) Runtime echo: the cell printed the basename at execution time.
     if (c.stdout && c.stdout.includes(basename)) return true;
+    if (c.text_output && c.text_output.includes(basename)) return true;
   }
   return false;
 }

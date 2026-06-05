@@ -2,6 +2,41 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.4.12] — 2026-06-05 — Figure Ledger accepted as producer (validator-side FigOrp fix)
+
+Round 19(v3.4.11 + Figure Ledger を **プロンプトに直接埋込**)で、Figure Ledger の採用率が **R18 の 0% → R19 の 46%** に跳ね上がった(skill 内指示だけでは浸透しないことが確定、`results-summary` の 84% と対照的)。にもかかわらず **FigOrp avg は 9.8 → 9.4 とほぼ不変**。9 ラウンド(R11〜R19)の実験により、FigOrp の根本原因が **バリデータ `figureHasProducerCell()` のパスマッチング方式** であることが確定した。
+
+**確定した原因**: エージェントが Figure Ledger セルで図を `assert os.path.exists("figures/roc.png")` により存在確認し `Figure ledger OK: [...]` を出力しても、そのセルは **savefig を呼ばない**。`figureHasProducerCell()` は save call(savefig / to_image / …)を含むセルしか検査しない(save-call ゲート)ため、ledger セルは丸ごとスキップされ、図は依然 orphan と判定されていた。**採用率が上がっても、検証側が ledger を認識しないので FigOrp は下がらない。**
+
+### Backend — `figureHasProducerCell()` に existence-attestation 経路を追加(本リリースの全変更)
+
+`backend/src/services/provenance-validator.ts`:
+
+- **新経路 (0): Figure Ledger / 存在アサーションセル** — save-call ゲートから独立。セルが存在チェック(`os.path.exists(` / `os.path.isfile(` / `Path(...).exists()` / `Path(...).is_file()` / `<var>.exists()` / `.is_file()`)を含み、**かつ**対象図のリテラルパス/basename が source に出現、または stdout / text_output に runtime 出力されている場合、その図は producer ありと判定する。
+  - **論拠**: バリデーション時点で `assert os.path.exists(...)` を通過したセルは、ファイルが実在することを証明しており、savefig のソースマッチよりも **強い** producer 証拠である。
+  - **false positive 防止**: リテラルパス必須化を維持。存在チェックを伴わない裸の `print("figures/x.png")` は依然 reject(既存テスト `rejects stdout-echo when no save call` を維持)。
+- **save-call 経路 (3) に text_output 検査を追加** — 従来は stdout のみ。runtime echo を display_data 出力でも拾えるよう対称化。
+
+### Skill は不変
+
+Co-Scientist は **v4.14.0 のまま**。本リリースは検証側の改修であり、Figure Ledger パターン(skill v4.14.0 + R19 プロンプト埋込)はそのまま活きる。
+
+### Tests
+
+`provenance-validator.test.ts` に v3.4.12 ブロック(5 ケース)を追加:
+- os.path.exists ledger(savefig なし)を producer として受理
+- pathlib `Path(...).exists()` ledger を受理
+- runtime のみで図パスを echo する ledger を受理
+- 別図を名指す存在チェックは reject
+- 存在チェックなしの裸 print は reject(ゲート維持)
+
+backend unit tests 全グリーン(provenance-validator 76/76、新規 5 含む)。Round 20 の実 telemetry で FigOrp avg の低下(R14 の 2.5 台復帰)と FigOrp=0 率の上昇を観測する。
+
+### Deferred (本リリース範囲外)
+
+- **エージェント側の literal path 100% 化** — R19 で 46% 止まり。本リリースで検証側が ledger を吸収するため緊急度は低下。プロンプト最適化は実験 runner 側で継続。
+- **Pre-seeded `[cell:aira-figures]` セル**(v3.4.11 から継続 deferred)
+
 ## [v3.4.11] — 2026-06-05 — Figure Ledger pattern (mandatory literal paths)
 
 Round 17(v3.4.10 + skill v4.13.0 aligned プロンプト)で **7 ラウンド中最もバランスの取れた実用品質**(Uncited 0.5 / Duration 24.5m とも歴代最良)を達成。一方で **`figure_orphans` avg 5.9** が依然最大の残課題(R14 の 2.5 を超えられない)で、3 ラウンド推移の 80% が変動パターン = LLM 非決定性が支配的という分析結果。Round 17 ノートの推奨アクション #1「copilot-instructions.md にリテラルパス必須化ルールを追加」を本リリースで実施。

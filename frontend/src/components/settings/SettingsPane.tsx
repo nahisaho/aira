@@ -319,6 +319,7 @@ function AgentsRepoSettings() {
     setLoading(false);
   };
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchRepos() loads the agents repo list on mount
   useEffect(() => { fetchRepos(); }, []);
 
   const handleAdd = async () => {

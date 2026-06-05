@@ -215,6 +215,7 @@ export async function startJupyterServer(): Promise<{ url: string; token: string
     throw new Error(
       `jupyter command not found in PATH: ${(err as Error).message}. ` +
         `Install jupyter-server in the AIRA Python environment.`,
+      { cause: err },
     );
   }
 
