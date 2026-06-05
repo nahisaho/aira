@@ -2,6 +2,71 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.4.11] — 2026-06-05 — Figure Ledger pattern (mandatory literal paths)
+
+Round 17(v3.4.10 + skill v4.13.0 aligned プロンプト)で **7 ラウンド中最もバランスの取れた実用品質**(Uncited 0.5 / Duration 24.5m とも歴代最良)を達成。一方で **`figure_orphans` avg 5.9** が依然最大の残課題(R14 の 2.5 を超えられない)で、3 ラウンド推移の 80% が変動パターン = LLM 非決定性が支配的という分析結果。Round 17 ノートの推奨アクション #1「copilot-instructions.md にリテラルパス必須化ルールを追加」を本リリースで実施。
+
+v3.4.10 では validator 側に動的パス検出 3 系統を追加したが、**完全変数化パス**(`f"figures/plot_{i}.png"` ループ等)は依然 false positive 残存。本リリースは **発生源を断つアプローチ** — agent に literal path を強制し、Citation Ledger の成功パターン(v4.13.0)を Figure 版に転写した **Figure Ledger** を導入する。
+
+### Skill — Co-Scientist v4.13.0 → v4.14.0(本リリースの全変更)
+
+**新セクション 1: `Figure path rules (v4.14.0)`** — `AGENTS.md` に追加
+
+4 つの明示ルール:
+
+1. **literal string path を必須化**: 全 save call で `plt.savefig("figures/roc_curve.png", ...)` 形式。`f"figures/{name}.png"` / `os.path.join("figures", name)` / ループ生成パスを全て禁止
+2. **1 save call = 1 literal path**: 似た図を複数保存する場合も繰り返し書く(静的読み取り可能性を担保)
+3. **`savefig()` のパス = `paper.md` の参照パスと完全一致**: directory 書き換え不可
+4. **生成 ⇔ 引用の対称性**: 不要な savefig を削除 or 不要な image 参照を削除
+
+OK / NG コード例を skill 内に inline で提示。
+
+**新セクション 2: `Figure Ledger cell pattern (v4.14.0)`** — Citation Ledger (v4.13.0) の図版
+
+```python
+# [cell:figure-ledger]
+FIGURES_IN_PAPER = [
+    "figures/roc_curve.png",
+    "figures/calibration_plot.png",
+    ...
+]
+for p in FIGURES_IN_PAPER:
+    assert os.path.exists(p), f"missing figure: {p}"
+print("Figure ledger OK:", FIGURES_IN_PAPER)
+```
+
+3 つの効用を 1 セルに集約:
+- canonical literal paths を一覧化(validator がそのまま探す)
+- 全ファイルの存在 assert(「セル実行し忘れ」を検知)
+- grep target(`grep figures/ paper.md` と ledger が一致するべき)
+
+**新セクション 3: `Pre-validate figure cross-check (v4.14.0)`** — `/validate` 直前の 30 秒チェック手順
+
+`copilot-instructions.md` には 1 段落のサマリー + AGENTS.md への forward-pointer を追加。`skill.json` / top-level / copilot-instructions.md ヘッダを v4.14.0 にバンプ。
+
+### Backend は不変
+
+本リリースは **skill markdown のみ**の変更。`provenance-validator.ts` / `notebook-trace.ts` / API は v3.4.10 から不変、TypeScript / vitest テストにも変更なし。Docker image は新規 build & publish されるが、内容差分は skill ファイル群のみ。
+
+### Deferred (本リリース範囲外)
+
+- **Pre-seeded `[cell:aira-figures]` セル追加** → backend 変更(`exec-context.ts` の `syncSkillFiles()` 経由の notebook テンプレート)が必要、v3.4.12 で検討
+- **VM さらなる改善** → R17 で VM 26.8(R11 水準)に戻ったが、これは VM-FigOrp 逆相関(VM=0 群の FigOrp avg=9.2)の表れ。VM 個別を chase すると FigOrp が悪化するため見送り
+- **マルチラン外れ値検証**(R17 SCI-011 VM=231 等) → 実験 runner 側で対処(LLM 非決定性は AIRA で吸収不可)
+
+### Tests
+
+skill ファイル変更のみのため、backend unit tests に変更なし(304/304 グリーン維持)。Round 18 の実 telemetry で FigOrp avg 5.9 → 3 台復帰、Figure Ledger 採用率の上昇を観測する。
+
+### Notes
+
+Round 18 で観測すべきポイント:
+- **FigOrp avg**: 5.9 → 3 台前半(R14 水準への復帰)
+- **FigOrp=0 件数**: R17 の 16 (53%) から R14 の 23 (77%) 水準への復帰
+- **`f"figures/`、`os.path.join("figures"` の検索 hit 数**: 大幅減を期待
+- **Figure Ledger 採用率**: 新パターンのため初観測
+- VM / Uncited / Duration: R17 水準維持を最低ライン
+
 ## [v3.4.10] — 2026-06-05 — Figure Producer Detection — Dynamic Paths
 
 Round 15 telemetry で **FigOrp avg が 2.5 → 7.2 と 5 ラウンド中ワースト**に悪化。原因調査の結果、Round 14→15 で agent の図生成パターンが `plt.savefig("figures/roc.png")` 型から **動的パス構築型**(f-string, `os.path.join`, ループ生成)に shift していたが、`figureHasProducerCell()` が literal 文字列比較しかしておらず大量の **false-positive orphan** が発生していた。

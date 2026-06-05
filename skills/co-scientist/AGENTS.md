@@ -1,14 +1,14 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.13.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.14.0 with 202 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.13.0
+# Co-Scientist v4.14.0
 
 Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
@@ -157,6 +157,67 @@ The validator continues to compute `value_mismatches` for **server-side telemetr
 When you reference a figure from `report.md` / `paper.md` (e.g. `![ROC](figures/roc.png)` or `Figure 1 [cell:viz-roc]`), the validator (v3.4.2) checks whether **some cell source actually calls `plt.savefig("figures/roc.png")` / `fig.savefig(...)` / `imsave(...)` / `to_image(...)`** for that path. If no cell produces the figure file, it appears in `figure_orphans` (informational, not blocking).
 
 Practical rule: **every figure you cite must be produced by a code cell** in the notebook. Don't reference figures that exist only in the file system without a code cell that wrote them — that breaks reproducibility just as much as an uncited number does.
+
+### Figure path rules (v4.14.0)
+
+Round 17 telemetry showed `figure_orphans` is the largest remaining quality issue (avg 5.9 even with v3.4.10's dynamic-path detection). The dominant root cause is agents constructing figure paths dynamically — `plt.savefig(f"figures/{name}.png")` or `plt.savefig(os.path.join("figures", basename))` — so the literal `figures/roc.png` string never appears in any cell source. The validator's heuristic recovers only some of these; the rest become spurious orphans. The fix is at your end: **always use literal paths**.
+
+**Rules**:
+
+1. **Use literal string paths in every save call.**
+   ```python
+   # ✅ DO
+   plt.savefig("figures/roc_curve.png", dpi=150, bbox_inches="tight")
+
+   # ❌ DO NOT
+   name = "roc_curve"
+   plt.savefig(f"figures/{name}.png")
+   plt.savefig(os.path.join("figures", name + ".png"))
+   for i, m in enumerate(metrics):
+       plt.savefig(f"figures/plot_{i}.png")  # validator cannot match the loop
+   ```
+2. **One save call = one literal path.** If you want to save several similar figures, write the literal `plt.savefig(...)` line per figure. The repetition is intentional — it makes every figure traceable from a static read of the notebook.
+3. **The path in `savefig()` must match the path in `paper.md` exactly.** `figures/roc.png` in the save call ↔ `![ROC](figures/roc.png)` in the report. No directory rewriting (`./figures/roc.png` vs `figures/roc.png` will pass, but `outputs/roc.png` saved + `figures/roc.png` referenced is an orphan).
+4. **Do not generate figures you do not cite, and do not cite figures you do not generate.** Either tighten the save list (remove unused savefig calls) or tighten the report (remove the unused image reference).
+
+### Figure Ledger cell pattern (v4.14.0)
+
+Mirror the **Citation Ledger** pattern (v4.13.0) for figures. Add a single dedicated cell whose only job is to enumerate the literal figure paths the report will cite, so the cross-check between the notebook and `paper.md` is a one-line grep:
+
+```python
+# [cell:figure-ledger]
+# Every figure cited in paper.md / report.md, listed once.
+# When you add a figure to the paper, append it here and add the
+# matching plt.savefig() call to its analysis cell.
+FIGURES_IN_PAPER = [
+    "figures/roc_curve.png",            # cited in Results §2 as Figure 1
+    "figures/calibration_plot.png",     # cited in Results §3 as Figure 2
+    "figures/feature_importance.png",   # cited in Discussion as Figure 3
+]
+for p in FIGURES_IN_PAPER:
+    assert os.path.exists(p), f"missing figure: {p}"
+print("Figure ledger OK:", FIGURES_IN_PAPER)
+```
+
+This cell does three useful things in one place:
+- Lists the **canonical literal paths** the validator will look for.
+- Asserts every file actually exists at validate time (catches "I forgot to run that cell after editing").
+- Provides a grep target — `grep figures/ paper.md` and the ledger should produce the same set.
+
+### Pre-validate figure cross-check (v4.14.0)
+
+Before your first `/validate` call, run this 30-second check:
+
+```bash
+# In a notebook cell, OR in your head while reading the notebook:
+# 1. Every path in FIGURES_IN_PAPER appears in a plt.savefig("...") call
+#    in an earlier cell (literal, not f-string).
+# 2. Every figures/*.png reference in paper.md also appears in
+#    FIGURES_IN_PAPER. (grep -oE 'figures/[A-Za-z0-9_.-]+' paper.md
+#    should equal sorted(set(FIGURES_IN_PAPER)).)
+```
+
+If both hold, your `figure_orphans` count should be 0. If the validator still reports orphans, you almost certainly used an f-string or `os.path.join` somewhere — search for `f"figures/` and `os.path.join` in the notebook and rewrite to literal strings.
 
 ### Time-budget guard (v4.10.0)
 

@@ -1,4 +1,4 @@
-# Co-Scientist — Copilot Instructions (v4.13.0)
+# Co-Scientist — Copilot Instructions (v4.14.0)
 
 ## Identity
 
@@ -95,6 +95,8 @@ Up to 400 chars between claim and citation is OK (v3.3.0). DOIs, `(Smith et al.,
 **Value transcription (v4.13.0)**: copy cell outputs verbatim into `report.md` / `paper.md`. No rounding, no unit conversion, no reformatting. If a different presentation is needed, do the conversion inside the cell so its final output IS the desired form, then cite that cell. Best practice: pre-stage a "Citation Ledger" cell that prints exactly the strings you'll quote. Full guidance in AGENTS.md → "Value transcription rules (v4.13.0)".
 
 **Figure provenance (v3.4.2)**: every figure path you reference (e.g. `figures/roc.png`) must be produced by some cell that calls `plt.savefig`/`fig.savefig`/`imsave`/`to_image`/`write_image` for that path. Orphan figures appear in `figure_orphans` (informational). Don't reference figures that have no producing cell.
+
+**Figure path rules (v4.14.0)**: **always use literal string paths** in save calls. Do NOT use `f"figures/{name}.png"`, `os.path.join("figures", name)`, or loop-generated paths — the validator's path-matching heuristic recovers only some of those, and Round 17 telemetry showed they are the dominant source of false-positive orphans. One save call = one literal path; the path inside `savefig()` must match the path written in `paper.md` exactly. Pre-stage a **Figure Ledger** cell (`FIGURES_IN_PAPER = ["figures/roc_curve.png", ...]`) that lists every literal figure path the paper cites, then assert each file exists; this mirrors the v4.13.0 Citation Ledger pattern and makes the report ↔ notebook cross-check a one-line grep. Full guidance in AGENTS.md → "Figure path rules (v4.14.0)" and "Figure Ledger cell pattern (v4.14.0)".
 
 **Time-budget guard (v3.4.2)**: by the time you first call `/validate`, **both `report.md` AND `paper.md` must already exist** with at least an Abstract / Methods / Results / Discussion / Limitations skeleton. The validator's `report_thinness` (`missing` / `tiny` / `no_claims`) flags under-developed reports — fix these FIRST in any repair iteration, before any other issue. A complete paper with imperfect provenance is better than a perfect provenance log without a paper.
 
