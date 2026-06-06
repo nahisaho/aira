@@ -238,6 +238,11 @@ wc -w report.md paper.md
 - Check **statistical assumptions** before applying parametric methods.
 - Distinguish **statistical significance from practical significance**.
 
+### Anomaly Detection First (non-sycophancy, v4.15.0)
+- A near-perfect metric (**AUROC / accuracy / F1 ≥ 0.99**) is a symptom to investigate, **not** a result to report as-is.
+- On any such score — or a single feature with |r| ≥ 0.95 to the label, or a per-source positive rate > 0.95 — route to `co-scientist-leakage-detection`, add a `[cell:leakage-audit]` covering the five leakage patterns (feature-label circularity, train/test contamination, source-DB bias, temporal leakage, feature proxy; Kapoor & Narayanan 2023), and cite it next to the metric.
+- In Deep Review, `co-scientist-critical-review` adds a **Devil's Advocate** pass (alternative-explanation / sample-size / label-reliability counterarguments, each with a verification method) and an orthogonal **Multi-Perspective Review** (statistical / domain / methodological). See AGENTS.md for the full procedure.
+
 ### Mathematical Formulation
 - When mathematical/statistical/modeling methods are used, include **≥3 key equations** in `report.md` Methods section with variable definitions.
 - Use LaTeX notation: `$$..$$` for display equations.

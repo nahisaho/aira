@@ -1,16 +1,16 @@
 ---
 name: co-scientist
 description: |
-  Harness-optimized collaborative research partner suite v4.14.0 with 202 specialized sub-skills.
+  Harness-optimized collaborative research partner suite v4.15.0 with 203 specialized sub-skills.
   Covers research planning, literature review, experimental design, data analysis,
   academic writing, peer review, reproducibility, and presentation.
   Use when conducting scientific research, writing papers, designing experiments,
   or managing the full research lifecycle from hypothesis to publication.
 ---
 
-# Co-Scientist v4.14.0
+# Co-Scientist v4.15.0
 
-Collaborative research partner with 202 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
+Collaborative research partner with 203 specialized sub-skills. Route work to the narrowest sub-skill, save all outputs as files, and leave a complete execution trace.
 
 **Global applicability**: Time budget, code quality, file hygiene, and final-response rules below apply to all sub-skills unless the user explicitly overrides them.
 
@@ -29,6 +29,9 @@ Collaborative research partner with 202 specialized sub-skills. Route work to th
   - Consider at least two candidate methods, and describe the reasons for not adopting the rejected methods.
   - When using Deep Learning, explicitly state why simpler methods (analytical methods, classical ML, statistical models) are insufficient.
   - Include at least one baseline comparison. The baseline may be a lightweight implementation, analytical comparison, or literature-based comparison. If implementation is infeasible due to runtime or data constraints, a comparison based on literature/theoretical justification may be used instead.
+- **Anomaly Detection First (non-sycophancy)**: Treat a too-good result as a symptom to investigate, not a result to celebrate.
+  - When any reported metric is near-perfect (**AUROC / accuracy / F1 ≥ 0.99**), or a single feature correlates with the label at |r| ≥ 0.95, or a per-source positive rate exceeds 0.95: **stop and route to `co-scientist-leakage-detection`** before writing the number into `report.md` / `paper.md`.
+  - Add a `[cell:leakage-audit]` cell and cite it next to the metric. Do not report a near-perfect score without it.
 
 ## Time Budget
 
@@ -455,6 +458,9 @@ DO: → `co-scientist-experimental-design`
 WHEN: The user requests data analysis, statistical analysis, visualization, or interpretation of results  
 DO: → `co-scientist-data-analysis`
 
+WHEN: A model scores near-perfect (AUROC / accuracy / F1 ≥ 0.99), or you suspect data leakage / a circular feature-label design, or a metric needs a trustworthiness audit  
+DO: → `co-scientist-leakage-detection`
+
 WHEN: The user requests paper writing, IMRaD structuring, or journal submission preparation  
 DO: → `co-scientist-academic-writing`
 
@@ -494,9 +500,10 @@ Phase 1 → `co-scientist-literature-review`: Literature review
 Phase 2 → `co-scientist-experimental-design`: Experimental design
 
 Phase 3 → `co-scientist-data-analysis`: Execution and analysis
+  → 🔎 Anomaly gate: if any metric ≥ 0.99, run `co-scientist-leakage-detection` and add `[cell:leakage-audit]` before reporting it
 
 Phase 4 → `co-scientist-academic-writing`: Academic writing — **MUST produce `paper.md`**
-  → 🦆 `co-scientist-critical-review` (Mode: Deep Review, one time only)
+  → 🦆 `co-scientist-critical-review` (Mode: Deep Review, one time only) — includes Devil's Advocate + Multi-Perspective Review
   → If issues are found, revise and incorporate changes only once
 
 Phase 4.5 → `co-scientist-citation-checker`: Citation verification

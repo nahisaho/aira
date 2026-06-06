@@ -1,10 +1,10 @@
 # co-scientist
 
-Harness-optimized collaborative research partner suite with 202 specialized sub-skills, 2 Custom Agents, and full Orchestrator routing.
+Harness-optimized collaborative research partner suite with 203 specialized sub-skills, 2 Custom Agents, and full Orchestrator routing.
 
 - **Source path**: `co-scientist`
 - **Version**: v4.0.2
-- **Sub-skills**: 202
+- **Sub-skills**: 203
 - **Custom Agents**: 2 (research-lead, methods-auditor)
 
 ## Harness Optimization
@@ -50,7 +50,7 @@ Cross-cutting: Learning Capture → co-scientist-learning-capture
 └── skills/                ← copy co-scientist/skills/
     ├── co-scientist-research-planning/SKILL.md
     ├── co-scientist-literature-review/SKILL.md
-    └── ...（202 sub-skills）
+    └── ...（203 sub-skills）
 ```
 
 | Aspect | scientist | co-scientist |

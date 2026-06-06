@@ -2,7 +2,9 @@
 name: co-scientist-critical-review
 description: |
   Critical review skill for phase-gate checks and deep review of paper drafts.
-  Focuses on structure, claims, statistics, reproducibility, and citations.
+  Focuses on structure, claims, statistics, reproducibility, and citations, plus
+  adversarial Devil's-Advocate counterarguments and orthogonal multi-perspective
+  review (statistics / domain / methodology) for a non-sycophantic critique.
   Use for Phase Gate Review and Deep Review.
 ---
 
@@ -53,6 +55,42 @@ Primary review mode for `paper.md`. Run the full checklist below and save findin
 - [ ] Every in-text citation maps to a reference entry.
 - [ ] Every reference entry is cited in the text.
 
+### Anomaly / Leakage Check
+- [ ] No reported metric is near-perfect (AUROC / accuracy / F1 ≥ 0.99) without an accompanying leakage audit. If one is, route to `co-scientist-leakage-detection`.
+
+## Devil's Advocate
+
+> Strengthen the work by attacking it. Tone is "demand more verification", not "this is wrong".
+
+For each **main claim** (typically 1–3), generate three structured counterarguments,
+each paired with a concrete verification method. Record them in `results/devils-advocate.md`
+and fold any that survive into Limitations.
+
+| Angle | The counterargument asks | Verification method to attach |
+|-------|--------------------------|-------------------------------|
+| **Alternative explanation** | Could a confounder / leakage / artifact explain the result instead of the stated cause? | Partial-correlation or ablation controlling for the confounder |
+| **Sample size** | Is the effect robust, or an artifact of small / imbalanced n? | Bootstrap 95% CI; report whether it excludes the null |
+| **Label reliability** | Are the ground-truth labels trustworthy (noisy, proxy, annotator-dependent)? | Label-source audit; inter-rater agreement or sensitivity to label noise |
+
+A counterargument is **resolved** only when its verification was actually run and reported.
+Otherwise it becomes a stated Limitation.
+
+## Multi-Perspective Review
+
+> Review through orthogonal lenses so a single viewpoint's blind spot is covered.
+
+Evaluate the draft from three independent angles; keep them separate so they don't collapse into one:
+
+- **Statistical**: tests, uncertainty, multiple-comparison handling, power.
+- **Domain**: does the result make sense in the field; are effect sizes plausible; prior work consistent?
+- **Methodological**: design validity, data pipeline, evaluation protocol, reproducibility.
+
+For **each critical concern** raised by any lens, mark exactly one disposition and state why:
+
+- **Resolved** — addressed with new analysis/text (cite where).
+- **Mitigated** — partially addressed; residual risk documented in Limitations.
+- **Accepted** — out of scope; explicitly acknowledged as a limitation.
+
 ## Simple Lint
 
 - [ ] A `## Limitations` or `## Limitations and Future Work` header exists.
@@ -71,18 +109,21 @@ Primary review mode for `paper.md`. Run the full checklist below and save findin
 1. Determine mode: use Phase Gate for a handoff check, or Deep Review for `paper.md`.
 2. For a paper draft, run Simple Lint before the main checklist.
 3. Run the relevant checklist and mark each item PASS or FAIL.
-4. Classify findings:
+4. For Deep Review, run **Devil's Advocate** on each main claim and a **Multi-Perspective Review** (statistical / domain / methodological).
+5. Classify findings:
    - **Critical**: must be fixed before proceeding.
    - **Other findings**: record as comments with concrete suggestions.
-5. If a Critical issue is found, apply one focused fix.
-6. Re-run the failed checks once.
-7. Save the findings to `results/review-{phase}.md` or `results/review-paper.md`.
-8. Record evidence with a simple format: `- [PASS/FAIL] item: evidence | action`.
+6. If a Critical issue is found, apply one focused fix.
+7. Re-run the failed checks once.
+8. Give every multi-perspective critical concern a disposition (Resolved / Mitigated / Accepted).
+9. Save the findings to `results/review-{phase}.md` or `results/review-paper.md` (+ `results/devils-advocate.md` for Deep Review).
+10. Record evidence with a simple format: `- [PASS/FAIL] item: evidence | action`.
 
 ## Deliverables
 
 - `results/review-{phase}.md` for Phase Gate reviews.
 - `results/review-paper.md` for Deep Review.
+- `results/devils-advocate.md` for Deep Review — counterarguments + verification status per main claim.
 - `report.md` summary in the user's language with blockers, comments, and file inventory.
 
 ## Quality Gates
@@ -90,9 +131,12 @@ Primary review mode for `paper.md`. Run the full checklist below and save findin
 - [ ] The selected review mode matches the task and output file.
 - [ ] Every checklist item is marked PASS or FAIL with brief evidence.
 - [ ] Every Critical issue is fixed and re-checked before completion.
+- [ ] Deep Review: each main claim has ≥1 Devil's-Advocate counterargument with a verification method, and each multi-perspective critical concern has a Resolved/Mitigated/Accepted disposition.
 
 ## Gotchas
 
 - Phase Gate is a quick screen; it does not replace Deep Review for `paper.md`.
 - Fix the failing section only; do not regenerate the whole paper for a local issue.
 - Claims in Discussion and Conclusion must trace back to specific Results and citations.
+- Devil's Advocate must *demand verification*, not merely assert doubt — an unattached counterargument is incomplete.
+- Keep the three perspectives separate; if they all say the same thing you have collapsed them into one.

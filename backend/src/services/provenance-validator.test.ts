@@ -14,6 +14,9 @@ import {
   extractFigureReferences,
   figureHasProducerCell,
   computeVmRatioAndGrade,
+  extractPerformanceMetrics,
+  hasLeakageAuditCell,
+  LEAKAGE_METRIC_THRESHOLD,
 } from './provenance-validator.js';
 import { getTraceDir } from '../config/paths.js';
 import {
@@ -914,6 +917,118 @@ describe('validateProject', () => {
       );
       const report = validateProject(PROJECT_ID);
       expect(report.figure_orphans).toEqual([]);
+    });
+  });
+
+  // v3.5.0 — Anomaly Detection First + leakage advisory (Qiita 第4章 原則①④)
+  describe('Anomaly-first leakage advisory (v3.5.0)', () => {
+    it('extractPerformanceMetrics flags decimal metrics ≥ 0.99 only', () => {
+      const got = extractPerformanceMetrics('We achieved AUROC = 0.997 and accuracy of 0.85.');
+      const auroc = got.find((g) => /AUROC/i.test(g.metric));
+      const acc = got.find((g) => /accuracy/i.test(g.metric));
+      expect(auroc?.value).toBeCloseTo(0.997, 3);
+      expect(acc?.value).toBeCloseTo(0.85, 2);
+      expect(auroc!.value).toBeGreaterThanOrEqual(LEAKAGE_METRIC_THRESHOLD);
+      expect(acc!.value).toBeLessThan(LEAKAGE_METRIC_THRESHOLD);
+    });
+
+    it('extractPerformanceMetrics normalises percentages', () => {
+      const got = extractPerformanceMetrics('The model reached 99.7% accuracy and an F1 of 100%.');
+      expect(got.find((g) => /accuracy/i.test(g.metric))?.value).toBeCloseTo(0.997, 3);
+      expect(got.find((g) => /F1/i.test(g.metric))?.value).toBeCloseTo(1.0, 3);
+    });
+
+    it('extractPerformanceMetrics ignores out-of-range numbers (n, years)', () => {
+      // "accuracy" is far from the cohort size; window guard keeps it from binding 2020.
+      const got = extractPerformanceMetrics('Across n = 2020 samples the recall was 0.40.');
+      expect(got.every((g) => g.value > 0 && g.value <= 1)).toBe(true);
+      expect(got.some((g) => g.value > 1)).toBe(false);
+    });
+
+    it('hasLeakageAuditCell detects by id, source keyword, and stdout echo', () => {
+      const byId = [{ id: 'leakage-audit', type: 'code', source: 'print(1)', stdout: '', text_output: '' }];
+      const bySrc = [{ id: 'x', type: 'code', source: 'check_data_leakage(X, y)', stdout: '', text_output: '' }];
+      const byOut = [{ id: 'x', type: 'code', source: 'audit()', stdout: 'Leakage audit OK\n', text_output: '' }];
+      const none = [{ id: 'x', type: 'code', source: 'model.fit(X, y)', stdout: '', text_output: '' }];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(hasLeakageAuditCell(byId as any)).toBe(true);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(hasLeakageAuditCell(bySrc as any)).toBe(true);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(hasLeakageAuditCell(byOut as any)).toBe(true);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(hasLeakageAuditCell(none as any)).toBe(false);
+    });
+
+    it('flags a near-perfect metric with no audit cell, and surfaces the advisory', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'seed', cell_type: 'code', source: 'import numpy as np\nnp.random.seed(0)', outputs: [] },
+            { id: 'clf', cell_type: 'code', source: 'auc = roc_auc_score(yte, p)\nprint(auc)',
+              outputs: [{ output_type: 'stream', name: 'stdout', text: '0.997\n' }] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'requirements.txt': 'scikit-learn==1.4.0\n',
+          'report.md': 'The classifier reached AUROC = 0.997 [cell:clf] on the held-out set.',
+        },
+      );
+      const report = validateProject(PROJECT_ID);
+      expect(report.leakage_risks.length).toBe(1);
+      expect(report.leakage_risks[0].metric).toMatch(/AUROC/i);
+      expect(report.leakage_risks[0].has_audit).toBe(false);
+
+      const payload = buildRepairPayload(PROJECT_ID);
+      expect(payload.violations.some((v) => v.issue === 'leakage_risk')).toBe(true);
+      expect(payload.repair_prompt).toContain('Anomaly-first leakage advisory');
+      // Informational only — must not, by itself, force a repair loop.
+      expect(payload.needs_repair).toBe(false);
+    });
+
+    it('silences the advisory once a leakage-audit cell exists', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'seed', cell_type: 'code', source: 'import numpy as np\nnp.random.seed(0)', outputs: [] },
+            { id: 'leakage-audit', cell_type: 'code', source: 'assert no train/test leakage\nprint("Leakage audit OK")',
+              outputs: [{ output_type: 'stream', name: 'stdout', text: 'Leakage audit OK\n' }] },
+            { id: 'clf', cell_type: 'code', source: 'auc = roc_auc_score(yte, p)\nprint(auc)',
+              outputs: [{ output_type: 'stream', name: 'stdout', text: '0.997\n' }] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'requirements.txt': 'scikit-learn==1.4.0\n',
+          'report.md': 'The classifier reached AUROC = 0.997 [cell:clf] after a leakage audit.',
+        },
+      );
+      const report = validateProject(PROJECT_ID);
+      expect(report.leakage_risks.length).toBe(1);
+      expect(report.leakage_risks[0].has_audit).toBe(true);
+
+      const payload = buildRepairPayload(PROJECT_ID);
+      expect(payload.violations.some((v) => v.issue === 'leakage_risk')).toBe(false);
+    });
+
+    it('does not flag a report whose metrics are all below threshold', () => {
+      setupProject(
+        {
+          cells: [
+            { id: 'seed', cell_type: 'code', source: 'import numpy as np\nnp.random.seed(0)', outputs: [] },
+            { id: 'clf', cell_type: 'code', source: 'print(0.84)',
+              outputs: [{ output_type: 'stream', name: 'stdout', text: '0.84\n' }] },
+          ],
+          metadata: {}, nbformat: 4, nbformat_minor: 5,
+        },
+        {
+          'requirements.txt': 'scikit-learn==1.4.0\n',
+          'report.md': 'The classifier reached AUROC = 0.84 [cell:clf] on the held-out set.',
+        },
+      );
+      const report = validateProject(PROJECT_ID);
+      expect(report.leakage_risks).toEqual([]);
     });
   });
 

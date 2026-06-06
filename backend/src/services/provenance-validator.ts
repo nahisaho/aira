@@ -296,6 +296,30 @@ export interface FigureOrphan {
 }
 
 /**
+ * v3.5.0 — "Anomaly Detection First" gate (Qiita 第4章 原則①). A near-perfect
+ * performance metric (AUROC / accuracy / F1 ≥ 0.99) is the single most common
+ * surface symptom of data leakage or a circular feature-label design
+ * (Kapoor & Narayanan, 2023). We surface such metrics as an ADVISORY so the
+ * agent runs a leakage audit before reporting them as a real finding —
+ * mirroring the VM spot-check philosophy (v3.4.7): never a hard fail, capped
+ * examples in the repair prompt, no count to optimise against.
+ */
+export interface LeakageRisk {
+  source_file: string;
+  /** The metric name as written, e.g. "AUROC". */
+  metric: string;
+  /** Normalised value in [0,1] (percentages divided by 100). */
+  value: number;
+  /** The matched substring, e.g. "AUROC = 0.997". */
+  raw: string;
+  /** True when the notebook already contains a leakage-audit cell. */
+  has_audit: boolean;
+}
+
+/** v3.5.0 — a metric at/above this is "too good to be true" → audit first. */
+export const LEAKAGE_METRIC_THRESHOLD = 0.99;
+
+/**
  * v3.4.2 — informational notice that the report is suspiciously thin
  * (catches cases like Round 10 SCI-073 where the agent could not produce
  * any reportable claim).
@@ -345,6 +369,8 @@ export interface ValidationReport {
   vm_grade: VmGrade;
   /** v3.4.2 — figures referenced from reports but produced by no cell. */
   figure_orphans: FigureOrphan[];
+  /** v3.5.0 — near-perfect metrics (≥0.99) that warrant a leakage audit. */
+  leakage_risks: LeakageRisk[];
   /** v3.4.2 — informational notice that report.md / paper.md is thin or missing. */
   report_thinness: ReportThinness[];
   gates: GateResult[];
@@ -468,6 +494,82 @@ export function figureHasProducerCell(
     // (3) Runtime echo: the cell printed the basename at execution time.
     if (c.stdout && c.stdout.includes(basename)) return true;
     if (c.text_output && c.text_output.includes(basename)) return true;
+  }
+  return false;
+}
+
+/**
+ * v3.5.0 — extract reported performance metrics from a report/paper so the
+ * "Anomaly Detection First" gate can flag near-perfect values. Anchored on a
+ * metric keyword, then the nearest number within a short window so we don't
+ * pick up sample sizes or years. Percentages (`99.7%`) and decimals (`0.997`)
+ * are both normalised to [0,1]; matches that don't land in (0,1] are dropped.
+ */
+const PERF_METRIC_NAMES =
+  'AUROC|AUPRC|AUC|balanced accuracy|accuracy|F1[ -]?score|F1|precision|recall|sensitivity|specificity|R\\^?2|R²|Dice|IoU|MCC';
+/** Window (chars) searched on each side of a metric keyword for its value. */
+const PERF_WINDOW = 18;
+
+export function extractPerformanceMetrics(
+  markdown: string,
+): Array<{ metric: string; value: number; raw: string }> {
+  const out: Array<{ metric: string; value: number; raw: string }> = [];
+  const nameRe = new RegExp(`\\b(${PERF_METRIC_NAMES})\\b`, 'gi');
+  let nm: RegExpExecArray | null;
+  while ((nm = nameRe.exec(markdown)) !== null) {
+    const metric = nm[1];
+    const start = nm.index;
+    const end = start + nm[0].length;
+
+    // The value may sit on either side ("accuracy = 0.99" or "99% accuracy").
+    // Collect candidate numbers from a window before and after the keyword
+    // (excluding the keyword span so the "1" in "F1" / "2" in "R2" is never
+    // read as the value), then keep the one nearest the keyword.
+    const candidates: Array<{ value: number; raw: string; dist: number }> = [];
+    const collect = (from: number, to: number) => {
+      const seg = markdown.slice(from, to);
+      const re = /(\d{1,3}(?:\.\d+)?)(%?)/g;
+      let mm: RegExpExecArray | null;
+      while ((mm = re.exec(seg)) !== null) {
+        const absStart = from + mm.index;
+        // Skip digits glued to a letter (identifiers like F1, R2, COVID19).
+        const prev = markdown[absStart - 1];
+        if (prev && /[A-Za-z]/.test(prev)) continue;
+        const dist = absStart >= end ? absStart - end : start - (absStart + mm[0].length);
+        if (dist < 0) continue;
+        const num = parseFloat(mm[1]);
+        if (!Number.isFinite(num)) continue;
+        // A trailing '%' or a bare value > 1 is a percentage; a decimal ≤ 1 is
+        // already normalised.
+        const isPercent = mm[2] === '%' || num > 1;
+        const value = isPercent ? num / 100 : num;
+        if (value <= 0 || value > 1) continue;
+        candidates.push({ value, raw: `${metric} ${mm[0].trim()}`.trim(), dist });
+      }
+    };
+    collect(Math.max(0, start - PERF_WINDOW), start);
+    collect(end, Math.min(markdown.length, end + PERF_WINDOW));
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => a.dist - b.dist);
+      out.push({ metric, value: candidates[0].value, raw: candidates[0].raw });
+    }
+  }
+  return out;
+}
+
+/**
+ * v3.5.0 — does the notebook contain a leakage-audit cell? Recognised by a
+ * `leakage-audit` cell id, a leakage-check signature in the source, or a
+ * "Leakage audit OK" echo at runtime — mirroring the Figure Ledger detector.
+ * A present audit cell silences the anomaly advisory (the agent already looked).
+ */
+export function hasLeakageAuditCell(cells: TraceCell[]): boolean {
+  const sig = /\bleakage\b|data[_\s-]?leak|target[_\s-]?leak|train[_\s-]?test[_\s-]?(overlap|contaminat)/i;
+  for (const c of cells) {
+    if (c.type !== 'code') continue;
+    if (c.id === 'leakage-audit') return true;
+    if (sig.test(c.source)) return true;
+    if (c.stdout && /leakage audit/i.test(c.stdout)) return true;
   }
   return false;
 }
@@ -608,8 +710,9 @@ export interface RepairPayload {
     /**
      * v3.4.0 — added 'value_mismatch' (informational).
      * v3.4.2 — added 'figure_orphan' and 'report_thin' (informational).
+     * v3.5.0 — added 'leakage_risk' (informational, anomaly-first advisory).
      */
-    issue: 'uncited' | 'unknown_citation' | 'gate_failed' | 'value_mismatch' | 'figure_orphan' | 'report_thin';
+    issue: 'uncited' | 'unknown_citation' | 'gate_failed' | 'value_mismatch' | 'figure_orphan' | 'report_thin' | 'leakage_risk';
     detail: string;
   }>;
   /** Markdown prompt the agent reads to drive the second pass. */
@@ -820,6 +923,18 @@ export function buildRepairPayload(projectId: string): RepairPayload {
       detail: f.reason + ' Add the cell that produces this figure (e.g. `plt.savefig("' + f.figure_path + '")`) or remove the reference if the figure is no longer used.',
     });
   }
+  // v3.5.0 — anomaly-first leakage advisory (informational). Only surfaced
+  // when no leakage-audit cell exists yet; once the agent runs an audit the
+  // advisory is silenced so it does not nag legitimately high metrics.
+  for (const r of report.leakage_risks) {
+    if (r.has_audit) continue;
+    violations.push({
+      file: r.source_file,
+      claim: r.raw,
+      issue: 'leakage_risk',
+      detail: `${r.metric} ≈ ${r.value.toFixed(3)} (≥ ${LEAKAGE_METRIC_THRESHOLD}) is suspiciously high and is the classic surface symptom of data leakage or a circular feature-label design. Before reporting it, add a [cell:leakage-audit] that checks feature-label circularity, train/test contamination, source-DB bias, temporal leakage, and feature proxies (Kapoor & Narayanan 2023). If the value is legitimate, keep the audit cell and note in Limitations why no leakage applies.`,
+    });
+  }
   // v3.4.2 — report thinness (informational, catches SCI-073-style cases).
   for (const t of report.report_thinness) {
     const detailMap = {
@@ -846,7 +961,7 @@ export function buildRepairPayload(projectId: string): RepairPayload {
   // figure_orphan / report_thin) are surfaced in the prompt but don't
   // by themselves keep the agent in the loop — declaring pass=true is OK
   // when only informational items remain.
-  const informationalIssues = new Set(['value_mismatch', 'figure_orphan', 'report_thin']);
+  const informationalIssues = new Set(['value_mismatch', 'figure_orphan', 'report_thin', 'leakage_risk']);
   const blockingViolations = violations.filter(v => !informationalIssues.has(v.issue));
   const needsRepair = blockingViolations.length > 0;
   const repair_prompt = (violations.length > 0)
@@ -882,6 +997,7 @@ function formatRepairPrompt(
   const gates = violations.filter((v) => v.issue === 'gate_failed');
   const valueMismatches = violations.filter((v) => v.issue === 'value_mismatch');
   const figureOrphans = violations.filter((v) => v.issue === 'figure_orphan');
+  const leakageRisks = violations.filter((v) => v.issue === 'leakage_risk');
   const thinness = violations.filter((v) => v.issue === 'report_thin');
 
   const lines: string[] = [];
@@ -950,6 +1066,18 @@ function formatRepairPrompt(
     if (figureOrphans.length > 20) lines.push(`- … +${figureOrphans.length - 20} more`);
   }
 
+  // v3.5.0 — Anomaly Detection First. Same anti-count philosophy as the VM
+  // spot-check: show a few examples, do not display a total to optimise, and
+  // frame as "audit before you trust" rather than "lower this number".
+  if (leakageRisks.length > 0) {
+    lines.push('');
+    lines.push('## Anomaly-first leakage advisory (audit before you trust these metrics)');
+    lines.push('Near-perfect scores (≥ 0.99) showed up in your report. This is the single most common surface symptom of **data leakage** or a **circular feature-label design** (Kapoor & Narayanan 2023), not a result to celebrate. **Add one `[cell:leakage-audit]` cell** that checks: feature-label circularity, train/test contamination, source-DB bias (per-source positive rate > 0.95), temporal leakage, and feature proxies. If the audit is clean, keep the cell and state in Limitations why no leakage applies; if not, fix the design before reporting. Do not chase this list to empty — run the audit once.');
+    for (const v of leakageRisks.slice(0, 3)) {
+      lines.push(`- ${v.file}: \`${v.claim}\``);
+    }
+  }
+
   if (thinness.length > 0) {
     lines.push('');
     lines.push(`## Report thinness (${thinness.length}) — informational, urgent`);
@@ -988,6 +1116,7 @@ export function validateProject(projectId: string): ValidationReport {
       vm_ratio: 0,
       vm_grade: 'A',
       figure_orphans: [],
+      leakage_risks: [],
       report_thinness: [],
       gates: [],
       pass: false,
@@ -1060,6 +1189,25 @@ export function validateProject(projectId: string): ValidationReport {
     }
   }
 
+  // v3.5.0 — "Anomaly Detection First": flag near-perfect metrics (≥0.99) as
+  // a leakage advisory. `has_audit` is global (one leakage-audit cell covers
+  // the analysis) and, when true, silences the advisory in the repair prompt.
+  const leakage_risks: LeakageRisk[] = [];
+  const leakageAuditPresent = hasLeakageAuditCell(snapshot.cells);
+  for (const { file, text } of reportTexts) {
+    if (!text) continue;
+    for (const pm of extractPerformanceMetrics(text)) {
+      if (pm.value < LEAKAGE_METRIC_THRESHOLD) continue;
+      leakage_risks.push({
+        source_file: file,
+        metric: pm.metric,
+        value: pm.value,
+        raw: pm.raw,
+        has_audit: leakageAuditPresent,
+      });
+    }
+  }
+
   // v3.4.2 — thinness detection (catches Round-10 SCI-073-style failures).
   const report_thinness: ReportThinness[] = [];
   for (const { file, text } of reportTexts) {
@@ -1093,10 +1241,11 @@ export function validateProject(projectId: string): ValidationReport {
     vm_ratio,
     vm_grade,
     figure_orphans,
+    leakage_risks,
     report_thinness,
     gates,
-    // value_mismatches / figure_orphans / report_thinness are informational;
-    // they don't block the overall pass.
+    // value_mismatches / figure_orphans / leakage_risks / report_thinness are
+    // informational; they don't block the overall pass.
     pass: gates.every((g) => g.passed) && unknown.length === 0,
   };
 }

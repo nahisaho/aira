@@ -2,6 +2,40 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.5.0] — 2026-06-05 — 「忖度しないAI」4設計原則（Anomaly-First / Devil's Advocate / Multi-Perspective / Leakage Codification）
+
+Qiita 記事「第4章: 忖度しないAI の4つの設計原則」を Co-Scientist に実装。**出来すぎた結果を疑う**懐疑的レビュー層を追加し、データリーケージ・循環設計を発生源で検出する。スキル指示は採用率が低い（R18 の Figure Ledger が skill 内 0%）という確定教訓を踏まえ、**スキル＋バリデータの二段構え**で実装した。
+
+### 原則① 異常検知ファースト（Anomaly Detection First）— skill + validator
+
+- **新サブスキル `co-scientist-leakage-detection`**（203番目）— AUROC/accuracy/F1 ≥ 0.99、単一特徴の |r| ≥ 0.95、ソース別陽性率 > 0.95 をレッドフラグとし、`[cell:leakage-audit]` 監査セルを強制。
+- **バリデータ `provenance-validator.ts`** — `extractPerformanceMetrics()` が report/paper から性能指標（小数・%両表記、`F1`/`R2` の識別子数字は除外、前後窓で最近傍値を採用）を抽出し、`LEAKAGE_METRIC_THRESHOLD = 0.99` 以上を `leakage_risks` として surface。`hasLeakageAuditCell()`（id=`leakage-audit` / `leakage` 等のソース signature / `Leakage audit` 出力で検出）が存在すれば advisory を**沈黙**させる。
+- **VM spot-check 哲学を踏襲**（v3.4.7）— informational のみで pass をブロックしない、repair prompt は最大3例・カウント非表示・「数を減らせ」ではなく「報告前に監査せよ」。
+
+### 原則④「おかしい」の言語化（Leakage Codification）— skill
+
+`co-scientist-leakage-detection` に Kapoor & Narayanan (2023) の5パターン（特徴量-ラベル循環 / 訓練-テスト汚染 / ソースDB偏り / 時間的リーケージ / 特徴量プロキシ）を検出方法＋実例の表で体系化。`[cell:leakage-audit]` テンプレートに5パターンの自動チェックを同梱。
+
+### 原則② Devil's Advocate / 原則③ 多視点レビュー — skill
+
+`co-scientist-critical-review`（Deep Review）を拡張：
+
+- **Devil's Advocate**: 各主要主張に3視点（代替説明 / サンプルサイズ / ラベル信頼性）の反論を生成し、**各々に検証方法を必須付与**（partial-correlation / bootstrap CI / label audit）。検証を実行して初めて「解消」、未実行なら Limitations へ。`results/devils-advocate.md` に保存。
+- **Multi-Perspective Review**: 統計 / ドメイン / 方法論の直交3レンズ。重大懸念ごとに resolve/mitigate/accept を明示。
+
+### Orchestration
+
+`AGENTS.md` に Core Rule「Anomaly Detection First」、Phase 3 異常ゲート、Phase 4 Deep Review 注記、`leakage-detection` の WHEN/DO ルートを追加。`copilot-instructions.md` にサマリ＋AGENTS.md への forward-pointer。skill `v4.14.0 → v4.15.0`、sub-skill count `202 → 203`。
+
+### Tests
+
+`provenance-validator.test.ts` に v3.5.0 ブロック（7ケース）追加 — 小数/% の閾値判定、識別子数字・範囲外の除外、`hasLeakageAuditCell` の3経路検出、監査セル有/無での advisory の surface/沈黙、閾値未満の非検出。backend **309 → 316** テスト全グリーン。tsc クリーン、lint グリーン。
+
+### Deferred
+
+- **Round 20 実験での効果検証** — `co-scientist-leakage-detection` 採用率、FigOrp/VM への影響、リーケージ検出率を実 telemetry で観測（実験 runner 側）。
+- **異常検知ゲートのプロンプト直接埋込** — R18/R19 教訓に従い、採用率が伸びなければ実験プロンプトの Golden Rules への埋込を検討。
+
 ## [v3.4.12] — 2026-06-05 — Figure Ledger accepted as producer (validator-side FigOrp fix)
 
 Round 19(v3.4.11 + Figure Ledger を **プロンプトに直接埋込**)で、Figure Ledger の採用率が **R18 の 0% → R19 の 46%** に跳ね上がった(skill 内指示だけでは浸透しないことが確定、`results-summary` の 84% と対照的)。にもかかわらず **FigOrp avg は 9.8 → 9.4 とほぼ不変**。9 ラウンド(R11〜R19)の実験により、FigOrp の根本原因が **バリデータ `figureHasProducerCell()` のパスマッチング方式** であることが確定した。
