@@ -37,6 +37,12 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Disable the default `latest=auto` flavor: otherwise pushing any
+          # vX.Y.Z tag (even an old patch) would re-point `:latest` to it.
+          # `:latest` is updated ONLY on default-branch pushes via the explicit
+          # type=raw rule below.
+          flavor: |
+            latest=false
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
