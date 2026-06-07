@@ -6,6 +6,7 @@ import { startRun, stopRun, clearSession } from './container-runner.js';
 import { reconcileProjectFiles } from './file.service.js';
 import { captureSnapshot } from './notebook-trace.js';
 import { recordSkillRouting } from './skill-routing.service.js';
+import { selectRelevantSkills } from './dynamic-skill-router.js';
 import {
   getRagSettings,
   indexMessageTokens,
@@ -139,7 +140,7 @@ function copyDirRecursive(src: string, dest: string): void {
  * The --prompt argument contains ONLY conversation history + current message.
  * Skill discovery and routing is handled entirely by the CLI.
  */
-export function syncSkillFiles(projectId: string): SyncedSkillSummary {
+export function syncSkillFiles(projectId: string, prompt?: string): SyncedSkillSummary {
   const workspaceDir = pathConfig.getWorkspaceDir(projectId);
   fs.mkdirSync(workspaceDir, { recursive: true });
 
@@ -152,6 +153,9 @@ export function syncSkillFiles(projectId: string): SyncedSkillSummary {
     hasCopilotInstructions: false,
     hasAgentsMd: false,
   };
+
+  // Dynamic skill selection: if prompt is provided, only sync relevant sub-skills.
+  const relevantSkills = prompt ? selectRelevantSkills(prompt) : null;
 
   // Log resolved skill directories for debugging
   for (const dir of skillDirs) {
@@ -194,14 +198,26 @@ export function syncSkillFiles(projectId: string): SyncedSkillSummary {
 
     // Subskill directories → .github/skills/{name}/
     // The CLI auto-discovers all files in a skill directory alongside SKILL.md.
+    // v3.7.0: if prompt is provided, only sync relevant sub-skills to reduce context.
     try {
       const subSkills = fs.readdirSync(path.join(dir, 'skills'), { withFileTypes: true });
+      let syncedCount = 0;
+      let skippedCount = 0;
       for (const entry of subSkills) {
         if (!entry.isDirectory()) continue;
+        // Dynamic filtering: skip irrelevant sub-skills when prompt is provided
+        if (relevantSkills && !relevantSkills.has(entry.name)) {
+          skippedCount++;
+          continue;
+        }
         const srcDir = path.join(dir, 'skills', entry.name);
         const destDir = path.join(skillsOutDir, entry.name);
         copyDirRecursive(srcDir, destDir);
         summary.skills[i]?.subSkills.push(entry.name);
+        syncedCount++;
+      }
+      if (relevantSkills) {
+        console.log(`[syncSkillFiles] dynamic routing: synced ${syncedCount} sub-skills, skipped ${skippedCount} (prompt-based filtering)`);
       }
     } catch { /* no skills/ dir */ }
 
