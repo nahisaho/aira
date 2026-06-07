@@ -42,12 +42,20 @@ const RUN_TIMEOUT_MS = parseInt(process.env.CONTAINER_TIMEOUT ?? String(3 * 60 *
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+/** A skill-routing signal observed in the CLI event stream (v3.6.0). */
+export interface SkillRoutingEvent {
+  type: 'skills_loaded' | 'tool_invoked';
+  payload: Record<string, unknown>;
+}
+
 export interface RunnerCallbacks {
   onChunk:    (content: string) => void;
   onProgress: (message: string) => void;
   onDone:     (exitCode: number | null) => void;
   onError:    (message: string) => void;
   onFileCreated?: (filePath: string) => void;
+  /** Skill routing signals parsed from the CLI event stream. */
+  onSkillRouting?: (event: SkillRoutingEvent) => void;
 }
 
 export interface RunnerOptions {
@@ -126,6 +134,22 @@ function formatToolStart(toolName: string, args: Record<string, unknown>): strin
   return short ? `${toolName}: ${short}` : toolName;
 }
 
+/**
+ * Detect whether a tool call's arguments reference a synced skill file, e.g.
+ * `.github/skills/co-scientist-critical-review/SKILL.md`. Returns the sub-skill
+ * directory name (the routing-relevant identifier) or null. Scans all string
+ * argument values so it works regardless of which field holds the path.
+ */
+function detectSkillRef(args: Record<string, unknown>): string | null {
+  const re = /[./]github\/skills\/([^/\s"']+)/i;
+  for (const v of Object.values(args)) {
+    if (typeof v !== 'string') continue;
+    const m = v.match(re);
+    if (m && m[1]) return m[1];
+  }
+  return null;
+}
+
 interface ParseState {
   deltasSeen: boolean;
   finalMessage: string;
@@ -134,7 +158,7 @@ interface ParseState {
 function parseLine(
   line: string,
   state: ParseState,
-  cbs: Pick<RunnerCallbacks, 'onChunk' | 'onProgress' | 'onFileCreated'>,
+  cbs: Pick<RunnerCallbacks, 'onChunk' | 'onProgress' | 'onFileCreated' | 'onSkillRouting'>,
 ): void {
   let event: { type?: string; data?: Record<string, unknown> };
   try { event = JSON.parse(line) as typeof event; } catch {
@@ -174,6 +198,12 @@ function parseLine(
       const a = (data.arguments && typeof data.arguments === 'object')
         ? data.arguments as Record<string, unknown> : {};
       cbs.onProgress(formatToolStart(n, a));
+      // Skill routing (v3.6.0): a tool call whose arguments reference a synced
+      // SKILL.md file is strong evidence the CLI actually engaged that skill.
+      const skillName = detectSkillRef(a);
+      if (skillName) {
+        cbs.onSkillRouting?.({ type: 'tool_invoked', payload: { toolName: n, skill: skillName } });
+      }
       break;
     }
     case 'session.tools_loaded':
@@ -185,10 +215,13 @@ function parseLine(
       break;
     }
     case 'session.skills_loaded': {
-      const skills = Array.isArray(data.skills)
-        ? (data.skills as Array<{ name?: string }>).map(s => s.name).filter(Boolean).join(', ')
-        : '';
-      if (skills) console.log(`[copilot-cli] Skills loaded: ${skills}`);
+      const names = Array.isArray(data.skills)
+        ? (data.skills as Array<{ name?: string }>).map(s => s.name).filter(Boolean) as string[]
+        : [];
+      if (names.length) {
+        console.log(`[copilot-cli] Skills loaded: ${names.join(', ')}`);
+        cbs.onSkillRouting?.({ type: 'skills_loaded', payload: { skills: names } });
+      }
       break;
     }
     case 'session.info': {
@@ -230,7 +263,7 @@ function parseLine(
 function attachStreamReader(
   proc: ChildProcess,
   state: ParseState,
-  cbs: Pick<RunnerCallbacks, 'onChunk' | 'onProgress' | 'onFileCreated'>,
+  cbs: Pick<RunnerCallbacks, 'onChunk' | 'onProgress' | 'onFileCreated' | 'onSkillRouting'>,
 ): void {
   let buf = '';
   const MAX_BUF = 1024 * 1024; // 1MB line buffer cap
@@ -438,6 +471,7 @@ export function startRun(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
     onChunk:    (c) => cbs.onChunk(c),
     onProgress: (m) => cbs.onProgress(m),
     onFileCreated: (p) => cbs.onFileCreated?.(p),
+    onSkillRouting: (e) => cbs.onSkillRouting?.(e),
     onDone: (code) => {
       activeRuns.delete(opts.projectId);
       cbs.onDone(code);

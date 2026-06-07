@@ -121,10 +121,10 @@ function extractWithLlm(
     child.stdin?.end();
 
     let stdout = '';
-    let stderr = '';
+    let _stderr = '';
 
     child.stdout?.on('data', (d: Buffer) => { stdout += d.toString('utf8'); });
-    child.stderr?.on('data', (d: Buffer) => { stderr += d.toString('utf8'); });
+    child.stderr?.on('data', (d: Buffer) => { _stderr += d.toString('utf8'); });
 
     const timeout = setTimeout(() => {
       child.kill('SIGTERM');

@@ -143,6 +143,27 @@ export interface Run {
   created_at: string;
 }
 
+// ─── Skill routing log (v3.6.0) ───
+
+export type SkillRoutingEventType = 'synced' | 'skills_loaded' | 'tool_invoked';
+
+export interface SkillRoutingEvent {
+  id: string;
+  run_id: string | null;
+  event_type: SkillRoutingEventType;
+  // Shape varies by event_type — see skill-routing.service.ts.
+  payload: unknown;
+  created_at: string;
+}
+
+export interface SkillRoutingRun {
+  runId: string;
+  status: string | null;
+  prompt: string | null;
+  createdAt: string | null;
+  events: SkillRoutingEvent[];
+}
+
 export const runsApi = {
   list: (projectId: string, limit = 20) =>
     request<Run[]>(`/projects/${projectId}/runs?limit=${limit}`),
@@ -152,6 +173,8 @@ export const runsApi = {
     request<{ status: string }>(`/projects/${projectId}/runs/current/stop`, { method: 'POST' }),
   promptUrl: (projectId: string, runId: string) =>
     `${API_BASE}/projects/${projectId}/runs/${runId}/prompt`,
+  skillRouting: (projectId: string) =>
+    request<{ runs: SkillRoutingRun[] }>(`/projects/${projectId}/skill-routing`),
 };
 
 // ─── Files ───

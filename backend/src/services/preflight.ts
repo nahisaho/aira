@@ -119,7 +119,7 @@ function checkJupyter(): PreflightCheck {
   // Both binaries are required for the v3.0.0 Python compute layer. Missing
   // either is a warning, not fatal — AIRA stays up, only Jupyter MCP is
   // unavailable.
-  let jupyterVersion = '';
+  let jupyterVersion: string;
   try {
     jupyterVersion = execFileSync('jupyter', ['--version'], {
       encoding: 'utf-8',

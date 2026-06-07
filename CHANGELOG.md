@@ -2,6 +2,48 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.6.0] — 2026-06-08 — Skill Routing Log + Jupyter Kernel Culling
+
+> **Base:** このリリースは **v3.4.10 を基点に分岐**して作成。v3.4.11 / v3.4.12 (Figure Ledger) および v3.5.0 (「忖度しないAI」4原則) の変更は含まない。
+
+### 背景 — Co-Science Skill の出力ばらつき調査
+
+同一の Co-Science Skill を使った 2 回の実行で、出力特性が大きく異なる事象を観測:
+
+| | 語数 | 引用数 |
+|---|---|---|
+| 実行 A | 短め (3,040 語) だが引用密度が高い | 96.5 個 |
+| 実行 B | 長め (3,936 語) だが引用が薄い | 69.2 個 |
+
+Copilot CLI のスキルルーティング(どの SKILL.md を読み込み・実際に使用したか)は従来 `console.log` に流れるだけで永続化されず、**実行間の差分を後から調査できなかった**。原因調査のための観測基盤として、スキルルーティングログ機能を追加する。
+
+### Added — スキルルーティングログ (DB + API + UI)
+
+run ごとに、スキルルーティングのタイムラインを記録・閲覧できるようにした。
+
+- **DB** (`db/index.ts`): `skill_routing_logs` テーブルを新設。`event_type` は以下の 3 種:
+  - `synced` — AIRA 側(決定論的):`.github/skills/` に同期したスキル + サブスキル一覧
+  - `skills_loaded` — CLI イベント:CLI がそのターンで読み込んだスキル
+  - `tool_invoked` — CLI イベント:引数が SKILL.md ファイルを参照したツール呼び出し(= スキルが実際に engage された強い証拠)
+- **Service** (`skill-routing.service.ts`, 新規): `recordSkillRouting()` / `getSkillRoutingForProject()` / `getSkillRoutingForRun()`。記録は run を壊さないよう全例外を握りつぶす設計。
+- **Capture** (`exec-context.ts`, `container-runner.ts`): `syncSkillFiles()` が同期サマリを返すようにし、run 作成直後に `synced` を記録。CLI イベントストリームから `skills_loaded` / `tool_invoked` を `onSkillRouting` コールバック経由で記録。
+- **API** (`routes/runs.ts`): `GET /api/projects/:id/skill-routing` — run ごとにグループ化(新しい run が先頭、run 内はクロノロジカル)。テナントスコープ済み。
+- **UI** (`RightPanel.tsx`, `SkillRoutingPane.tsx` 新規): 右パネルに「ルーティング」タブを追加。run ごとに synced / loaded / engaged をバッジ表示。i18n (ja/en) 対応。
+
+### Fixed — Jupyter カーネルが残り続けるバグ (`jupyter-server.ts`)
+
+jupyter-mcp-server(プロジェクトごとに 1 カーネル)や JupyterLab iframe が起動したカーネルが **一切回収されず**、実行をまたいで蓄積しメモリ / PID をリークしていた。Jupyter Server 自身の `MappingKernelManager` culling が無効だったのが原因。
+
+- `kernelCullArgs()` を追加し、spawn 引数に注入:
+  - `cull_idle_timeout=1800`(30 分アイドルで停止)、`cull_interval=120`(2 分ごとに点検)
+  - **`cull_connected=True`** — MCP stdio 子プロセス / iframe が持続接続を保持するため、これが無いとアイドルでも回収されない(=今回のバグそのもの)
+  - `cull_busy=False` — 実行中(セル計算中)のカーネルは回収しない
+- env で調整 / 無効化可能:`AIRA_JUPYTER_CULL_IDLE_TIMEOUT`(0 で無効)、`AIRA_JUPYTER_CULL_INTERVAL`、`AIRA_JUPYTER_CULL_CONNECTED=false`。
+
+### Chore — lint 整備
+
+v3.4.10 基点のため未整備だった lint エラーを解消(`_`-prefix 規約を eslint 設定に追加、未使用変数 / useless-escape / caught-error cause 等の個別修正、`react-hooks/set-state-in-effect` の意図的箇所に disable 付与)。`npm run lint` / `npm test` / `npm run build` すべてグリーン。
+
 ## [v3.4.10] — 2026-06-05 — Figure Producer Detection — Dynamic Paths
 
 Round 15 telemetry で **FigOrp avg が 2.5 → 7.2 と 5 ラウンド中ワースト**に悪化。原因調査の結果、Round 14→15 で agent の図生成パターンが `plt.savefig("figures/roc.png")` 型から **動的パス構築型**(f-string, `os.path.join`, ループ生成)に shift していたが、`figureHasProducerCell()` が literal 文字列比較しかしておらず大量の **false-positive orphan** が発生していた。

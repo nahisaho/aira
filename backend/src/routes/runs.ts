@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { getDatabase } from '../db/index.js';
 import { stopChat } from '../services/exec-context.js';
 import { broadcastToProject } from '../services/ws.service.js';
+import { getSkillRoutingForProject, type SkillRoutingLog } from '../services/skill-routing.service.js';
 
 const runRoutes = new Hono();
 
@@ -100,6 +101,47 @@ runRoutes.get('/api/projects/:id/runs/:runId/prompt', (c) => {
       'Content-Disposition': `attachment; filename="prompt-${runId.slice(0, 8)}.txt"`,
     },
   });
+});
+
+// GET /api/projects/:id/skill-routing — skill routing log, grouped by run
+// (v3.6.0). Returns newest run first; events within a run are chronological.
+// Used by the right panel to investigate why the same skill set produced
+// different agent behaviour across runs.
+runRoutes.get('/api/projects/:id/skill-routing', (c) => {
+  const projectId = c.req.param('id');
+  const rawLimit = parseInt(c.req.query('limit') ?? '500', 10);
+  const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 500, 1), 2000);
+
+  const logs = getSkillRoutingForProject(projectId, limit);
+
+  // Group by run, preserving newest-run-first order (getSkillRoutingForProject
+  // returns rows newest-first, so first-seen run id is the most recent).
+  const byRun = new Map<string, SkillRoutingLog[]>();
+  for (const log of logs) {
+    const key = log.run_id ?? 'unknown';
+    let bucket = byRun.get(key);
+    if (!bucket) { bucket = []; byRun.set(key, bucket); }
+    bucket.push(log);
+  }
+
+  const db = getDatabase();
+  const runs = Array.from(byRun.entries()).map(([runId, events]) => {
+    const run = runId !== 'unknown'
+      ? db.prepare(
+          'SELECT id, status, prompt, created_at FROM agent_runs WHERE id = ? AND project_id = ?',
+        ).get(runId, projectId) as { id: string; status: string; prompt: string | null; created_at: string } | undefined
+      : undefined;
+    return {
+      runId,
+      status: run?.status ?? null,
+      prompt: run?.prompt ?? null,
+      createdAt: run?.created_at ?? events[events.length - 1]?.created_at ?? null,
+      // events arrive newest-first; reverse to chronological for the timeline.
+      events: events.slice().reverse(),
+    };
+  });
+
+  return c.json({ runs });
 });
 
 export { runRoutes };

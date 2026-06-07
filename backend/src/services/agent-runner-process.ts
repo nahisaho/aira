@@ -65,7 +65,6 @@ function resolveCli(): CliInfo {
     return { command: 'copilot', argsPrefix: [] };
   } catch { /* fall through */ }
   // Node.js require fallback
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const scriptPath = require.resolve('@github/copilot/cli');
   return { command: process.execPath, argsPrefix: [scriptPath] };
 }

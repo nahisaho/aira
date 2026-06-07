@@ -21,6 +21,7 @@ export function ValidationModal({
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset loading before re-running validation
     setLoading(true);
     provenanceApi
       .validate(projectId)

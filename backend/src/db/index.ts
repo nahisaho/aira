@@ -370,7 +370,28 @@ function createSchema(db: CompatDatabase): void {
       max_context_chars INTEGER NOT NULL DEFAULT 4000,
       auto_index_files  INTEGER NOT NULL DEFAULT 1,
       created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`
+    )`,
+
+    // ── Skill routing log (v3.6.0) ──
+    // Records, per run, which skills AIRA synced into the workspace and which
+    // skills the Copilot CLI reported loading. Lets the operator investigate why
+    // the same skill set produced different agent behaviour (e.g. citation
+    // density) across runs. event_type:
+    //   'synced'        — AIRA-side: skill dirs + sub-skills written to .github/
+    //   'skills_loaded' — CLI event: skills the CLI selected/loaded for the turn
+    //   'tool_invoked'  — CLI event: a skill-related tool the agent actually ran
+    `CREATE TABLE IF NOT EXISTS skill_routing_logs (
+      id          TEXT PRIMARY KEY,
+      project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      run_id      TEXT,
+      event_type  TEXT NOT NULL CHECK(event_type IN ('synced','skills_loaded','tool_invoked')),
+      payload     TEXT NOT NULL,
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_skill_routing_project
+      ON skill_routing_logs(project_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_skill_routing_run
+      ON skill_routing_logs(run_id)`
   ];
 
   for (const stmt of statements) {

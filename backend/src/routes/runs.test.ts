@@ -6,6 +6,10 @@ import os from 'node:os';
 import { runRoutes } from './runs.js';
 import { initializeDatabase, getDatabase, closeDatabase } from '../db/index.js';
 import { setBaseDir, getBaseDir } from '../config/paths.js';
+import {
+  recordSkillRouting,
+  getSkillRoutingForRun,
+} from '../services/skill-routing.service.js';
 
 describe('Runs API', () => {
   let tmpDir: string;
@@ -56,6 +60,43 @@ describe('Runs API', () => {
     it('returns 404 for unknown runId', async () => {
       const res = await app.request('/api/projects/p1/runs/does-not-exist/prompt');
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('skill routing log (v3.6.0)', () => {
+    it('records and reads back a run timeline in chronological order', () => {
+      recordSkillRouting('p1', 'r1', 'synced', {
+        skills: [{ name: 'co-scientist', subSkills: ['a', 'b'] }],
+      });
+      recordSkillRouting('p1', 'r1', 'skills_loaded', { skills: ['co-scientist'] });
+      recordSkillRouting('p1', 'r1', 'tool_invoked', {
+        toolName: 'read', skill: 'co-scientist-critical-review',
+      });
+
+      const events = getSkillRoutingForRun('r1');
+      expect(events.map(e => e.event_type)).toEqual(['synced', 'skills_loaded', 'tool_invoked']);
+      expect((events[0]!.payload as { skills: unknown[] }).skills).toHaveLength(1);
+    });
+
+    it('GET /skill-routing groups events by run, newest run first', async () => {
+      recordSkillRouting('p1', 'r1', 'synced', { skills: [{ name: 'co-scientist', subSkills: [] }] });
+      recordSkillRouting('p1', 'r1', 'skills_loaded', { skills: ['co-scientist'] });
+
+      const res = await app.request('/api/projects/p1/skill-routing');
+      expect(res.status).toBe(200);
+      const body = await res.json() as { runs: Array<{ runId: string; status: string | null; events: unknown[] }> };
+      expect(body.runs).toHaveLength(1);
+      expect(body.runs[0]!.runId).toBe('r1');
+      expect(body.runs[0]!.status).toBe('completed');
+      expect(body.runs[0]!.events).toHaveLength(2);
+    });
+
+    it('does not leak another project’s routing events', async () => {
+      recordSkillRouting('p2', 'r2', 'synced', { skills: [] });
+
+      const res = await app.request('/api/projects/p1/skill-routing');
+      const body = await res.json() as { runs: unknown[] };
+      expect(body.runs).toHaveLength(0);
     });
   });
 });

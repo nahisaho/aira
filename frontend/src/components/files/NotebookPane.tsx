@@ -26,6 +26,7 @@ export function NotebookPane({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset loading on projectId change before re-fetching
     setLoading(true);
     jupyterApi
       .getSettings()

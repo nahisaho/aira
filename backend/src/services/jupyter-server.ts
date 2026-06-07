@@ -199,6 +199,45 @@ export function frameAncestorOrigins(): string {
 }
 
 /**
+ * Idle-kernel culling args (v3.6.0).
+ *
+ * Bug: kernels started by jupyter-mcp-server (one per project notebook) and by
+ * the JupyterLab iframe were never reaped — they "lingered" indefinitely,
+ * accumulating across runs and leaking memory/PIDs. The Jupyter Server can do
+ * this itself via MappingKernelManager culling, which was simply not enabled.
+ *
+ * Defaults: shut down a kernel idle for 30 min, checked every 2 min.
+ * `cull_connected=True` is the crucial part — the MCP stdio child and the iframe
+ * hold persistent connections, so without it an idle-but-connected kernel is
+ * never culled (which is exactly the lingering bug). Busy (executing) kernels
+ * are never culled so long-running cells aren't interrupted.
+ *
+ * Overridable via env so an operator can tune or disable culling:
+ *   - AIRA_JUPYTER_CULL_IDLE_TIMEOUT  seconds (default 1800; 0 disables culling)
+ *   - AIRA_JUPYTER_CULL_INTERVAL      seconds between checks (default 120)
+ *   - AIRA_JUPYTER_CULL_CONNECTED     'false' to spare connected kernels
+ *
+ * Exported for testing.
+ */
+export function kernelCullArgs(): string[] {
+  const idle = parseInt(process.env.AIRA_JUPYTER_CULL_IDLE_TIMEOUT ?? '1800', 10);
+  // 0 (or invalid) disables culling entirely — operator opt-out.
+  if (!Number.isFinite(idle) || idle <= 0) return [];
+
+  const rawInterval = parseInt(process.env.AIRA_JUPYTER_CULL_INTERVAL ?? '120', 10);
+  const interval = Number.isFinite(rawInterval) && rawInterval > 0 ? rawInterval : 120;
+  const cullConnected = process.env.AIRA_JUPYTER_CULL_CONNECTED !== 'false';
+
+  return [
+    `--MappingKernelManager.cull_idle_timeout=${idle}`,
+    `--MappingKernelManager.cull_interval=${interval}`,
+    `--MappingKernelManager.cull_connected=${cullConnected ? 'True' : 'False'}`,
+    // Never cull a kernel that is actively executing a cell.
+    '--MappingKernelManager.cull_busy=False',
+  ];
+}
+
+/**
  * Start the Jupyter Server. Idempotent — returns existing url/token if already
  * running. Throws if `jupyter` is not installed or the server fails to become
  * ready within STARTUP_TIMEOUT_MS.
@@ -215,6 +254,7 @@ export async function startJupyterServer(): Promise<{ url: string; token: string
     throw new Error(
       `jupyter command not found in PATH: ${(err as Error).message}. ` +
         `Install jupyter-server in the AIRA Python environment.`,
+      { cause: err },
     );
   }
 
@@ -255,6 +295,8 @@ export async function startJupyterServer(): Promise<{ url: string; token: string
     `--ServerApp.tornado_settings=${tornadoSettings}`,
     // Match the AIRA CORS allowlist so AJAX from the iframe works
     `--ServerApp.allow_origin_pat=^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:\\d+)?$`,
+    // v3.6.0 — reap idle kernels so they don't linger across runs.
+    ...kernelCullArgs(),
   ];
 
   _process = spawn('jupyter', args, {

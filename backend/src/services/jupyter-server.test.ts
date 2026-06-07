@@ -8,6 +8,7 @@ import {
   resetJupyterStateForTesting,
   setJupyterStateForTesting,
   frameAncestorOrigins,
+  kernelCullArgs,
 } from './jupyter-server.js';
 
 describe('jupyter-server module', () => {
@@ -122,6 +123,53 @@ describe('jupyter-server module', () => {
       const ancestors = frameAncestorOrigins();
       expect(ancestors).toContain("'self'");
       expect(ancestors).toContain('http://localhost:3001');
+    });
+  });
+
+  describe('kernelCullArgs (v3.6.0) — reap lingering idle kernels', () => {
+    afterEach(() => {
+      delete process.env.AIRA_JUPYTER_CULL_IDLE_TIMEOUT;
+      delete process.env.AIRA_JUPYTER_CULL_INTERVAL;
+      delete process.env.AIRA_JUPYTER_CULL_CONNECTED;
+    });
+
+    it('enables culling with sane defaults', () => {
+      const args = kernelCullArgs();
+      expect(args).toContain('--MappingKernelManager.cull_idle_timeout=1800');
+      expect(args).toContain('--MappingKernelManager.cull_interval=120');
+      // Connected kernels MUST be culled — the MCP child / iframe hold the
+      // connection that otherwise keeps an idle kernel alive forever.
+      expect(args).toContain('--MappingKernelManager.cull_connected=True');
+      // Busy (executing) kernels are never culled.
+      expect(args).toContain('--MappingKernelManager.cull_busy=False');
+    });
+
+    it('honours AIRA_JUPYTER_CULL_IDLE_TIMEOUT / INTERVAL overrides', () => {
+      process.env.AIRA_JUPYTER_CULL_IDLE_TIMEOUT = '600';
+      process.env.AIRA_JUPYTER_CULL_INTERVAL = '60';
+      const args = kernelCullArgs();
+      expect(args).toContain('--MappingKernelManager.cull_idle_timeout=600');
+      expect(args).toContain('--MappingKernelManager.cull_interval=60');
+    });
+
+    it('disables culling when idle timeout is 0', () => {
+      process.env.AIRA_JUPYTER_CULL_IDLE_TIMEOUT = '0';
+      expect(kernelCullArgs()).toEqual([]);
+    });
+
+    it('disables culling on a non-numeric idle timeout', () => {
+      process.env.AIRA_JUPYTER_CULL_IDLE_TIMEOUT = 'off';
+      expect(kernelCullArgs()).toEqual([]);
+    });
+
+    it('spares connected kernels when AIRA_JUPYTER_CULL_CONNECTED=false', () => {
+      process.env.AIRA_JUPYTER_CULL_CONNECTED = 'false';
+      expect(kernelCullArgs()).toContain('--MappingKernelManager.cull_connected=False');
+    });
+
+    it('falls back to default interval when override is invalid', () => {
+      process.env.AIRA_JUPYTER_CULL_INTERVAL = '-5';
+      expect(kernelCullArgs()).toContain('--MappingKernelManager.cull_interval=120');
     });
   });
 });

@@ -9,6 +9,7 @@ import { filesApi, runsApi } from '../../api/client';
 import { FileViewerModal } from './FileViewerModal';
 import { NotebookPane } from './NotebookPane';
 import { ValidationModal } from './ValidationModal';
+import { SkillRoutingPane } from './SkillRoutingPane';
 
 export function RightPanel() {
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
@@ -20,7 +21,7 @@ export function RightPanel() {
   const light = theme === 'light';
 
   const [viewingFile, setViewingFile] = useState<{ id: string; path: string } | null>(null);
-  const [tab, setTab] = useState<'files' | 'notebook'>('files');
+  const [tab, setTab] = useState<'files' | 'notebook' | 'routing'>('files');
   const [validating, setValidating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -73,6 +74,9 @@ export function RightPanel() {
         <TabButton active={tab === 'notebook'} onClick={() => setTab('notebook')} light={light}>
           {t('panel.tabNotebook')}
         </TabButton>
+        <TabButton active={tab === 'routing'} onClick={() => setTab('routing')} light={light}>
+          {t('panel.tabRouting')}
+        </TabButton>
       </div>
 
       {/* Notebook tab — iframe fills remaining space */}
@@ -80,6 +84,11 @@ export function RightPanel() {
         <div className="flex-1 min-h-0">
           <NotebookPane projectId={activeProjectId} />
         </div>
+      )}
+
+      {/* Skill routing log tab (v3.6.0) */}
+      {tab === 'routing' && (
+        <SkillRoutingPane projectId={activeProjectId} light={light} />
       )}
 
       {/* Files tab — original scrollable content (inlined to keep typing simple) */}

@@ -5,6 +5,7 @@ import { createRedactorWithFlush } from './agent.service.js';
 import { startRun, stopRun, clearSession } from './container-runner.js';
 import { reconcileProjectFiles } from './file.service.js';
 import { captureSnapshot } from './notebook-trace.js';
+import { recordSkillRouting } from './skill-routing.service.js';
 import {
   getRagSettings,
   indexMessageTokens,
@@ -24,6 +25,22 @@ export interface ExecContext {
   mcpConfigFile: string | null;
   redactSecrets: string[];
   extraEnv: Record<string, string>;
+  /** Skills synced into the workspace for this run — recorded to the routing log. */
+  skillRouting: SyncedSkillSummary;
+}
+
+/** One assigned skill and the sub-skills AIRA wrote into `.github/skills/`. */
+export interface SyncedSkill {
+  name: string;
+  skillPath: string;
+  subSkills: string[];
+}
+
+export interface SyncedSkillSummary {
+  skills: SyncedSkill[];
+  /** Whether merged copilot-instructions.md / AGENTS.md were written. */
+  hasCopilotInstructions: boolean;
+  hasAgentsMd: boolean;
 }
 
 const authService = new AuthService();
@@ -122,14 +139,19 @@ function copyDirRecursive(src: string, dest: string): void {
  * The --prompt argument contains ONLY conversation history + current message.
  * Skill discovery and routing is handled entirely by the CLI.
  */
-export function syncSkillFiles(projectId: string): void {
+export function syncSkillFiles(projectId: string): SyncedSkillSummary {
   const workspaceDir = pathConfig.getWorkspaceDir(projectId);
   fs.mkdirSync(workspaceDir, { recursive: true });
 
   const skills = skillsService.getProjectSkills(projectId);
-  const skillDirs = skills
-    .filter(s => s.status === 'available')
-    .map(s => path.resolve(s.skill_path));
+  const available = skills.filter(s => s.status === 'available');
+  const skillDirs = available.map(s => path.resolve(s.skill_path));
+  // Routing summary: which skills + sub-skills AIRA is about to sync.
+  const summary: SyncedSkillSummary = {
+    skills: available.map(s => ({ name: s.name, skillPath: path.resolve(s.skill_path), subSkills: [] })),
+    hasCopilotInstructions: false,
+    hasAgentsMd: false,
+  };
 
   // Log resolved skill directories for debugging
   for (const dir of skillDirs) {
@@ -145,7 +167,7 @@ export function syncSkillFiles(projectId: string): void {
   fs.rmSync(githubDir, { recursive: true, force: true });
   try { fs.unlinkSync(path.join(workspaceDir, 'AGENTS.md')); } catch { /* ok */ }
 
-  if (skillDirs.length === 0) return;
+  if (skillDirs.length === 0) return summary;
 
   fs.mkdirSync(githubDir, { recursive: true });
 
@@ -154,7 +176,8 @@ export function syncSkillFiles(projectId: string): void {
   // Size limit per skill file (1MB) to prevent excessive context injection
   const MAX_SKILL_FILE_SIZE = 1_000_000;
 
-  for (const dir of skillDirs) {
+  for (let i = 0; i < skillDirs.length; i++) {
+    const dir = skillDirs[i]!;
     // AGENTS.md → workspace root (merged across all assigned skills)
     try {
       const content = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
@@ -178,6 +201,7 @@ export function syncSkillFiles(projectId: string): void {
         const srcDir = path.join(dir, 'skills', entry.name);
         const destDir = path.join(skillsOutDir, entry.name);
         copyDirRecursive(srcDir, destDir);
+        summary.skills[i]?.subSkills.push(entry.name);
       }
     } catch { /* no skills/ dir */ }
 
@@ -226,6 +250,10 @@ export function syncSkillFiles(projectId: string): void {
   console.log(`[syncSkillFiles]   .github/copilot-instructions.md: ${ciSections.length > 0 ? 'yes' : 'no'}`);
   console.log(`[syncSkillFiles]   AGENTS.md: ${agentsSections.length > 0 ? 'yes' : 'no'}`);
   console.log(`[syncSkillFiles]   .github/skills/: ${skillCount} skills`);
+
+  summary.hasCopilotInstructions = ciSections.length > 0;
+  summary.hasAgentsMd = agentsSections.length > 0;
+  return summary;
 }
 
 /**
@@ -293,7 +321,7 @@ export function assembleExecContext(projectId: string): ExecContext {
 
   // Sync skill files to workspace before spawning the CLI.
   // This is a safety net; normally done at skill-assignment time via the API.
-  syncSkillFiles(projectId);
+  const skillRouting = syncSkillFiles(projectId);
 
   // MCP temp config
   const mcpConfigFile = mcpService.generateTempConfig(projectId);
@@ -311,6 +339,7 @@ export function assembleExecContext(projectId: string): ExecContext {
     mcpConfigFile,
     redactSecrets,
     extraEnv,
+    skillRouting,
   };
 }
 
@@ -379,6 +408,11 @@ export function executeChat(
 
     return { runId };
   }) as () => { runId: string })();
+
+  // Skill routing log (v3.6.0): record the deterministic AIRA-side view of which
+  // skills/sub-skills were synced into the workspace for this run. CLI-side
+  // 'skills_loaded' / 'tool_invoked' events are appended below as they stream in.
+  recordSkillRouting(projectId, runId, 'synced', ctx.skillRouting);
 
   // The prompt sent to the CLI depends on session mode:
   // - On --resume: only the raw user message (CLI already has history in its session).
@@ -465,6 +499,11 @@ export function executeChat(
         }
       },
       onProgress: (msg) => callbacks.onProgress?.(msg),
+      onSkillRouting: (event) => {
+        // CLI-side routing signal (skills_loaded / tool_invoked). Persisted so the
+        // per-run timeline shows what the CLI actually engaged, not just synced.
+        recordSkillRouting(projectId, runId, event.type, event.payload);
+      },
       onFileCreated: (absPath) => {
         // Register file immediately when CLI creates/modifies it (don't wait for reconcile)
         const workspaceDir = ctx.workspaceDir;
