@@ -505,8 +505,9 @@ workspace/
 
 ## Verification Loop
 
-Every execution follows: PLAN → EXECUTE (with incremental report) → VERIFY → FINALIZE → LOG.
+Every execution follows: **PHASE 0 →** PLAN → EXECUTE (with incremental report) → VERIFY → FINALIZE → LOG.
 
+0. **PHASE 0 (Prompt Generator)**: Before any research work, run the `co-scientist-prompt-generator` skill to classify the domain, select relevant sub-skills, and generate an execution plan. Save as `[cell:execution-plan]`. This ensures the research pipeline is optimized for the specific topic and maintains citation density ≥ 2%.
 1. **PLAN**: define objective, constraints, and target outputs.
 2. **EXECUTE**: run the selected sub-skill pipeline. **Build `report.md` incrementally** — write each section as corresponding work completes.
 3. **VERIFY**: check all applicable quality gates. Run `wc -w report.md` — if below 850, expand and re-verify. Run `wc -w paper.md` — if below 1,500, expand and re-verify. **Both files must pass.**

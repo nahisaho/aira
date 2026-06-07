@@ -77,6 +77,7 @@ const DOMAIN_SKILLS: Record<string, string[]> = {
 
 /** Always included regardless of domain — critical for paper quality. */
 const MANDATORY_SKILLS = [
+  'co-scientist-prompt-generator',
   'co-scientist-academic-writing',
   'co-scientist-citation-checker',
   'co-scientist-data-analysis',
