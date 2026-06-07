@@ -2,6 +2,42 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.6.1] — 2026-06-08 — Dynamic Skill Routing（プロンプト連動のサブスキル選択）
+
+v3.6.0 のスキルルーティングログで可視化された「全 202 サブスキル同期 → コンテキスト希釈 → 引用密度低下(96.5 → 69.2)」問題への**対処**。プロンプト内容に基づき、関連するサブスキルだけをワークスペースに同期する。
+
+> **PR #2 (`feat/dynamic-skill-routing`) を基に再実装。** 元 PR は中核アイデア(ドメイン分類 + 必須スキル + サブスキル絞り込み)は妥当だったが、配線・設計に 3 つの欠陥があったため、それらを修正して取り込み・差し戻し。
+
+### Added — `dynamic-skill-router.ts`（新規）
+
+- `classifyDomains(prompt)`: プロンプトを **0 個以上のドメイン**(genomics / molecular / protein / materials / general-science)に分類。英語 + 日本語キーワード対応。ヒット数降順。無マッチ時は `general-science`。
+- `selectRelevantSkills(prompt)`: 必須スキル(10) + マッチした全ドメインのスキル + general-science ベースラインを union し、選択ドメインと共に返す。
+
+### Changed — `exec-context.ts`（動的ルーティングの配線と安全装置）
+
+- **プロンプトを実行経路に配線**: `executeChat` → `assembleExecContext(projectId, userMessage)` → `syncSkillFiles(projectId, prompt)`。割当・作成時の同期(`skills.ts` / `projects.ts`)は従来どおり prompt なし = 全同期。
+- **大規模スキルのみフィルタ**(`LARGE_SKILL_THRESHOLD = 30`): サブスキル数が閾値超のスキル(co-scientist: 202)だけ絞り込む。小規模スキル(spread1000-assistant: 13)は常に全同期され、機能停止しない。
+- **ドリフト安全フォールバック**: フィルタ対象スキルで選択集合に 1 つもマッチしない場合(curated 名のドリフト等)は全同期に戻し警告。
+- **オプトアウト**: `AIRA_DYNAMIC_SKILL_ROUTING=off` で無効化(全同期)。
+- ルーティング判断(ドメイン / 選択数 / スキップ数)を `SyncedSkillSummary.routing` に格納し、**v3.6.0 ルーティングログ(`synced` イベント)経由で記録**。
+
+### Changed — `SkillRoutingPane.tsx`
+
+- ルーティングタブの `synced` 行に「🎯 ドメイン · N selected / M skipped」を表示し、動的選択の結果を UI で検証可能に。
+
+### 元 PR #2 から修正した 3 つの欠陥
+
+1. **dead code**: `prompt` がどの呼び出し側からも渡されず、動的ルーティングが**一度も発火しなかった** → 実行経路に配線。
+2. **非 co-scientist スキルの全消し**: 選択集合は `co-scientist-*` 名のみのため、他スキル(spread1000 等)のサブスキルが全 skip され機能停止していた → **閾値方式**で大規模スキルのみ対象化。
+3. **単一ドメイン**: genomics+protein 等の複合プロンプトで片方しか選ばれなかった → **マルチドメイン**化。
+
+### Tests
+
+- `dynamic-skill-router.test.ts`: 分類(複合 / 日本語 / 無マッチ)・選択(必須 / ドメイン / union / 規模)。
+- `exec-context.routing.test.ts`: prompt なし全同期 / フィルタ + 小規模スキル温存 / オプトアウト / ドリフトフォールバック。
+
+`npm run lint` / `npm test`(347件)/ `npm run build` すべてグリーン。
+
 ## [v3.6.0] — 2026-06-08 — Skill Routing Log + Jupyter Kernel Culling
 
 > **Base:** このリリースは **v3.4.10 を基点に分岐**して作成。v3.4.11 / v3.4.12 (Figure Ledger) および v3.5.0 (「忖度しないAI」4原則) の変更は含まない。

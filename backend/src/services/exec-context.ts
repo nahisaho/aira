@@ -6,6 +6,7 @@ import { startRun, stopRun, clearSession } from './container-runner.js';
 import { reconcileProjectFiles } from './file.service.js';
 import { captureSnapshot } from './notebook-trace.js';
 import { recordSkillRouting } from './skill-routing.service.js';
+import { selectRelevantSkills } from './dynamic-skill-router.js';
 import {
   getRagSettings,
   indexMessageTokens,
@@ -36,16 +37,46 @@ export interface SyncedSkill {
   subSkills: string[];
 }
 
+/** Dynamic-routing decision metadata, surfaced in the routing log (v3.6.1). */
+export interface SkillRoutingDecision {
+  /** True when prompt-based filtering was applied to at least one large skill. */
+  applied: boolean;
+  /** Domains the prompt classified into (strongest first). */
+  domains: string[];
+  /** Sub-skills synced after filtering (across filtered skills). */
+  selected: number;
+  /** Sub-skills skipped by filtering. */
+  skipped: number;
+  /** Min sub-skill count for a skill to be eligible for filtering. */
+  threshold: number;
+}
+
 export interface SyncedSkillSummary {
   skills: SyncedSkill[];
   /** Whether merged copilot-instructions.md / AGENTS.md were written. */
   hasCopilotInstructions: boolean;
   hasAgentsMd: boolean;
+  /** Present when prompt-based dynamic routing ran for this sync. */
+  routing?: SkillRoutingDecision;
 }
 
 const authService = new AuthService();
 const skillsService = new SkillsService();
 const mcpService = new McpService();
+
+/**
+ * Dynamic routing only kicks in for skills with MORE sub-skills than this. Small
+ * skills (e.g. spread1000-assistant, 13 sub-skills) are always synced in full —
+ * their sub-skill names are not in the Co-Scientist selection set, so filtering
+ * them would silently disable the skill entirely. The Co-Scientist suite (202)
+ * is the only set large enough to bloat context, so it is the only one filtered.
+ */
+const LARGE_SKILL_THRESHOLD = 30;
+
+/** Dynamic skill routing is on by default; AIRA_DYNAMIC_SKILL_ROUTING=off disables it. */
+function dynamicRoutingEnabled(): boolean {
+  return process.env.AIRA_DYNAMIC_SKILL_ROUTING !== 'off';
+}
 
 /**
  * v3.2.0 Pillar 4 — ensure the data conventions exist:
@@ -138,8 +169,12 @@ function copyDirRecursive(src: string, dest: string): void {
  *
  * The --prompt argument contains ONLY conversation history + current message.
  * Skill discovery and routing is handled entirely by the CLI.
+ *
+ * v3.6.1: when `prompt` is provided (per-run sync), large skill sets are filtered
+ * to the sub-skills relevant to the prompt (see dynamic-skill-router). Callers
+ * that sync at skill-assignment time (no prompt available) sync everything.
  */
-export function syncSkillFiles(projectId: string): SyncedSkillSummary {
+export function syncSkillFiles(projectId: string, prompt?: string): SyncedSkillSummary {
   const workspaceDir = pathConfig.getWorkspaceDir(projectId);
   fs.mkdirSync(workspaceDir, { recursive: true });
 
@@ -152,6 +187,14 @@ export function syncSkillFiles(projectId: string): SyncedSkillSummary {
     hasCopilotInstructions: false,
     hasAgentsMd: false,
   };
+
+  // Dynamic routing: compute the relevant sub-skill set from the prompt. Only the
+  // per-run sync passes a prompt; assignment-time syncs pass none (sync all).
+  const useRouting = !!prompt && dynamicRoutingEnabled();
+  const selection = useRouting ? selectRelevantSkills(prompt!) : null;
+  let routingSelected = 0;
+  let routingSkipped = 0;
+  let routingApplied = false;
 
   // Log resolved skill directories for debugging
   for (const dir of skillDirs) {
@@ -195,13 +238,36 @@ export function syncSkillFiles(projectId: string): SyncedSkillSummary {
     // Subskill directories → .github/skills/{name}/
     // The CLI auto-discovers all files in a skill directory alongside SKILL.md.
     try {
-      const subSkills = fs.readdirSync(path.join(dir, 'skills'), { withFileTypes: true });
+      const subSkills = fs.readdirSync(path.join(dir, 'skills'), { withFileTypes: true })
+        .filter(e => e.isDirectory());
+
+      // Decide whether to filter THIS skill: only large sets, only when routing is
+      // on, and only when at least one sub-skill actually matches the selection
+      // (otherwise a curated-name drift would wipe the skill — sync all instead).
+      let filter: Set<string> | null = null;
+      if (selection && subSkills.length > LARGE_SKILL_THRESHOLD) {
+        const matches = subSkills.filter(e => selection.skills.has(e.name)).length;
+        if (matches > 0) {
+          filter = selection.skills;
+          routingApplied = true;
+        } else {
+          console.warn(`[syncSkillFiles] dynamic routing: 0/${subSkills.length} sub-skills matched in ${path.basename(dir)} — syncing all (fallback)`);
+        }
+      }
+
       for (const entry of subSkills) {
-        if (!entry.isDirectory()) continue;
+        if (filter && !filter.has(entry.name)) {
+          routingSkipped++;
+          continue;
+        }
         const srcDir = path.join(dir, 'skills', entry.name);
         const destDir = path.join(skillsOutDir, entry.name);
         copyDirRecursive(srcDir, destDir);
         summary.skills[i]?.subSkills.push(entry.name);
+        if (filter) routingSelected++;
+      }
+      if (filter) {
+        console.log(`[syncSkillFiles] dynamic routing: ${path.basename(dir)} — synced ${routingSelected}, skipped ${routingSkipped} (domains: ${selection!.domains.join(', ')})`);
       }
     } catch { /* no skills/ dir */ }
 
@@ -253,6 +319,15 @@ export function syncSkillFiles(projectId: string): SyncedSkillSummary {
 
   summary.hasCopilotInstructions = ciSections.length > 0;
   summary.hasAgentsMd = agentsSections.length > 0;
+  if (selection) {
+    summary.routing = {
+      applied: routingApplied,
+      domains: selection.domains,
+      selected: routingSelected,
+      skipped: routingSkipped,
+      threshold: LARGE_SKILL_THRESHOLD,
+    };
+  }
   return summary;
 }
 
@@ -304,8 +379,12 @@ function injectRagContext(projectId: string, userMessage: string): void {
 /**
  * Assemble execution context for an agent run.
  * Gathers token, skills, MCP config, and sets up redaction.
+ *
+ * `prompt` (the current user message) drives v3.6.1 dynamic skill routing — pass
+ * it from the per-run path so large skill sets are filtered to relevant
+ * sub-skills. Omit it to sync all skills (e.g. assignment-time syncs).
  */
-export function assembleExecContext(projectId: string): ExecContext {
+export function assembleExecContext(projectId: string, prompt?: string): ExecContext {
   // Token
   const token = authService.resolveToken();
   if (!token) {
@@ -319,9 +398,9 @@ export function assembleExecContext(projectId: string): ExecContext {
   // v3.2.0 Pillar 4 — ensure data/raw + data/SOURCES.md skeleton exists.
   ensureDataConventions(projectId);
 
-  // Sync skill files to workspace before spawning the CLI.
-  // This is a safety net; normally done at skill-assignment time via the API.
-  const skillRouting = syncSkillFiles(projectId);
+  // Sync skill files to workspace before spawning the CLI. Passing the prompt
+  // enables dynamic routing (filter large skill sets to relevant sub-skills).
+  const skillRouting = syncSkillFiles(projectId, prompt);
 
   // MCP temp config
   const mcpConfigFile = mcpService.generateTempConfig(projectId);
@@ -367,7 +446,8 @@ export function executeChat(
   },
 ): string {
   const db = getDatabase();
-  const ctx = assembleExecContext(projectId);
+  // Pass the user message so dynamic skill routing can filter large skill sets.
+  const ctx = assembleExecContext(projectId, userMessage);
 
   // RAG: inject context before CLI invocation
   try {
