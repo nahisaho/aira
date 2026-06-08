@@ -45,7 +45,7 @@ Target total runtime: **60 minutes** (complex experiments may take up to 90 minu
 | Verification & cleanup | 5 min |
 
 - **paper.md is a required deliverable.** Do not mark the work complete without generating paper.md. If time is running short, simplify the experiment scope rather than skipping paper.md.
-- **Completion over speed.** Never skip a phase or deliverable to meet a time target. All phases (PLAN → EXECUTE → VERIFY → FINALIZE → LOG) must execute. All deliverables (report.md, paper.md, figures, tests) must be generated.
+- **Completion over speed.** Never skip a phase or deliverable to meet a time target. All phases (PHASE 0 → PLAN → EXECUTE → VERIFY → FINALIZE → LOG) must execute. All deliverables (report.md, paper.md, figures, tests) must be generated.
 - Use **lightweight sample data** for training, simulation, and heavy computation. Full-scale runs are the user's responsibility.
 - After **3 failed retries** of the same step, simplify the approach and proceed. Do not loop indefinitely.
 - Prefer quick representative runs that demonstrate correctness over exhaustive computation.
@@ -505,8 +505,9 @@ workspace/
 
 ## Verification Loop
 
-Every execution follows: PLAN → EXECUTE (with incremental report) → VERIFY → FINALIZE → LOG.
+Every execution follows: **PHASE 0 →** PLAN → EXECUTE (with incremental report) → VERIFY → FINALIZE → LOG.
 
+0. **PHASE 0 (Prompt Generator)**: Before any research work, run the `co-scientist-prompt-generator` skill to produce a short execution plan for the topic, saved as `[cell:execution-plan]`. Domain classification and sub-skill selection are already handled by AIRA's dynamic routing — Phase 0 only writes the concise plan + quality targets (keep it minimal; more instructions lowers quality).
 1. **PLAN**: define objective, constraints, and target outputs.
 2. **EXECUTE**: run the selected sub-skill pipeline. **Build `report.md` incrementally** — write each section as corresponding work completes.
 3. **VERIFY**: check all applicable quality gates. Run `wc -w report.md` — if below 850, expand and re-verify. Run `wc -w paper.md` — if below 1,500, expand and re-verify. **Both files must pass.**

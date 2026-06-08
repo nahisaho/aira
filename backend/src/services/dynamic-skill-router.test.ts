@@ -36,6 +36,12 @@ describe('dynamic-skill-router', () => {
       }
     });
 
+    it('always includes the Phase 0 prompt-generator (v3.7.0)', () => {
+      // Mandatory regardless of domain — every run must start with a plan.
+      expect(selectRelevantSkills('genome variant analysis').skills.has('co-scientist-prompt-generator')).toBe(true);
+      expect(selectRelevantSkills('quarterly sales report').skills.has('co-scientist-prompt-generator')).toBe(true);
+    });
+
     it('includes domain-specific skills for the matched domain', () => {
       const { domains, skills } = selectRelevantSkills('single-cell RNA-seq transcriptomics analysis');
       expect(domains).toContain('genomics');

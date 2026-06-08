@@ -2,6 +2,35 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.7.0] — 2026-06-08 — Phase 0 Prompt Generator（実行計画メタスキル）
+
+研究パイプライン実行前に、テーマ最適化された**簡潔な実行計画**を生成する Phase 0 メタスキルを追加。`PHASE 0 → PLAN → EXECUTE → VERIFY → FINALIZE → LOG`。
+
+> **PR #3 (`feat/prompt-generator-skill`) を基にリファインして実装・差し戻し。** 方向性は妥当だったが、v3.6.0/v3.6.1 の知見と衝突する点を 3 つ調整。
+
+### Added — `co-scientist-prompt-generator/SKILL.md`（新規スキル）
+
+- Phase 0 で `[cell:execution-plan]`(目的・4フェーズ・品質目標) を生成。ルールベース（LLM 生成なし）で決定論的。
+- **品質目標**: 引用密度 ≥ 2/100語・Uncited=0・FigOrp=0・figure は literal savefig パス。
+- ドメイン別ヒント（NatureLM/GALACTICA ツール・推奨ライブラリ）は 1 行ずつに圧縮。
+
+### Changed
+
+- `skills/co-scientist/AGENTS.md`: 検証ループに **PHASE 0** を追加（2箇所のフェーズ列を整合）。
+- `dynamic-skill-router.ts`: `co-scientist-prompt-generator` を MANDATORY_SKILLS に追加し、**ドメイン問わず常に同期**（v3.6.1 の閾値フィルタでも温存）。
+
+### PR #3 から調整した 3 点
+
+1. **指示ブロート回避**（元 PR の自己矛盾の解消）: 元 SKILL.md は約110行の大テンプレートだったが、ベンチ知見「指示増 → 品質低下(R26 3.27%→R30 1.91%, FigOrp R22→R24)」に従い**簡潔版に圧縮**。「最小限の的確な指示」を体現。
+2. **ドメイン分類の二重管理を解消**: 元 PR は分類キーワード表を SKILL.md にも複製していたが、**v3.6.1 の動的ルーティングが既に分類・同期済み**であることを明記し、SKILL.md からは分類表を撤去（プランナーに専念）。router 側にも相互参照コメント。
+3. **フロントマター整合**: `tags:` → 既存サブスキル準拠の `tu_tools:` に。
+
+### Tests
+
+- `dynamic-skill-router.test.ts`: prompt-generator が常に必須選択されることを検証。
+
+`npm run lint` / `npm test` / `npm run build` すべてグリーン。
+
 ## [v3.6.1] — 2026-06-08 — Dynamic Skill Routing（プロンプト連動のサブスキル選択）
 
 v3.6.0 のスキルルーティングログで可視化された「全 202 サブスキル同期 → コンテキスト希釈 → 引用密度低下(96.5 → 69.2)」問題への**対処**。プロンプト内容に基づき、関連するサブスキルだけをワークスペースに同期する。

@@ -75,8 +75,17 @@ const DOMAIN_SKILLS: Record<string, string[]> = {
   ],
 };
 
-/** Always included regardless of domain — critical for paper quality. */
+/**
+ * Always included regardless of domain — critical for paper quality.
+ *
+ * `co-scientist-prompt-generator` is the v3.7.0 Phase 0 planner; it must always
+ * be present so every run starts by writing an execution plan. Its agent-facing
+ * domain hints live in its SKILL.md — it does NOT re-classify the domain (this
+ * router already did, and the SKILL.md says so), so the two do not duplicate the
+ * keyword table.
+ */
 const MANDATORY_SKILLS = [
+  'co-scientist-prompt-generator',
   'co-scientist-academic-writing',
   'co-scientist-citation-checker',
   'co-scientist-data-analysis',
