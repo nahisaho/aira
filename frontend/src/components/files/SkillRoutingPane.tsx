@@ -126,9 +126,6 @@ function describePayload(ev: SkillRoutingEvent, muted: string): React.ReactNode 
   const p = ev.payload as Record<string, unknown> | null;
   if (ev.event_type === 'synced' && p && Array.isArray(p.skills)) {
     const skills = p.skills as Array<{ name: string; subSkills?: string[] }>;
-    const routing = p.routing as
-      | { applied?: boolean; domains?: string[]; selected?: number; skipped?: number }
-      | undefined;
     if (skills.length === 0) return <span className={muted}>no skills assigned</span>;
     return (
       <span>
@@ -141,11 +138,6 @@ function describePayload(ev: SkillRoutingEvent, muted: string): React.ReactNode 
             )}
           </span>
         ))}
-        {routing?.applied && (
-          <span className={muted}>
-            {' '}— 🎯 {(routing.domains ?? []).join(', ')} · {routing.selected} selected / {routing.skipped} skipped
-          </span>
-        )}
       </span>
     );
   }

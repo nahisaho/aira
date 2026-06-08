@@ -2,6 +2,42 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.8.0] — 2026-06-08 — Remove AIRA-side Skill Routing（CLI の progressive disclosure に一本化）
+
+v3.6.1 で導入した動的スキルルーター（プロンプト→ドメイン→サブスキル名のハードコードマッピング）を**撤去**。スキル選択を Copilot CLI 本来の **description ベース progressive disclosure に一本化**し、二段ルーティングを解消する。
+
+### 背景 — 二重ルーティングの保守コスト
+
+`dynamic-skill-router.ts` は本来 CLI が SKILL.md の description で行う選択を AIRA 側で再実装しており、次のリスクを抱えていた:
+
+- **(a) ドリフト**: キュレートしたディレクトリ名が実体とずれると、改名されたものだけ静かに脱落しうる
+- **(b) 誤分類**: キーワードが部分文字列一致（例：`structure` が protein に効く）で誤分類しうる
+- **(c) 先回り除外**: CLI が選びたかったスキルを AIRA フィルタが先に除外しうる
+
+ルーター自身のコメントも「将来は description から関連度を導出すべき」と認めていた。large set 限定＋sync-all フォールバックで防御はしていたが、根本は CLI と同じ仕事の二重化。**最も確実な解は二重化そのものの撤去**と判断。
+
+### Removed
+
+- `dynamic-skill-router.ts` および同テストを削除（ハードコードの `DOMAIN_SKILLS` / `DOMAIN_KEYWORDS` / `MANDATORY_SKILLS` マッピング約60件を撤去）。
+- `exec-context.ts`: 閾値フィルタ・`prompt` 引数の配線・`AIRA_DYNAMIC_SKILL_ROUTING` 環境変数・`SkillRoutingDecision` / `summary.routing` を撤去。`syncSkillFiles(projectId)` は**全サブスキルを同期**する v3.6.0 以前の挙動に戻す。
+- `SkillRoutingPane.tsx`: `synced` 行の「🎯 domains」表示を撤去。
+
+### Changed
+
+- `AGENTS.md` / `co-scientist-prompt-generator/SKILL.md`: 「AIRA が分類・選別済み」→「**CLI が description で関連スキルを選ぶ**」に文言修正。Phase 0 はプランナーに専念。
+- 新テスト `exec-context.sync.test.ts`: 規模に関わらず全サブスキルが同期されること（フィルタ再混入の防止）を検証。
+
+### 保持
+
+- v3.6.0 のスキルルーティング**ログ**（DB / API / UI の `synced` `skills_loaded` `tool_invoked`）は観測性として維持。`synced` は全同期スキルを記録。
+- v3.7.0 の Phase 0 プロンプトジェネレーター（メタスキル）は維持。
+
+### ⚠️ 要フォロー — ベンチ再計測
+
+撤去の動機だった「全202スキル同期で引用密度低下（R26 96.5 → R29 69.2）」のリスクは残る。CLI の progressive disclosure が description だけを段階開示し本文を遅延読込するなら影響は小さいはずだが、**次の検証ラウンドで引用密度・FigOrp を実測**し、悪化する場合は description ベースの軽量プリフィルタ等を別途検討する。
+
+`npm run lint` / `npm test` / `npm run build` すべてグリーン。
+
 ## [v3.7.0] — 2026-06-08 — Phase 0 Prompt Generator（実行計画メタスキル）
 
 研究パイプライン実行前に、テーマ最適化された**簡潔な実行計画**を生成する Phase 0 メタスキルを追加。`PHASE 0 → PLAN → EXECUTE → VERIFY → FINALIZE → LOG`。

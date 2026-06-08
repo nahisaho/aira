@@ -18,12 +18,12 @@ adding instructions *lowers* quality (citation density R26 3.27% → R30 1.91%; 
 R22 6.1 → R24 13.1). A tight, targeted plan beats a long one. Do not restate rules that
 already live in the other sub-skills — point to them.
 
-## Domain & skill selection — already done for you
+## Skill selection — the CLI handles it
 
-AIRA's dynamic skill router (v3.6.1) has **already classified the topic and synced only the
-relevant sub-skills** into this workspace. Do **not** re-derive the domain or re-list
-skills — inspect the skills available under `.github/skills/` and plan around them. This
-keeps Phase 0 a planner, not a duplicate classifier.
+All Co-Scientist sub-skills are available under `.github/skills/`, and the CLI selects the
+relevant ones for you by matching each SKILL.md description (progressive disclosure). Do
+**not** try to classify the domain or pick skills yourself — inspect what is available and
+plan around it. This keeps Phase 0 a planner, not a router.
 
 ## What to produce
 
