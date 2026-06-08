@@ -36,6 +36,8 @@ Before any work, judge whether the request is specific enough. If the topic/scop
 
 ## Routing — WHEN/DO dispatch
 
+**Invoke the matching sub-skill with the skill tool BEFORE implementing — do not work from memory and then name a skill you never ran.** Base the relevant part of the work on the invoked skill's instructions. The validator's `skill_usage_mismatch` check compares the skills you name in `report.md` / `paper.md` against the run's actual skill-invocation log: any skill you claim but did not invoke is flagged. So either genuinely invoke it, or don't claim it — never write "used skill X" for a skill you didn't run.
+
 | When the user requests… | Route to |
 |---|---|
 | Topic formulation, scope, methodology selection | `co-scientist-research-planning` |

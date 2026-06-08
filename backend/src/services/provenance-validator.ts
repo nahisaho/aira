@@ -18,6 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getWorkspaceDir, getTraceDir } from '../config/paths.js';
 import { readLatestSnapshot, readAllSnapshots, type TraceCell, type TraceSnapshot } from './notebook-trace.js';
+import { getSkillUsageForLatestRun } from './skill-routing.service.js';
 
 // ── Numeric-claim extraction ──────────────────────────────────────────
 //
@@ -311,6 +312,49 @@ export interface ReportThinness {
 }
 
 /**
+ * v3.10.0 — a skill the report/paper claims to have used, but that the run's
+ * routing log shows was never invoked (no `skill.invoked` / tool_invoked record).
+ * Catches "used-a-skill fiction" the same way uncited numbers catch computed
+ * fiction. Informational (does not block `pass`), but surfaced in the repair
+ * prompt so the agent removes the false claim or actually invokes the skill.
+ */
+export interface SkillUsageMismatch {
+  source_file: string;
+  /** The skill name claimed in the text but absent from the invocation log. */
+  skill: string;
+}
+
+/**
+ * v3.10.0 — find skills the report/paper names but that were never invoked.
+ *
+ * A mismatch = a synced skill whose exact name appears in report.md / paper.md
+ * yet is absent from `invokedSkills` (the run's `skill.invoked` records). Skills
+ * that were actually invoked are never flagged, even if also mentioned. Pure
+ * function for testability.
+ */
+export function detectSkillUsageMismatches(
+  reportTexts: Array<{ file: string; text: string }>,
+  syncedSkills: string[],
+  invokedSkills: string[],
+): SkillUsageMismatch[] {
+  const invoked = new Set(invokedSkills);
+  const out: SkillUsageMismatch[] = [];
+  const seen = new Set<string>();
+  for (const { file, text } of reportTexts) {
+    if (!text) continue;
+    for (const skill of syncedSkills) {
+      if (invoked.has(skill)) continue;       // actually used → honest
+      if (!text.includes(skill)) continue;    // not claimed → nothing to flag
+      const key = `${file}::${skill}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ source_file: file, skill });
+    }
+  }
+  return out;
+}
+
+/**
  * v3.4.9 — paper-size-normalised VM grade. Round 14 telemetry showed a
  * 0.728 correlation between `claims` and `value_mismatches`, meaning longer
  * papers naturally accrue more VMs without lower per-claim accuracy. The
@@ -347,6 +391,8 @@ export interface ValidationReport {
   figure_orphans: FigureOrphan[];
   /** v3.4.2 — informational notice that report.md / paper.md is thin or missing. */
   report_thinness: ReportThinness[];
+  /** v3.10.0 — skills the report claims to use but never actually invoked. */
+  skill_usage_mismatches: SkillUsageMismatch[];
   gates: GateResult[];
   /** Overall pass = every gate passes AND no unknown citations. */
   pass: boolean;
@@ -580,8 +626,9 @@ export interface RepairPayload {
     /**
      * v3.4.0 — added 'value_mismatch' (informational).
      * v3.4.2 — added 'figure_orphan' and 'report_thin' (informational).
+     * v3.10.0 — added 'skill_usage_mismatch' (informational).
      */
-    issue: 'uncited' | 'unknown_citation' | 'gate_failed' | 'value_mismatch' | 'figure_orphan' | 'report_thin';
+    issue: 'uncited' | 'unknown_citation' | 'gate_failed' | 'value_mismatch' | 'figure_orphan' | 'report_thin' | 'skill_usage_mismatch';
     detail: string;
   }>;
   /** Markdown prompt the agent reads to drive the second pass. */
@@ -689,6 +736,14 @@ export function buildPostmortemReport(projectId: string): PostmortemReport {
     for (const t of report.report_thinness) {
       md.push(`- ${t.source_file}: ${t.level} (${t.size_bytes} bytes, ${t.claim_count} claims)`);
     }
+    md.push('');
+  }
+  if (report.skill_usage_mismatches.length > 0) {
+    md.push(`**Skill-usage mismatches** (${report.skill_usage_mismatches.length}, informational)`);
+    for (const s of report.skill_usage_mismatches.slice(0, 5)) {
+      md.push(`- ${s.source_file}: claims skill \`${s.skill}\` but it was never invoked`);
+    }
+    if (report.skill_usage_mismatches.length > 5) md.push(`- … +${report.skill_usage_mismatches.length - 5} more`);
     md.push('');
   }
   md.push(`Trace snapshots captured: **${snapshots.length}**.`);
@@ -806,6 +861,16 @@ export function buildRepairPayload(projectId: string): RepairPayload {
       detail: detailMap[t.level],
     });
   }
+  // v3.10.0 — skill-usage mismatches (informational): the report claims a skill
+  // that the routing log shows was never invoked.
+  for (const s of report.skill_usage_mismatches) {
+    violations.push({
+      file: s.source_file,
+      claim: s.skill,
+      issue: 'skill_usage_mismatch',
+      detail: `${s.source_file} states or implies it used the \`${s.skill}\` skill, but the run's skill-invocation log has no record of it being invoked. Either actually invoke the skill (use the skill tool) and redo that part of the work, or remove the claim so the record is honest.`,
+    });
+  }
 
   // Collect available cell ids — agent uses these to choose correct citations.
   const snapshot = readLatestSnapshot(projectId);
@@ -818,7 +883,7 @@ export function buildRepairPayload(projectId: string): RepairPayload {
   // figure_orphan / report_thin) are surfaced in the prompt but don't
   // by themselves keep the agent in the loop — declaring pass=true is OK
   // when only informational items remain.
-  const informationalIssues = new Set(['value_mismatch', 'figure_orphan', 'report_thin']);
+  const informationalIssues = new Set(['value_mismatch', 'figure_orphan', 'report_thin', 'skill_usage_mismatch']);
   const blockingViolations = violations.filter(v => !informationalIssues.has(v.issue));
   const needsRepair = blockingViolations.length > 0;
   const repair_prompt = (violations.length > 0)
@@ -855,6 +920,7 @@ function formatRepairPrompt(
   const valueMismatches = violations.filter((v) => v.issue === 'value_mismatch');
   const figureOrphans = violations.filter((v) => v.issue === 'figure_orphan');
   const thinness = violations.filter((v) => v.issue === 'report_thin');
+  const skillMismatches = violations.filter((v) => v.issue === 'skill_usage_mismatch');
 
   const lines: string[] = [];
   lines.push('# Provenance Repair — Apply ALL Fixes in ONE Pass');
@@ -931,6 +997,16 @@ function formatRepairPrompt(
     }
   }
 
+  if (skillMismatches.length > 0) {
+    lines.push('');
+    lines.push(`## Skill-usage honesty (${skillMismatches.length}) — informational`);
+    lines.push('Your report names these skills, but the run\'s skill-invocation log has no record of them being invoked. **Either actually invoke each skill (use the skill tool) and base that part of the work on its output, or remove the claim** — do not state you used a skill you did not.');
+    for (const s of skillMismatches.slice(0, 20)) {
+      lines.push(`- ${s.file}: \`${s.claim}\``);
+    }
+    if (skillMismatches.length > 20) lines.push(`- … +${skillMismatches.length - 20} more`);
+  }
+
   if (availableCellIds.length > 0) {
     lines.push('');
     lines.push('## Available cell ids (from the latest snapshot)');
@@ -961,6 +1037,7 @@ export function validateProject(projectId: string): ValidationReport {
       vm_grade: 'A',
       figure_orphans: [],
       report_thinness: [],
+      skill_usage_mismatches: [],
       gates: [],
       pass: false,
     };
@@ -1047,6 +1124,10 @@ export function validateProject(projectId: string): ValidationReport {
     }
   }
 
+  // v3.10.0 — skill-usage honesty: skills named in the report but never invoked.
+  const { synced: syncedSkills, invoked: invokedSkills } = getSkillUsageForLatestRun(projectId);
+  const skill_usage_mismatches = detectSkillUsageMismatches(reportTexts, syncedSkills, invokedSkills);
+
   const gates: GateResult[] = [
     checkSeedPresence(snapshot),
     checkEnvCapture(wsDir, snapshot),
@@ -1066,9 +1147,10 @@ export function validateProject(projectId: string): ValidationReport {
     vm_grade,
     figure_orphans,
     report_thinness,
+    skill_usage_mismatches,
     gates,
-    // value_mismatches / figure_orphans / report_thinness are informational;
-    // they don't block the overall pass.
+    // value_mismatches / figure_orphans / report_thinness / skill_usage_mismatches
+    // are informational; they don't block the overall pass.
     pass: gates.every((g) => g.passed) && unknown.length === 0,
   };
 }

@@ -89,6 +89,41 @@ export function getSkillRoutingForProject(projectId: string, limit = 300): Skill
   return rows.map(parseRow);
 }
 
+/**
+ * Skills synced vs actually invoked for a project's most recent run (v3.10.0).
+ * `synced` = sub-skill names AIRA wrote to the workspace ('synced' event);
+ * `invoked` = skill names the CLI actually engaged ('tool_invoked' /
+ * skill.invoked). Used by the validator's skill-usage honesty check.
+ */
+export function getSkillUsageForLatestRun(projectId: string): { synced: string[]; invoked: string[] } {
+  // Resilient: if the DB isn't initialized or has no routing data, return empty
+  // so callers (e.g. the validator) never break on missing telemetry.
+  try {
+    const db = getDatabase();
+    const row = db.prepare(
+      `SELECT run_id FROM skill_routing_logs
+        WHERE project_id = ? AND run_id IS NOT NULL
+        ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+    ).get(projectId) as { run_id: string } | undefined;
+    if (!row?.run_id) return { synced: [], invoked: [] };
+
+    const synced = new Set<string>();
+    const invoked = new Set<string>();
+    for (const ev of getSkillRoutingForRun(row.run_id)) {
+      if (ev.event_type === 'synced') {
+        const p = ev.payload as { skills?: Array<{ subSkills?: string[] }> } | null;
+        for (const s of p?.skills ?? []) for (const sub of s.subSkills ?? []) synced.add(sub);
+      } else if (ev.event_type === 'tool_invoked') {
+        const p = ev.payload as { skill?: string } | null;
+        if (p?.skill) invoked.add(p.skill);
+      }
+    }
+    return { synced: Array.from(synced), invoked: Array.from(invoked) };
+  } catch {
+    return { synced: [], invoked: [] };
+  }
+}
+
 /** All routing events for a single run, oldest first (chronological timeline). */
 export function getSkillRoutingForRun(runId: string): SkillRoutingLog[] {
   const db = getDatabase();

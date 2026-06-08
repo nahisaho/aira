@@ -43,6 +43,8 @@ Format: `AUROC = 0.83 ± 0.02 (95% CI: [0.79, 0.87]) [cell:eda-corr-final]`. Cit
 
 **Figure provenance** — every referenced figure path must be produced by a cell calling `plt.savefig`/`fig.savefig`/`imsave`/`to_image`/`write_image`. Orphans are informational, not blocking — but don't cite figures no cell produced.
 
+**Skill-usage honesty** — the validator's `skill_usage_mismatch` check compares the skills you name in `report.md` / `paper.md` against the run's actual skill-invocation log. Never claim you used a skill you did not invoke: invoke it with the skill tool, or don't name it.
+
 **Both `report.md` AND `paper.md` must exist** (at least an Abstract/Methods/Results/Discussion/Limitations skeleton) **before the first `/validate` call**. `report_thinness` (`missing`/`tiny`/`no_claims`) is fixed first in any repair iteration. A complete paper with imperfect provenance beats perfect provenance with no paper.
 
 ## Quality gates (self-check before marking complete)

@@ -2,6 +2,33 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.10.0] — 2026-06-09 — スキル使用の誠実性ゲート + invoke 指示強化
+
+v3.9.1 の正しい計測で「**スキルは一度も invoke されない**（モデルが直接実装する）」ことが確定（Copilot CLI で直に実施しても同じ＝モデル挙動の問題）。さらにエージェント自身が「paper.md に『使用した』と書いたが実際には未使用＝虚偽記録」と認めた。これは AIRA が戦ってきた "scientific fiction"（計算したフリの数値）の「使ったフリのスキル」版。
+
+### Added — `skill_usage_mismatch` 検証ゲート（P2: 誠実性）
+
+数値の `[cell:]` 引用と同じ「主張 vs 実証」照合を**スキル使用**に適用。
+
+- `provenance-validator.ts`: `detectSkillUsageMismatches()` を追加。report.md / paper.md が名指しするスキルを、その run の**実 invoke ログ**（v3.9.1 で正しく記録される `tool_invoked` = `skill.invoked`）と照合し、**invoke されていないのに主張されたスキル**を `skill_usage_mismatches` として報告。
+- `ValidationReport` に `skill_usage_mismatches` フィールド、`RepairPayload` に `skill_usage_mismatch` issue を追加。修復プロンプトに「Skill-usage honesty」セクション（「invoke するか、主張を消すか」）。postmortem 要約にも反映。
+- informational（`pass` をブロックしない。図 orphan 等と同様）だが修復プロンプトで明示。
+- `skill-routing.service.ts`: `getSkillUsageForLatestRun()` を追加（最新 run の synced/invoked スキルを集計）。DB 未初期化でも空を返す耐性設計。
+
+### Changed — (iii) invoke 指示の強化
+
+- `AGENTS.md`: ルーティング節に「**実装前に該当スキルを skill tool で invoke せよ。記憶で実装してから使っていないスキル名を書くな**」を明記し、`skill_usage_mismatch` ゲートと連動（主張するなら invoke、しないなら書くな）。
+- `copilot-instructions.md`: provenance 節に同趣旨の1行を追加（運用ルールの単一情報源として）。
+
+> CLI 自身の「必ず invoke せよ」指示すら無視された実績があるため、(iii) の指示強化単独での効果は限定的。**ゲート（P2）が虚偽記録を検出・修正可能にする**点が本質的な担保。
+
+### Tests
+
+- `provenance-validator.test.ts`: `detectSkillUsageMismatches` のケース5件（未invoke主張を検出 / 実invokeは非検出 / 未言及は非検出 / ファイル別重複排除 / 虚偽主張ケース）。
+- 既存71件は、検証器がDB未初期化で落ちないよう `getSkillUsageForLatestRun` を耐性化して全て維持。
+
+`npm run lint` / `npm test`（344）/ `npm run build` すべてグリーン。
+
 ## [v3.9.1] — 2026-06-08 — スキル invoke 計測のバグ修正（`skill.invoked` を捕捉）
 
 ルーティングログの `tool_invoked` が常に 0 だったのは**計測漏れ**であり、「スキルが invoke されていない」事実ではなかった。v3.6.0 の検知ロジックのバグを修正。

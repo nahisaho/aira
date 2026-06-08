@@ -14,6 +14,7 @@ import {
   extractFigureReferences,
   figureHasProducerCell,
   computeVmRatioAndGrade,
+  detectSkillUsageMismatches,
 } from './provenance-validator.js';
 import { getTraceDir } from '../config/paths.js';
 import {
@@ -957,5 +958,44 @@ describe('validateProject', () => {
       expect(repair.repair_prompt).toMatch(/Unknown citations/);
       expect(repair.repair_prompt).toMatch(/Failed reproducibility gates/);
     });
+  });
+});
+
+describe('detectSkillUsageMismatches (v3.10.0 — skill-usage honesty)', () => {
+  const synced = ['co-scientist-crispr-design', 'co-scientist-bioinformatics', 'co-scientist-academic-writing'];
+
+  it('flags a skill named in the paper but never invoked', () => {
+    const texts = [{ file: 'paper.md', text: 'We used the co-scientist-crispr-design skill for gRNA design.' }];
+    const out = detectSkillUsageMismatches(texts, synced, []); // nothing invoked
+    expect(out).toEqual([{ source_file: 'paper.md', skill: 'co-scientist-crispr-design' }]);
+  });
+
+  it('does NOT flag a skill that was actually invoked', () => {
+    const texts = [{ file: 'paper.md', text: 'We used the co-scientist-crispr-design skill.' }];
+    const out = detectSkillUsageMismatches(texts, synced, ['co-scientist-crispr-design']);
+    expect(out).toHaveLength(0);
+  });
+
+  it('does NOT flag skills that are never mentioned', () => {
+    const texts = [{ file: 'report.md', text: 'A plain report with no skill names.' }];
+    expect(detectSkillUsageMismatches(texts, synced, [])).toHaveLength(0);
+  });
+
+  it('flags per-file and de-duplicates within a file', () => {
+    const texts = [
+      { file: 'report.md', text: 'co-scientist-bioinformatics ... co-scientist-bioinformatics again' },
+      { file: 'paper.md', text: 'co-scientist-bioinformatics here too' },
+    ];
+    const out = detectSkillUsageMismatches(texts, synced, []);
+    expect(out).toEqual([
+      { source_file: 'report.md', skill: 'co-scientist-bioinformatics' },
+      { source_file: 'paper.md', skill: 'co-scientist-bioinformatics' },
+    ]);
+  });
+
+  it('the false-claim case: paper claims skills but tool_invoked is empty → all claimed skills flagged', () => {
+    const texts = [{ file: 'paper.md', text: 'Skills used: co-scientist-crispr-design, co-scientist-academic-writing.' }];
+    const out = detectSkillUsageMismatches(texts, synced, []);
+    expect(out.map(o => o.skill).sort()).toEqual(['co-scientist-academic-writing', 'co-scientist-crispr-design']);
   });
 });
