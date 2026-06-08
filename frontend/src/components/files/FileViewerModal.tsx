@@ -162,7 +162,17 @@ export function FileViewerModal({ projectId, fileId, filePath, onClose }: FileVi
 
           {content !== null && !isImage && isMarkdown && (
             <MarkdownContent
-              html={renderMarkdown(content)}
+              html={renderMarkdown(content, {
+                // Embed workspace images (e.g. figures/roc.png) by mapping the
+                // relative path — resolved against this markdown file's dir — to
+                // the inline raw-file endpoint (v3.11.1).
+                resolveImageSrc: (src) => {
+                  const baseDir = filePath.includes('/')
+                    ? filePath.slice(0, filePath.lastIndexOf('/') + 1)
+                    : '';
+                  return filesApi.rawUrl(projectId, baseDir + src.replace(/^\.\//, ''));
+                },
+              })}
               className={`prose prose-sm max-w-none ${light ? '' : 'prose-invert'}`}
               dark={!light}
             />

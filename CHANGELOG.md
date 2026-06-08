@@ -2,6 +2,28 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.11.1] — 2026-06-09 — ルーティング表示を invoked に + Markdown 画像(PNG)表示の修正
+
+### Changed — ルーティングタブ：loaded → invoked
+
+- `SkillRoutingPane`: 200+件のノイズだった `skills_loaded`（loaded）の表示を**非表示**にし、**実際に invoke されたスキル**を主役に。`tool_invoked` のバッジを `engaged` → **`invoked`** に改称。記録自体（DB）は従来通り。
+- i18n ヒント文を「synced と invoked を記録」に更新。
+
+### Fixed — Markdown viewer の PNG が表示されない
+
+- 原因：markdown レンダラーの画像処理が、`figures/roc.png` のような**相対パスを「安全でない」と判定して `<img>` ではなくリンクに変換**していた（`/` か `data:image/` で始まるものだけ画像化）。
+- 修正：
+  - `markdown.ts` `renderMarkdown(content, { resolveImageSrc })` を追加。相対パス画像を、与えられた resolver で**servable な URL に解決**してから `<img>` 描画（解決後に安全判定）。外部 http(s) は従来どおりリンクのまま。
+  - backend に `GET /api/projects/:id/files/raw?path=<relpath>`（v3.11.1）を追加。ワークスペース内の画像/PDF を**相対パスでインライン配信**（`resolveFilePath` でトラバーサル防御、画像/PDF の content-type のみ、SVG は CSP ロック）。
+  - `filesApi.rawUrl(projectId, relPath)` を追加。
+  - `FileViewerModal`：markdown ファイルのディレクトリ基準で相対画像を `rawUrl` に解決して埋め込み。表示メッセージは汚さない。
+
+### Tests
+
+- `markdown.test.ts`（+4）：resolver 無し=リンク / 有り=`<img>` 解決 / 絶対・外部は resolver を通さない / 呼び出し後に resolver がリークしない。
+
+`npm run lint` / `npm test`（352）/ `npm run build` すべてグリーン。
+
 ## [v3.11.0] — 2026-06-09 — スキル使用ルールをプロンプトに自動注入
 
 「プロンプトに明示ルールを書くとスキルが invoke される」という実測に基づき、その明示ルールブロックを **AIRA が CLI 送信プロンプトに自動注入**する。

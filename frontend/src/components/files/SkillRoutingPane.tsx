@@ -92,9 +92,13 @@ function RunRouting({ run, light, sub, muted }: {
         </p>
       )}
       <div className="space-y-1">
-        {run.events.map((ev) => (
-          <EventRow key={ev.id} ev={ev} sub={sub} muted={muted} />
-        ))}
+        {/* v3.11.1: show what AIRA synced + what the CLI actually invoked.
+            The 'skills_loaded' registry (200+ entries) is noise — hidden. */}
+        {run.events
+          .filter((ev) => ev.event_type !== 'skills_loaded')
+          .map((ev) => (
+            <EventRow key={ev.id} ev={ev} sub={sub} muted={muted} />
+          ))}
       </div>
     </div>
   );
@@ -103,7 +107,7 @@ function RunRouting({ run, light, sub, muted }: {
 const BADGE: Record<string, { label: string; cls: string }> = {
   synced: { label: 'synced', cls: 'bg-blue-600' },
   skills_loaded: { label: 'loaded', cls: 'bg-purple-600' },
-  tool_invoked: { label: 'engaged', cls: 'bg-green-600' },
+  tool_invoked: { label: 'invoked', cls: 'bg-green-600' },
 };
 
 function EventRow({ ev, sub, muted }: {

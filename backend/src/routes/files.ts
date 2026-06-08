@@ -131,6 +131,46 @@ fileRoutes.get('/api/projects/:id/files/:fileId/download', (c) => {
   }
 });
 
+// GET /api/projects/:id/files/raw?path=<relpath> — serve a workspace file inline
+// by its relative path (v3.11.1). Used to embed images (e.g. figures/roc.png)
+// referenced from markdown in the file viewer. Image/PDF types only.
+fileRoutes.get('/api/projects/:id/files/raw', (c) => {
+  const projectId = c.req.param('id');
+  const relPath = c.req.query('path');
+  if (!relPath) return c.json({ error: 'path query required' }, 400);
+
+  const workspaceDir = getWorkspaceDir(projectId);
+  try {
+    const resolved = resolveFilePath(workspaceDir, relPath);
+    const content = fs.readFileSync(resolved);
+    const ext = path.extname(resolved).toLowerCase();
+    const inlineTypes: Record<string, string> = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.bmp': 'image/bmp',
+      '.svg': 'image/svg+xml',
+      '.pdf': 'application/pdf',
+    };
+    const contentType = inlineTypes[ext];
+    if (!contentType) return c.json({ error: 'Unsupported media type' }, 415);
+
+    const headers: Record<string, string> = {
+      'Content-Type': contentType,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'private, max-age=60',
+    };
+    // SVG can carry scripts; lock it down even if opened directly.
+    if (ext === '.svg') headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'";
+    return new Response(content, { headers });
+  } catch (err) {
+    if (err instanceof FilePathError) return c.json({ error: err.code }, 403);
+    return c.json({ error: 'File not found' }, 404);
+  }
+});
+
 // POST /api/projects/:id/files/:fileId/open — open with OS default app
 fileRoutes.post('/api/projects/:id/files/:fileId/open', (c) => {
   const projectId = c.req.param('id');

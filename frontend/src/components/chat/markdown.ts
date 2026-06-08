@@ -39,18 +39,33 @@ renderer.link = ({ href, title, text }) => {
   return `<a href="${escapeAttr(href)}"${titleAttr} class="text-blue-400 underline" target="_blank" rel="noopener noreferrer">${text}</a>`;
 };
 
+// v3.11.1 — optional resolver that maps a relative image path (e.g.
+// "figures/roc.png") to a servable URL. Set per-call by renderMarkdown; read
+// synchronously inside the image renderer (marked.parse is synchronous so there
+// is no race). Lets the file viewer embed workspace images that would otherwise
+// 404 against the app origin and fall back to a link.
+let imageSrcResolver: ((src: string) => string | null) | null = null;
+
 renderer.image = ({ href, title, text }) => {
   if (!href || URI_BLOCKLIST.test(href.trim())) {
     return text || '';
   }
-  // Only allow self/data-image URIs inline
-  const isSafe = href.startsWith('/') || href.startsWith('data:image/');
+  let src = href;
+  // Relative path (not absolute, not data:, not external http) → resolve to a
+  // servable URL when a resolver is provided (e.g. the project file viewer).
+  const isAbsolute = href.startsWith('/') || href.startsWith('data:image/') || /^https?:\/\//i.test(href);
+  if (!isAbsolute && imageSrcResolver) {
+    const resolved = imageSrcResolver(href);
+    if (resolved) src = resolved;
+  }
+  // Only allow self/data-image URIs inline; anything else renders as a link.
+  const isSafe = src.startsWith('/') || src.startsWith('data:image/');
   if (!isSafe) {
     const titleAttr = title ? ` title="${escapeAttr(title)}"` : '';
     return `<a href="${escapeAttr(href)}"${titleAttr} class="text-blue-400 underline" target="_blank" rel="noopener noreferrer">${text || href}</a>`;
   }
   const titleAttr = title ? ` title="${escapeAttr(title)}"` : '';
-  return `<img src="${escapeAttr(href)}" alt="${escapeAttr(text || '')}"${titleAttr} class="max-w-full rounded" />`;
+  return `<img src="${escapeAttr(src)}" alt="${escapeAttr(text || '')}"${titleAttr} class="max-w-full rounded" />`;
 };
 
 renderer.code = ({ text, lang }) => {
@@ -66,14 +81,22 @@ marked.use({ renderer });
  * Render markdown to sanitized HTML.
  * DOMPurify + URI blocking + SVG exclusion.
  */
-export function renderMarkdown(content: string): string {
-  const rawHtml = marked.parse(content, { async: false }) as string;
-  return DOMPurify.sanitize(rawHtml, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    ALLOW_DATA_ATTR: false,
-    FORBID_TAGS,
-  });
+export function renderMarkdown(
+  content: string,
+  opts?: { resolveImageSrc?: (src: string) => string | null },
+): string {
+  imageSrcResolver = opts?.resolveImageSrc ?? null;
+  try {
+    const rawHtml = marked.parse(content, { async: false }) as string;
+    return DOMPurify.sanitize(rawHtml, {
+      ALLOWED_TAGS,
+      ALLOWED_ATTR,
+      ALLOW_DATA_ATTR: false,
+      FORBID_TAGS,
+    });
+  } finally {
+    imageSrcResolver = null;
+  }
 }
 
 /**

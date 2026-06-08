@@ -201,6 +201,9 @@ export const filesApi = {
     request<void>(`/projects/${projectId}/files/${fileId}`, { method: 'DELETE' }),
   downloadUrl: (projectId: string, fileId: string) =>
     `${API_BASE}/projects/${projectId}/files/${fileId}/download`,
+  /** Inline raw URL by relative workspace path — used to embed markdown images (v3.11.1). */
+  rawUrl: (projectId: string, relPath: string) =>
+    `${API_BASE}/projects/${projectId}/files/raw?path=${encodeURIComponent(relPath)}`,
   downloadAllUrl: (projectId: string) =>
     `${API_BASE}/projects/${projectId}/files/download-all`,
   upload: async (projectId: string, files: File[]): Promise<{ uploaded: string[]; count: number }> => {
