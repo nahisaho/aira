@@ -2,6 +2,31 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.13.0] — 2026-06-09 — Jupyter kernel 停止機能（強制終了後の孤児カーネル対策）
+
+AIRA を強制終了（SIGKILL）すると、子プロセスだった Jupyter Server とその kernel が孤児化して生き残ることがある。これを止める手段を追加。
+
+### Added — 起動時の孤児 Jupyter Server 自動回収
+
+- `jupyter-server.ts` `reapOrphanedJupyterServer()`（新規）: jupyter_server は**自分の pinned runtime ディレクトリに `jpserver-<pid>.json` を書き、正常終了時に削除する**。残っていれば＝強制終了で孤児化したサーバ。その pid を **SIGTERM**（jupyter は SIGTERM で**自身の kernel を正しくシャットダウン**してから終了する）→ 猶予後に生存していれば SIGKILL → 古い接続ファイルを掃除。ファイルは AIRA の pinned runtime 配下なので pid は確実に自分が起動した Jupyter（PID 再利用の誤爆なし）。
+- `lifecycle.ts`: 起動時、`startJupyterServer()` の**前に** reap を実行（`recoverOrphanRuns()` と同じ起動時リカバリの並び）。→ 強制終了しても**次回起動で孤児カーネルが片付く**。
+
+### Added — 実行中カーネルの手動停止
+
+- `stopAllKernels()`（新規）: 起動中サーバの REST API（`GET /api/kernels` → 各 `DELETE /api/kernels/:id`）で**全 kernel を graceful に停止**。サーバ自体は起動したまま（iframe は生きる）。
+- `POST /api/settings/jupyter/kernels/stop` エンドポイント追加。
+- フロント：ノートブックタブのヘッダに **⏹ カーネル停止** ボタン（`jupyterApi.stopKernels()`、停止数を表示）。i18n (ja/en)。
+
+### 関連（既存）
+
+- v3.6.0 の `MappingKernelManager` cull（30分アイドルで自動回収）は維持。今回のは **(1) 強制終了後の孤児を起動時に確実に回収**、**(2) 任意タイミングで即停止**を足すもの。
+
+### Tests
+
+- `jupyter-server.test.ts`（+4）：runtime 無し=no-op / 死んだ pid の jpserver ファイルを掃除し killed=0 / 残った kernel 接続ファイルも削除 / サーバ未起動時 stopAllKernels=0。
+
+`npm run lint` / `npm test`（359）/ `npm run build` すべてグリーン。
+
 ## [v3.12.0] — 2026-06-09 — 敵対的査読＋改稿パス（paper.md の科学的価値を上げる）
 
 「検証が通る ≠ 科学的価値がある」という整理に基づき、**形式（provenance）でなく中身の価値**を攻める査読パスを追加。`co-scientist-critical-review` スキルが in-band で invoke されない問題を、**AIRA がオーケストレーションで決定的に駆動**して解決する（焦点を絞った単一指示の CLI パスは確実に動く）。

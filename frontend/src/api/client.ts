@@ -334,6 +334,9 @@ export interface JupyterSettings {
 
 export const jupyterApi = {
   getSettings: () => request<JupyterSettings>('/settings/jupyter'),
+  /** Stop all running Jupyter kernels (server stays up). v3.13.0. */
+  stopKernels: () =>
+    request<{ stopped: number; running: boolean }>('/settings/jupyter/kernels/stop', { method: 'POST' }),
 };
 
 // ─── Computational Provenance (v3.2.0) ───

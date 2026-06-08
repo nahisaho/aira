@@ -9,7 +9,13 @@ import {
   setJupyterStateForTesting,
   frameAncestorOrigins,
   kernelCullArgs,
+  reapOrphanedJupyterServer,
+  stopAllKernels,
 } from './jupyter-server.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { setBaseDir, getBaseDir } from '../config/paths.js';
 
 describe('jupyter-server module', () => {
   beforeEach(() => {
@@ -171,5 +177,49 @@ describe('jupyter-server module', () => {
       process.env.AIRA_JUPYTER_CULL_INTERVAL = '-5';
       expect(kernelCullArgs()).toContain('--MappingKernelManager.cull_interval=120');
     });
+  });
+});
+
+describe('Jupyter kernel/orphan management (v3.13.0)', () => {
+  let tmp: string;
+  let orig: string;
+
+  beforeEach(() => {
+    resetJupyterStateForTesting();
+    orig = getBaseDir();
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'aira-jup-test-'));
+    setBaseDir(tmp);
+  });
+  afterEach(() => {
+    setBaseDir(orig);
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('reap is a no-op (0) when the runtime dir is absent', async () => {
+    expect(await reapOrphanedJupyterServer()).toEqual({ killed: 0 });
+  });
+
+  it('reap cleans a stale jpserver file whose pid is dead and reports 0 killed', async () => {
+    const rt = path.join(tmp, 'data', 'jupyter', 'runtime');
+    fs.mkdirSync(rt, { recursive: true });
+    const deadPid = 2147480000; // almost certainly not a live process
+    const f = path.join(rt, `jpserver-${deadPid}.json`);
+    fs.writeFileSync(f, JSON.stringify({ pid: deadPid, port: 8888 }));
+    const res = await reapOrphanedJupyterServer();
+    expect(res.killed).toBe(0);          // dead pid not counted
+    expect(fs.existsSync(f)).toBe(false); // stale file cleaned
+  });
+
+  it('reap also removes leftover kernel connection files', async () => {
+    const rt = path.join(tmp, 'data', 'jupyter', 'runtime');
+    fs.mkdirSync(rt, { recursive: true });
+    const kf = path.join(rt, 'kernel-abc.json');
+    fs.writeFileSync(kf, '{}');
+    await reapOrphanedJupyterServer();
+    expect(fs.existsSync(kf)).toBe(false);
+  });
+
+  it('stopAllKernels is a no-op (0) when the server is not running', async () => {
+    expect(await stopAllKernels()).toEqual({ stopped: 0 });
   });
 });

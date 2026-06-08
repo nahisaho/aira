@@ -23,6 +23,21 @@ export function NotebookPane({ projectId }: { projectId: string }) {
   const light = usePreferencesStore((s) => s.theme) === 'light';
   const [settings, setSettings] = useState<JupyterSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [stopMsg, setStopMsg] = useState<string | null>(null);
+  const [stopping, setStopping] = useState(false);
+
+  const handleStopKernels = async (): Promise<void> => {
+    setStopping(true);
+    setStopMsg(null);
+    try {
+      const { stopped } = await jupyterApi.stopKernels();
+      setStopMsg(t('notebook.kernelsStopped').replace('{n}', String(stopped)));
+    } catch {
+      setStopMsg('⚠️');
+    } finally {
+      setStopping(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -92,18 +107,33 @@ export function NotebookPane({ projectId }: { projectId: string }) {
         <span className={`text-xs truncate ${light ? 'text-gray-500' : 'text-gray-400'}`}>
           notebook.ipynb
         </span>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`text-xs px-2 py-0.5 rounded ${
-            light
-              ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-              : 'bg-blue-900/40 text-blue-400 hover:bg-blue-900/60'
-          }`}
-        >
-          ↗ {t('notebook.openExternal')}
-        </a>
+        <div className="flex items-center gap-2 shrink-0">
+          {stopMsg && <span className={`text-[11px] ${light ? 'text-gray-500' : 'text-gray-400'}`}>{stopMsg}</span>}
+          <button
+            onClick={handleStopKernels}
+            disabled={stopping}
+            title={t('notebook.stopKernelsHint')}
+            className={`text-xs px-2 py-0.5 rounded disabled:opacity-50 ${
+              light
+                ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                : 'bg-red-900/40 text-red-400 hover:bg-red-900/60'
+            }`}
+          >
+            ⏹ {t('notebook.stopKernels')}
+          </button>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`text-xs px-2 py-0.5 rounded ${
+              light
+                ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                : 'bg-blue-900/40 text-blue-400 hover:bg-blue-900/60'
+            }`}
+          >
+            ↗ {t('notebook.openExternal')}
+          </a>
+        </div>
       </div>
       <iframe
         title="JupyterLab"

@@ -12,6 +12,7 @@ import {
   getJupyterToken,
   isJupyterRunning,
   isJupyterPubliclyReachable,
+  stopAllKernels,
 } from '../services/jupyter-server.js';
 
 const settingsRoutes = new Hono();
@@ -57,6 +58,17 @@ settingsRoutes.get('/api/settings/jupyter', (c) => {
     publicUrl,
     token,
   });
+});
+
+// POST /api/settings/jupyter/kernels/stop — stop all running Jupyter kernels
+// (v3.13.0). Frees resources without taking the server down. No-op if Jupyter
+// is not running.
+settingsRoutes.post('/api/settings/jupyter/kernels/stop', async (c) => {
+  if (!isJupyterRunning()) {
+    return c.json({ stopped: 0, running: false });
+  }
+  const { stopped } = await stopAllKernels();
+  return c.json({ stopped, running: true });
 });
 
 // PUT /api/settings/token — register/update token

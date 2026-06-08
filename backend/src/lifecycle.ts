@@ -20,7 +20,7 @@ import {
   setTokenSupplier,
   PROXY_PORT,
 } from './services/credential-proxy.js';
-import { startJupyterServer, stopJupyterServer } from './services/jupyter-server.js';
+import { startJupyterServer, stopJupyterServer, reapOrphanedJupyterServer } from './services/jupyter-server.js';
 import { AuthService } from './services/auth.service.js';
 import type { Server } from 'node:http';
 
@@ -68,6 +68,14 @@ export async function startServer(portOrOpts: number | StartOptions): Promise<St
 
   // 4. Start Jupyter Server (best-effort; AIRA stays up even if jupyter is
   // unavailable, just without the stateful Python compute layer).
+  // First reap any Jupyter Server + kernels orphaned by a force-killed prior
+  // run (v3.13.0) so they don't pile up after a SIGKILL.
+  try {
+    const { killed } = await reapOrphanedJupyterServer();
+    if (killed > 0) console.log(`[AIRA] reaped ${killed} orphaned Jupyter Server(s) from a previous run`);
+  } catch (err) {
+    console.warn(`[AIRA] orphan Jupyter reap failed: ${(err as Error).message}`);
+  }
   try {
     await startJupyterServer();
   } catch (err) {

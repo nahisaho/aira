@@ -369,3 +369,108 @@ export async function stopJupyterServer(): Promise<void> {
   _token = null;
   _bindHost = null;
 }
+
+// ── Kernel / orphan management (v3.13.0) ────────────────────────────────────
+
+function jupyterRuntimeDir(): string {
+  return path.join(getDataDir(), 'jupyter', 'runtime');
+}
+
+/** True if a process with this pid exists (EPERM counts as "exists"). */
+function isProcessAlive(pid: number): boolean {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/**
+ * Reap a Jupyter Server (and its kernels) left running by a force-killed AIRA.
+ *
+ * jupyter_server writes a `jpserver-<pid>.json` into our pinned runtime dir and
+ * removes it on clean exit, so a leftover file = an orphaned server. We SIGTERM
+ * its pid — jupyter shuts its kernels down gracefully on SIGTERM — wait a grace
+ * period, then SIGKILL any survivor, and clean the stale connection files. The
+ * files live in OUR runtime dir, so the pid is provably a Jupyter Server we
+ * started (no PID-reuse ambiguity).
+ *
+ * Call at startup BEFORE startJupyterServer(). Returns how many were reaped.
+ */
+export async function reapOrphanedJupyterServer(): Promise<{ killed: number }> {
+  const runtimeDir = jupyterRuntimeDir();
+  let files: string[];
+  try { files = fs.readdirSync(runtimeDir); } catch { return { killed: 0 }; }
+
+  const pids: number[] = [];
+  for (const f of files) {
+    if (!f.startsWith('jpserver-') || !f.endsWith('.json')) continue;
+    const fp = path.join(runtimeDir, f);
+    let pid = NaN;
+    try {
+      const info = JSON.parse(fs.readFileSync(fp, 'utf8')) as { pid?: number };
+      if (typeof info.pid === 'number') pid = info.pid;
+    } catch { /* unreadable — fall back to filename */ }
+    if (!Number.isFinite(pid)) {
+      const m = f.match(/^jpserver-(\d+)\.json$/);
+      if (m) pid = parseInt(m[1]!, 10);
+    }
+    if (Number.isFinite(pid) && isProcessAlive(pid)) pids.push(pid);
+    try { fs.unlinkSync(fp); } catch { /* ignore */ }
+  }
+
+  if (pids.length > 0) {
+    for (const pid of pids) {
+      console.warn(`[jupyter-server] reaping orphaned Jupyter Server pid=${pid} (force-kill leftover)`);
+      try { process.kill(pid, 'SIGTERM'); } catch { /* already gone */ }
+    }
+    // Grace for graceful kernel shutdown, then SIGKILL any survivor.
+    await new Promise((r) => setTimeout(r, 1500));
+    for (const pid of pids) {
+      if (isProcessAlive(pid)) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
+    }
+  }
+
+  // Clean leftover kernel connection files too (the server, if reaped, no longer owns them).
+  for (const f of files) {
+    if (f.startsWith('kernel-') && f.endsWith('.json')) {
+      try { fs.unlinkSync(path.join(runtimeDir, f)); } catch { /* ignore */ }
+    }
+  }
+  return { killed: pids.length };
+}
+
+/**
+ * Stop all kernels of the currently-running Jupyter Server via its REST API
+ * (graceful per-kernel shutdown), leaving the server itself up so the JupyterLab
+ * iframe keeps working. Used by the "Stop kernels" action. Returns how many were
+ * stopped; no-op (0) if the server isn't running.
+ */
+export async function stopAllKernels(): Promise<{ stopped: number }> {
+  const url = getJupyterUrl();
+  if (!url || !_token) return { stopped: 0 };
+  const auth = { Authorization: `token ${_token}` };
+  try {
+    const res = await fetch(`${url}/api/kernels`, { headers: auth, signal: AbortSignal.timeout(5_000) });
+    if (!res.ok) return { stopped: 0 };
+    const kernels = (await res.json()) as Array<{ id: string }>;
+    let stopped = 0;
+    for (const k of kernels) {
+      try {
+        const del = await fetch(`${url}/api/kernels/${encodeURIComponent(k.id)}`, {
+          method: 'DELETE',
+          headers: auth,
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (del.ok || del.status === 204) stopped++;
+      } catch { /* skip this kernel */ }
+    }
+    console.log(`[jupyter-server] stopped ${stopped}/${kernels.length} kernel(s)`);
+    return { stopped };
+  } catch (err) {
+    console.warn(`[jupyter-server] stopAllKernels failed: ${(err as Error).message}`);
+    return { stopped: 0 };
+  }
+}
