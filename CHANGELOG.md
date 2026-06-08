@@ -2,6 +2,33 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.11.0] — 2026-06-09 — スキル使用ルールをプロンプトに自動注入
+
+「プロンプトに明示ルールを書くとスキルが invoke される」という実測に基づき、その明示ルールブロックを **AIRA が CLI 送信プロンプトに自動注入**する。
+
+### 背景
+
+- **AGENTS.md（常時注入）= 弱い steering** → CLI 自身の必須 invoke 指示すら無視された（v3.10.0 (iii) の限界）。
+- **プロンプト = 強い steering** → 明示ルールを書くと invoke されるケースがあると判明（ベンチ知見「具体的プロンプト > 暗黙的スキル誘導」R26 vs R30 と一致）。
+- よって (iii) を「効く場所（プロンプト）」で実現する。
+
+### Added — `skillUsageRulesPrefix()`（`exec-context.ts`）
+
+- co-scientist スイートが割り当てられた run で、CLI に送るプロンプト（および cold-start プロンプト）の先頭に**スキル使用ルールブロック**を前置（フェーズ→`co-scientist-*` スキルの invoke を必須化）。
+- **DB / UI のユーザーメッセージはクリーンなまま** — CLI 送信プロンプトのみ拡張し、会話表示を汚さない。
+- co-scientist 非割当てプロジェクトでは no-op。`AIRA_SKILL_USAGE_PROMPT=off` で無効化。
+- 末尾に「使ったフリは v3.10.0 の `skill_usage_mismatch` で検出される」と明記し、誠実性ゲートと連動。
+
+### Tests
+
+- `exec-context.prompt.test.ts`（新規4件）: co-scientist 割当てで注入 / `co-scientist-*` サブスキルでも検出 / 非割当ては no-op / env で無効化。
+
+### ⚠️ 留意点
+
+invoke は増えるが**出力品質（引用密度）向上は未証明**（R26「スキル無し」が引用密度最良だった）。invoke 増＝スキル本文がコンテキストに載る＝再希釈の可能性もある。**次の検証ラウンドで `tool_invoked` 増加・`skill_usage_mismatch` 減少・引用密度を実測**し、逆効果なら `AIRA_SKILL_USAGE_PROMPT=off` で即時無効化できる。
+
+`npm run lint` / `npm test`（348）/ `npm run build` すべてグリーン。
+
 ## [v3.10.0] — 2026-06-09 — スキル使用の誠実性ゲート + invoke 指示強化
 
 v3.9.1 の正しい計測で「**スキルは一度も invoke されない**（モデルが直接実装する）」ことが確定（Copilot CLI で直に実施しても同じ＝モデル挙動の問題）。さらにエージェント自身が「paper.md に『使用した』と書いたが実際には未使用＝虚偽記録」と認めた。これは AIRA が戦ってきた "scientific fiction"（計算したフリの数値）の「使ったフリのスキル」版。

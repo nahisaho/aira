@@ -48,6 +48,47 @@ const skillsService = new SkillsService();
 const mcpService = new McpService();
 
 /**
+ * v3.11.0 — explicit skill-usage rules injected into the PROMPT (not AGENTS.md).
+ *
+ * Empirically, an explicit rules block in the prompt gets skills actually invoked,
+ * whereas the same instruction in always-on AGENTS.md is ignored (the CLI's own
+ * "must invoke" was too). "Specific prompt > implicit guidance" (R26 vs R30). We
+ * prepend this only when the Co-Scientist suite is assigned, and only to the CLI
+ * prompt — the stored/displayed user message stays clean.
+ *
+ * Note: increasing invocation is NOT proven to improve output (R26 "no skills"
+ * had the best citation density); the v3.10.0 skill_usage_mismatch gate keeps the
+ * record honest either way. Disable with AIRA_SKILL_USAGE_PROMPT=off.
+ */
+export function skillUsageRulesPrefix(skillRouting: SyncedSkillSummary): string {
+  if (process.env.AIRA_SKILL_USAGE_PROMPT === 'off') return '';
+  const hasCoScientist = skillRouting.skills.some(
+    s => s.name === 'co-scientist' || s.subSkills.some(sub => sub.startsWith('co-scientist-')),
+  );
+  if (!hasCoScientist) return '';
+  return [
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    '🔵 スキル使用ルール（必須）',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    '',
+    '各フェーズで該当するスキルを `skill` ツールで必ず呼び出してから作業を開始すること。',
+    '直接実装せず、まずスキルを invoke してその指示に従うこと。',
+    '',
+    '- 文献調査 → `co-scientist-literature-review` を invoke',
+    '- データ分析 → `co-scientist-data-analysis` を invoke',
+    '- 論文執筆 → `co-scientist-academic-writing` を invoke',
+    '- 引用チェック → `co-scientist-citation-checker` を invoke',
+    '- 図の作成 → `co-scientist-publication-figures` を invoke',
+    '',
+    '⚠️ スキルを呼び出さずに直接実装することは禁止。各フェーズの最初に必ず該当スキルを invoke すること。',
+    '（使ったフリは検証器の skill_usage_mismatch で検出される — invoke するか、主張しないか。）',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    '',
+    '',
+  ].join('\n');
+}
+
+/**
  * v3.2.0 Pillar 4 — ensure the data conventions exist:
  *   - workspace/data/raw/       (place user-provided real data here)
  *   - workspace/data/SOURCES.md (provenance log for data inputs)
@@ -484,12 +525,19 @@ export function executeChat(
 
   callbacks.onStatus(runId, 'running');
 
+  // v3.11.0 — prepend explicit skill-usage rules to the CLI prompt (not the
+  // stored user message) so skills actually get invoked. No-op unless the
+  // Co-Scientist suite is assigned and AIRA_SKILL_USAGE_PROMPT !== 'off'.
+  const rulesPrefix = skillUsageRulesPrefix(ctx.skillRouting);
+  const cliPrompt = rulesPrefix + userMessage;
+  const cliColdStart = coldStartPrompt ? rulesPrefix + coldStartPrompt : coldStartPrompt;
+
   startRun(
     {
       projectId,
       workspaceDir: ctx.workspaceDir,
-      prompt: userMessage,
-      coldStartPrompt,
+      prompt: cliPrompt,
+      coldStartPrompt: cliColdStart,
       token: ctx.token,
       model: callbacks.model,
       mcpConfigFile: ctx.mcpConfigFile,
