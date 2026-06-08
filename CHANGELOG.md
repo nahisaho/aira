@@ -2,6 +2,38 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.12.0] — 2026-06-09 — 敵対的査読＋改稿パス（paper.md の科学的価値を上げる）
+
+「検証が通る ≠ 科学的価値がある」という整理に基づき、**形式（provenance）でなく中身の価値**を攻める査読パスを追加。`co-scientist-critical-review` スキルが in-band で invoke されない問題を、**AIRA がオーケストレーションで決定的に駆動**して解決する（焦点を絞った単一指示の CLI パスは確実に動く）。
+
+### Added — AIRA 主導の Critical Review + Revision
+
+- `paper-review.service.ts`（新規）: `buildReviewerPrompt()` が**辛口査読＋1回改稿**の指示を構築。査読観点は科学的**価値**の6軸：
+  1. **データの実在性**（実 vs 合成、合成なら Limitations 前面化・結論抑制）
+  2. **新規性/貢献**（標準パイプラインの報告に留まっていないか）
+  3. **主張の支持**（Discussion/Conclusion が Results に実際に支持されるか・過大主張の特定）
+  4. **ベースラインの実質**
+  5. **統計の妥当性**（効果量/CI/多重比較/前提）
+  6. **文献の統合**
+  手順：`review.md` に重大度付き所見 → `paper.md` を1回改稿（過大主張削除・合成データ限界前面化・結論縮小）→ `[cell:]` provenance 維持 → `/validate` で再確認。**虚偽の補強は禁止**（不足は正直に Limitations へ）。
+- `ws.service.ts`: WS `review` イベントを追加。サーバ側で査読プロンプトを構築し、**既存のチャット実行経路（run記録・ストリーミング・検証・ファイル再構成）を再利用**して流す。
+- フロント：`chat` ストアに `requestReview()`、右パネルに **🦆 査読・改稿** ボタン（実行中は無効化）。i18n (ja/en)。
+
+### 設計判断
+
+- 在band スキル invoke は不確実（v3.6.0〜v3.11.0 の調査で確定）なので、**価値が最も出る「査読/改稿」工程に限定して AIRA がパスを駆動**。あなたの「分解して順番に実行」案を、効く所だけに適用した形。
+- **オンデマンド（ボタン）**で実装。run ごとの自動2パス（コスト倍）は避け、まず効果を実測できるようにした（自動化はフラグgatedで後続可能）。
+
+### 正直な限界
+
+AIRA は価値を**作り出せない**（天井は実データと問いで決まる）。本パスは「過大主張を削る・合成データを誠実に扱う・弱い結論を縮小する」＝**価値の下振れ防止**に効く。
+
+### Tests
+
+- `paper-review.service.test.ts`（新規3件）：6価値軸の網羅 / 1回改稿と review.md 指示 / 虚偽補強の禁止と provenance 維持。
+
+`npm run lint` / `npm test`（355）/ `npm run build` すべてグリーン。
+
 ## [v3.11.1] — 2026-06-09 — ルーティング表示を invoked に + Markdown 画像(PNG)表示の修正
 
 ### Changed — ルーティングタブ：loaded → invoked

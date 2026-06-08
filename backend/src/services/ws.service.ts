@@ -75,6 +75,13 @@ export function attachWebSocket(server: Server): WebSocketServer {
           const msg = JSON.parse(data.toString());
           if (msg.type === 'chat' && msg.content && typeof msg.content === 'string' && msg.content.trim().length > 0) {
             handleChatMessage(client, msg.content, msg.messageId, msg.model);
+          } else if (msg.type === 'review') {
+            // v3.12.0 — AIRA-driven adversarial paper review + revision. Builds
+            // the reviewer prompt server-side and runs it through the normal
+            // chat path (reuses run/streaming/validation).
+            import('./paper-review.service.js').then(({ buildReviewerPrompt }) => {
+              handleChatMessage(client, buildReviewerPrompt(), undefined, msg.model);
+            }).catch(() => {});
           }
         } catch {
           // Ignore invalid messages

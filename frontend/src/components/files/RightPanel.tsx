@@ -3,6 +3,7 @@ import { useFilesStore } from '../../stores/files';
 import { useProjectStore } from '../../stores/project';
 import { usePreferencesStore } from '../../stores/preferences';
 import { usePipelineStore } from '../../stores/pipeline';
+import { useChatStore } from '../../stores/chat';
 import { useT } from '../../useT';
 import { type TranslationKey } from '../../i18n';
 import { filesApi, runsApi } from '../../api/client';
@@ -18,6 +19,8 @@ export function RightPanel() {
   const { files, runHistory, fetchFiles, fetchCurrentRun, fetchRunHistory, removeFile } =
     useFilesStore();
   const pipelineSteps = usePipelineStore((s) => s.steps);
+  const requestReview = useChatStore((s) => s.requestReview);
+  const runStatus = useChatStore((s) => s.runStatus);
   const light = theme === 'light';
 
   const [viewingFile, setViewingFile] = useState<{ id: string; path: string } | null>(null);
@@ -94,8 +97,8 @@ export function RightPanel() {
       {/* Files tab — original scrollable content (inlined to keep typing simple) */}
       {tab === 'files' && (
     <div className="flex flex-col flex-1 min-h-0 p-3 overflow-y-auto">
-      {/* v3.2.0 — Provenance validator */}
-      <div className="mb-3">
+      {/* v3.2.0 — Provenance validator · v3.12.0 — Critical review */}
+      <div className="mb-3 flex gap-2">
         <button
           onClick={() => setValidating(true)}
           className={`text-xs px-3 py-1 rounded ${
@@ -105,6 +108,18 @@ export function RightPanel() {
           }`}
         >
           {t('validate.button')}
+        </button>
+        <button
+          onClick={() => requestReview()}
+          disabled={runStatus === 'running'}
+          title={t('review.hint')}
+          className={`text-xs px-3 py-1 rounded disabled:opacity-50 ${
+            light
+              ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+              : 'bg-amber-900/40 text-amber-300 hover:bg-amber-900/60'
+          }`}
+        >
+          {t('review.button')}
         </button>
       </div>
 

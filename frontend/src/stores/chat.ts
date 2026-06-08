@@ -29,6 +29,8 @@ interface ChatStore {
 
   fetchMessages: (projectId: string) => Promise<void>;
   sendMessage: (projectId: string, content: string) => Promise<void>;
+  /** v3.12.0 — trigger an AIRA-driven adversarial review + revision of paper.md. */
+  requestReview: () => void;
   clearMessages: (projectId: string) => Promise<void>;
   addMessage: (message: Message) => void;
   appendToLast: (content: string) => void;
@@ -73,6 +75,13 @@ export const useChatStore = create<ChatStore>((set) => ({
     } catch {
       set({ sending: false });
     }
+  },
+
+  requestReview: () => {
+    // Server builds the reviewer prompt and runs it through the normal chat path;
+    // the assistant response streams in like any turn.
+    set({ sending: true });
+    wsClient.send({ type: 'review' });
   },
 
   clearMessages: async (projectId: string) => {

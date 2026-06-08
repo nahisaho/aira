@@ -123,6 +123,8 @@ const translations = {
     'notebook.loading': 'Jupyter 情報を取得中...',
     // Provenance validator (v3.2.0)
     'validate.button': '🔬 検証',
+    'review.button': '🦆 査読・改稿',
+    'review.hint': 'paper.md を敵対的に査読し、過大主張の削除・合成データ限界の前面化など科学的価値の観点で1回改稿します（provenance は維持）。',
     'validate.title': '計算的プロベナンス検証',
     'validate.loading': '検証中...',
     'validate.passed': '✓ 全 gate 合格',
@@ -291,6 +293,8 @@ const translations = {
     'notebook.loading': 'Loading Jupyter info...',
     // Provenance validator (v3.2.0)
     'validate.button': '🔬 Validate',
+    'review.button': '🦆 Review & Revise',
+    'review.hint': 'Adversarially review paper.md and revise it once for scientific value (remove over-claims, foreground synthetic-data limits) while keeping provenance intact.',
     'validate.title': 'Computational Provenance Report',
     'validate.loading': 'Validating...',
     'validate.passed': '✓ All gates passed',
