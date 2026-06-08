@@ -2,6 +2,27 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.9.1] — 2026-06-08 — スキル invoke 計測のバグ修正（`skill.invoked` を捕捉）
+
+ルーティングログの `tool_invoked` が常に 0 だったのは**計測漏れ**であり、「スキルが invoke されていない」事実ではなかった。v3.6.0 の検知ロジックのバグを修正。
+
+### 背景
+
+- Copilot CLI はスキルを skill tool 経由で実行すると専用イベント **`skill.invoked`**（`name` / `path` / `content` を含む）を発火する。`content` が載る＝本文が on-demand でロードされる＝**progressive disclosure が設計通り動作**している証拠。
+- ところが v3.6.0 の `tool_invoked` 検知は、汎用ツール呼び出しの引数に `.github/skills/...` という**ファイルパス**が含まれるかを正規表現で見るだけだった。スキルは**名前**で invoke され `skill.invoked` で通知されるため、このパス正規表現には絶対に一致せず、`tool_invoked` は永遠に 0 になっていた（偽陰性）。
+
+### Fixed
+
+- `container-runner.ts`: 壊れた `detectSkillRef` ヒューリスティック（`tool.execution_start` のパス走査）を撤去し、**`skill.invoked` イベントを捕捉**して実際に engage されたスキル名を記録（`content` は大きく秘匿情報を含みうるので記録しない）。DB の `event_type` は既存の `tool_invoked` を流用（マイグレーション不要・UI は "engaged" 表示のまま）。
+- `parseLine` をテスト用に export。
+- `container-runner.test.ts`（新規）: `skill.invoked` → 記録、`session.skills_loaded` → 記録、旧偽陽性（SKILL.md を read しただけ）→ 記録しない、を検証。
+
+### 影響 — 過去の推論の訂正
+
+`tool_invoked=0` を根拠にした「スキルは使われていない / 203スキルは dead weight」という見立ては**棄却**。本修正後、ルーティングタブで**どのスキルが実際に invoke されたか**が初めて正しく見える。これにより v3.8.0（CLI 委譲）/ v3.9.0（常時文脈圧縮）の効果と、PD が実際に効いているかを正しく検証できる。
+
+`npm run lint` / `npm test` / `npm run build` すべてグリーン。
+
 ## [v3.9.0] — 2026-06-08 — 常時ロード文脈の圧縮（AGENTS.md / copilot-instructions.md）
 
 引用密度低下の真因と特定した「**毎回フルロードされる常時文脈**」を圧縮。`skills_loaded=204`（PD の登録層・軽い）でも `tool_invoked≈0`（本文は載らない）でもなく、**PD 対象外で毎回注入される AGENTS.md + copilot-instructions.md（863行/8,250語）** がプロンプトのゴールデンルールと注意を奪い合っていた。

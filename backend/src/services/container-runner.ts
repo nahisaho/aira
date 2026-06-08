@@ -134,28 +134,13 @@ function formatToolStart(toolName: string, args: Record<string, unknown>): strin
   return short ? `${toolName}: ${short}` : toolName;
 }
 
-/**
- * Detect whether a tool call's arguments reference a synced skill file, e.g.
- * `.github/skills/co-scientist-critical-review/SKILL.md`. Returns the sub-skill
- * directory name (the routing-relevant identifier) or null. Scans all string
- * argument values so it works regardless of which field holds the path.
- */
-function detectSkillRef(args: Record<string, unknown>): string | null {
-  const re = /[./]github\/skills\/([^/\s"']+)/i;
-  for (const v of Object.values(args)) {
-    if (typeof v !== 'string') continue;
-    const m = v.match(re);
-    if (m && m[1]) return m[1];
-  }
-  return null;
-}
-
-interface ParseState {
+export interface ParseState {
   deltasSeen: boolean;
   finalMessage: string;
 }
 
-function parseLine(
+/** Exported for unit tests. Parses one CLI JSON event line and fires callbacks. */
+export function parseLine(
   line: string,
   state: ParseState,
   cbs: Pick<RunnerCallbacks, 'onChunk' | 'onProgress' | 'onFileCreated' | 'onSkillRouting'>,
@@ -198,11 +183,18 @@ function parseLine(
       const a = (data.arguments && typeof data.arguments === 'object')
         ? data.arguments as Record<string, unknown> : {};
       cbs.onProgress(formatToolStart(n, a));
-      // Skill routing (v3.6.0): a tool call whose arguments reference a synced
-      // SKILL.md file is strong evidence the CLI actually engaged that skill.
-      const skillName = detectSkillRef(a);
-      if (skillName) {
-        cbs.onSkillRouting?.({ type: 'tool_invoked', payload: { toolName: n, skill: skillName } });
+      break;
+    }
+    case 'skill.invoked': {
+      // v3.9.1: the CLI emits skill.invoked (name/path/content) when it actually
+      // engages a skill via the skill tool — the accurate "skill engaged" signal.
+      // (The pre-v3.9.1 heuristic scanned tool args for a `.github/skills/` path,
+      // which skill invocations never contain, so it always recorded zero.)
+      const name = typeof data.name === 'string' ? data.name : '';
+      const skillPath = typeof data.path === 'string' ? data.path : '';
+      if (name) {
+        console.log(`[copilot-cli] Skill invoked: ${name}`);
+        cbs.onSkillRouting?.({ type: 'tool_invoked', payload: { skill: name, path: skillPath } });
       }
       break;
     }
