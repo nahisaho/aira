@@ -2,6 +2,37 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.9.0] — 2026-06-08 — 常時ロード文脈の圧縮（AGENTS.md / copilot-instructions.md）
+
+引用密度低下の真因と特定した「**毎回フルロードされる常時文脈**」を圧縮。`skills_loaded=204`（PD の登録層・軽い）でも `tool_invoked≈0`（本文は載らない）でもなく、**PD 対象外で毎回注入される AGENTS.md + copilot-instructions.md（863行/8,250語）** がプロンプトのゴールデンルールと注意を奪い合っていた。
+
+### 背景 — 計測で確定した希釈源
+
+| 常時ロード（PD対象外） | v3.8.0 | v3.9.0 |
+|---|---:|---:|
+| AGENTS.md | 536行 / 5,220語 | **102行 / 777語** |
+| copilot-instructions.md | 327行 / 3,030語 | **81行 / 1,027語** |
+| **合計** | **863行 / 8,250語** | **183行 / 1,804語** |
+
+→ 毎回プロンプト前に積まれる文脈を **約6,450語（78%）削減**。ゴールデンルールが埋もれにくくなる。
+
+### Changed
+
+- 両ファイルが **約70%重複**していた（provenance / 4ゲート / repair loop / value transcription / figure / word counts / cleanup / NatureLM が両方に記載。copilot-instructions 側は "Full guidance in AGENTS.md →" と明記すらしていた）。**各トピックを一方にだけ**置く方針で重複を排除:
+  - `copilot-instructions.md` = 運用ルールの単一情報源（provenance・validator gates・repair loop・value transcription・quality gates・compute・cleanup・confidentiality）。
+  - `AGENTS.md` = frontmatter + ルーティング/ライフサイクル + PHASE 0 + 最終応答テンプレ + Science LLM 接続要点 + Gotchas。重複は撤去し、運用ルールは copilot-instructions.md を参照。
+- 版番号注釈（v4.13.0 等）・根拠文（"Round 10 telemetry…"）・冗長な例 / フローチャート / HF モデル表 / dev専用ノート（CI スクリプト等）を削除。
+
+### 保持（操作ルールは全て温存）
+
+4ゲート名・閾値（citation_coverage ≥80%）・citation format（≤400字）・single-batch repair（3回 + postmortem）・value_mismatches=telemetry-only・Citation Ledger・figure savefig・report ≥850語 / paper ≥1,500語・refs ≥10 / `(Author, Year)` / DOI / 2020+ ≥30%・≥3 modules / ≥3 equations / 2候補+baseline・cleanup コマンド・use_notebook 先行呼び出し・PHASE 0・confidentiality。17項目の保持を grep で確認済み。
+
+### ⚠️ 要フォロー — ベンチ再計測
+
+この圧縮で引用密度が回復するか（目標 ≥2%）は次の検証ラウンドで実測。
+
+`npm run lint` / `npm test` / `npm run build` すべてグリーン。
+
 ## [v3.8.0] — 2026-06-08 — Remove AIRA-side Skill Routing（CLI の progressive disclosure に一本化）
 
 v3.6.1 で導入した動的スキルルーター（プロンプト→ドメイン→サブスキル名のハードコードマッピング）を**撤去**。スキル選択を Copilot CLI 本来の **description ベース progressive disclosure に一本化**し、二段ルーティングを解消する。
