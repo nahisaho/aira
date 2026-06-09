@@ -449,16 +449,32 @@ describe('validateProject', () => {
         expect(valueAppearsInCellOutputs(0.83, 2, cell)).toBe(true);
       });
 
-      it('does NOT match intermediate stdout values when last line differs', () => {
-        // Round 11 false positive: cell prints intermediate values 0.50/0.60/...
-        // and a final 0.92. A claim of 0.83 should NOT match 0.50 anymore.
+      it('does not match a value absent from stdout, but does match any present value (v3.14.1)', () => {
         const cell = {
           stdout: 'epoch 1: 0.50\nepoch 2: 0.60\nepoch 3: 0.70\nfinal: 0.92\n',
           text_output: '',
         };
+        // 0.83 is nowhere in stdout → no match.
         expect(valueAppearsInCellOutputs(0.83, 2, cell)).toBe(false);
-        // But the actual final value DOES match
+        // The final value matches.
         expect(valueAppearsInCellOutputs(0.92, 2, cell)).toBe(true);
+        // v3.14.1: stdout is now searched in full (not last-line-only), so a value
+        // printed on an earlier line also matches. This is the fix for the R38 VM
+        // spike — the v3.11.0 trace format empties text_output and puts values in
+        // stdout, where they were previously missed unless on the last line.
+        expect(valueAppearsInCellOutputs(0.50, 2, cell)).toBe(true);
+      });
+
+      it('matches a value in stdout even when text_output is empty and it is not the last line (R38 regression)', () => {
+        // Reproduces the v3.11.0 format change: text_output empty, multiple values
+        // in stdout. Each reported metric must match without a value_mismatch.
+        const cell = {
+          stdout: 'AUROC = 0.8316\nF1 = 0.7421\nAccuracy = 0.9012\nDone.\n',
+          text_output: '',
+        };
+        expect(valueAppearsInCellOutputs(0.8316, 4, cell)).toBe(true); // first line
+        expect(valueAppearsInCellOutputs(0.7421, 4, cell)).toBe(true); // middle line
+        expect(valueAppearsInCellOutputs(0.9012, 4, cell)).toBe(true); // not last (last is "Done.")
       });
 
       it('checks text_output before stdout (execute_result takes priority)', () => {

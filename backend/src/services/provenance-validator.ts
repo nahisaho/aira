@@ -587,19 +587,22 @@ export function valueAppearsInCellOutputs(
   precision: number,
   cell: { stdout: string; text_output: string },
 ): boolean {
-  // Priority 1: execute_result / display_data text (high-confidence)
+  // Priority 1: execute_result / display_data text (high-confidence return value).
   if (cell.text_output && valueAppearsInOutputs(claimedValue, precision, cell.text_output)) {
     return true;
   }
-  // Priority 2: last non-empty line of stdout
-  if (cell.stdout) {
-    const lines = cell.stdout.replace(/\s+$/, '').split('\n');
-    // Walk backwards to skip trailing blank lines defensively.
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i]!;
-      if (line.trim() === '') continue;
-      return valueAppearsInOutputs(claimedValue, precision, line);
-    }
+  // Priority 2: the WHOLE stdout (v3.14.1).
+  //
+  // Previously this checked only the LAST non-empty stdout line (a v3.4.4
+  // "last-line bias" that assumed text_output carried the real return value and
+  // stdout's last line was the final printed metric). Since v3.11.0 changed the
+  // execution-trace format — text_output is now empty and values live in stdout —
+  // a last-line-only check missed any value printed on an earlier line and
+  // produced large, spurious value_mismatches (the R38 VM spike). VM is
+  // telemetry-only (non-blocking), so searching all of stdout is the safe fix:
+  // it only adds matches (fewer false mismatches), never removes them.
+  if (cell.stdout && valueAppearsInOutputs(claimedValue, precision, cell.stdout)) {
+    return true;
   }
   return false;
 }

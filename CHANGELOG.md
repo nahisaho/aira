@@ -2,6 +2,28 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.14.1] — 2026-06-09 — value_mismatch 急増の修正（validator が stdout 全体を照合）
+
+R38 の `value_mismatches` 急増は **LLM の非決定性ではなく、トレース形式変更に伴う validator の互換性問題**だった（根本原因特定に感謝）。
+
+### 根本原因
+
+- v3.11.0 以降の `execution-trace` 形式変更で、**`text_output` が空・値は `stdout` に分離**するようになった。
+- validator の値照合 `valueAppearsInCellOutputs()` は v3.4.4 の「last-line bias」で **`text_output` → stdout の最終行のみ** を見ていた。
+- 結果、`text_output` が空のセルでは **最終行以外に出力された値がすべて見つからず**、大量の false な value_mismatch が発生していた。
+
+### Fixed
+
+- `provenance-validator.ts`: 値照合の優先度2を **stdout の最終行のみ → stdout 全体** に拡張（`extractNumericCandidates` は元々マルチライン対応）。`text_output` があればそれを優先（従来どおり）、無ければ stdout 全体を検索。
+- value_mismatch は **telemetry-only（非ブロッキング）** なので、照合を広げるのは安全（マッチが増える＝ false mismatch が減るだけで、判定を厳しくはしない）。
+- 「最終行のみ」を前提にしていた既存テストを新挙動に更新し、R38 回帰テスト（text_output 空・複数値が stdout の非最終行）を追加。
+
+### 補足
+
+`value_mismatches` は依然 telemetry-only で repair プロンプトには上位3例のみ表示・件数は隠す方針（v3.4.7）を維持。本修正は「件数を減らすために agent が再実行する」逆効果ループとは無関係に、**そもそも誤検知だった VM を構造的に解消**するもの。
+
+`npm run lint` / `npm test`（360）/ `npm run build` すべてグリーン。
+
 ## [v3.14.0] — 2026-06-09 — 設定画面に「全カーネル停止」ボタン
 
 v3.13.0 で追加した手動停止はノートブックタブ内（iframe 到達可能時のみ表示）だったが、Jupyter Server は全プロジェクト共通のサーバ単位リソース。**どこからでも押せるグローバルな停止操作**を設定画面に追加。
