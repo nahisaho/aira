@@ -2,6 +2,24 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.14.3] — 2026-06-09 — skill invoke 検知を `tool.execution_start` 経路に対応（tool_invoked=0 の真因修正）
+
+長く追っていた `tool_invoked=0`（スキルが invoke されていないように見える）の**真因が確定**：Copilot CLI **v1.0.55+ はスキル呼び出しを専用の `skill.invoked` イベントではなく、汎用の `tool.execution_start`（`toolName='skill'`）で流す**。v3.9.1 は `skill.invoked` に賭けたため、新しい CLI では依然 0 のままだった（＝スキルは実際には正しく呼ばれていたのに記録できていなかった）。
+
+### Fixed — `container-runner.ts`（外部コミット `13aaae6` を取り込み）
+
+- `parseLine` の `tool.execution_start` ハンドラで、**`toolName === 'skill'` の場合に引数 `skill` を実 invoke として記録**（`tool_invoked`）。
+- 旧 CLI の `skill.invoked` イベント経路も**後方互換として維持**（両対応）。
+- `container-runner.test.ts`：v1.0.55+ 経路（`tool.execution_start` toolName='skill'）のテストを追加。`skill.invoked` 経路・偽陽性除外の既存テストも維持。
+
+### 意義
+
+これにより v3.6.0 のルーティングログがようやく**実際の skill invoke を正しく記録**できる。「skills_loaded=204 だが tool_invoked=0」だった観測は、検知漏れ（v3.9.1 の賭けが外れた）であり、CLI は実際にはスキルを呼んでいた。v3.10.0 の `skill_usage_mismatch` ゲートも、これで正しい invoke ログと照合できるようになる。
+
+> 本リリースは外部（GitHub Copilot 連携）で実装・コミットされた修正を取り込み、version / CHANGELOG / タグを整えたもの。
+
+`npm run lint` / `npm test`（361）/ `npm run build` すべてグリーン。
+
 ## [v3.14.2] — 2026-06-09 — AGENTS.md のさらなる軽量化（引用密度回復）
 
 常時ロードされる AGENTS.md がプロンプトのゴールデンルールと注意を奪い合い引用密度を下げる、という分析（v3.9.0 で一次圧縮済み）を受け、その後の追記で残った**低操作価値の参照情報**をさらに削減。
