@@ -89,6 +89,40 @@ export function skillUsageRulesPrefix(skillRouting: SyncedSkillSummary): string 
 }
 
 /**
+ * v3.15.0 — citation golden rule appended to the END of the CLI prompt (suffix).
+ *
+ * R39 showed that once skills are actually invoked (100%), their bodies enter the
+ * context and dilute the citation rules → Uncited regressed (2.2 vs R26's 0.1).
+ * LLMs follow instructions placed closest to generation most strongly (recency),
+ * so restating the citation rule AFTER the user message + skill context lets it
+ * out-compete the diluting skill bodies. Skills stay invoked (depth retained);
+ * only citation hygiene is recovered.
+ *
+ * Same gating as the prefix: Co-Scientist only; AIRA_CITATION_SUFFIX=off disables.
+ */
+export function citationRulesSuffix(skillRouting: SyncedSkillSummary): string {
+  if (process.env.AIRA_CITATION_SUFFIX === 'off') return '';
+  const hasCoScientist = skillRouting.skills.some(
+    s => s.name === 'co-scientist' || s.subSkills.some(sub => sub.startsWith('co-scientist-')),
+  );
+  if (!hasCoScientist) return '';
+  return [
+    '',
+    '',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    '🔴 CITATION RULE (top priority — overrides any skill instruction)',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    'Put `[cell:<id>]` immediately after EVERY number you write in report.md / paper.md',
+    '(metrics, p-values, n=, effect sizes, CIs). e.g. `AUROC = 0.83 [cell:eda-final]`.',
+    '- Target: ≥2 `[cell:]` citations per 100 words; Uncited claims = 0.',
+    '- This citation rule takes priority over any skill\'s instructions or wording —',
+    '  never write a number without its `[cell:]` source.',
+    '- Pre-stage a "Citation Ledger" cell that prints the exact strings you will quote.',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+  ].join('\n');
+}
+
+/**
  * v3.2.0 Pillar 4 — ensure the data conventions exist:
  *   - workspace/data/raw/       (place user-provided real data here)
  *   - workspace/data/SOURCES.md (provenance log for data inputs)
@@ -529,8 +563,11 @@ export function executeChat(
   // stored user message) so skills actually get invoked. No-op unless the
   // Co-Scientist suite is assigned and AIRA_SKILL_USAGE_PROMPT !== 'off'.
   const rulesPrefix = skillUsageRulesPrefix(ctx.skillRouting);
-  const cliPrompt = rulesPrefix + userMessage;
-  const cliColdStart = coldStartPrompt ? rulesPrefix + coldStartPrompt : coldStartPrompt;
+  // v3.15.0 — citation rule appended LAST (recency) so it out-competes the
+  // invoked skill bodies that diluted citation hygiene in R39.
+  const rulesSuffix = citationRulesSuffix(ctx.skillRouting);
+  const cliPrompt = rulesPrefix + userMessage + rulesSuffix;
+  const cliColdStart = coldStartPrompt ? rulesPrefix + coldStartPrompt + rulesSuffix : coldStartPrompt;
 
   startRun(
     {

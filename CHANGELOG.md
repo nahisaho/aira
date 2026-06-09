@@ -2,6 +2,32 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.15.0] — 2026-06-10 — プロンプト末尾に citation ゴールデンルール注入（Uncited 回復）
+
+R39 で唯一後退した **Uncited（2.2 vs R26 の 0.1）** への対処。R39 でスキル invoke が 100%（v3.14.3 で計測も正常化）になった結果、**invoke されたスキル本文がコンテキストに載り引用ルールを希釈**したのが原因。LLM は生成直前＝**プロンプト末尾**の指示を最も強く守る（recency）ため、引用ルールをスキル本文の後に再掲して希釈に打ち勝たせる。
+
+### Added — `citationRulesSuffix()`（`exec-context.ts`）
+
+- co-scientist 割当て run で、CLI 送信プロンプトの **最末尾**に英語の citation ゴールデンルールを注入：「全数値の直後に `[cell:<id>]`、密度 ≥2/100語、Uncited=0、スキルの指示より引用を優先、Citation Ledger セルを事前作成」。
+- プロンプト構成は `[skill rules prefix(v3.11.0)] + userMessage + [citation suffix(新規)]`。**DB/UI のユーザーメッセージはクリーンなまま**（CLI 送信プロンプトのみ拡張）。
+- co-scientist 非割当ては no-op。`AIRA_CITATION_SUFFIX=off` で無効化。
+- cold-start プロンプト（`--name` フォールバック）にも同様に付与。
+
+### 設計
+
+- **スキルは invoke させたまま（R39 の深さ・skill 100% を維持）、引用衛生だけ回復**する狙い ＝ R26 の Uncited 0.1 と R39 の skill invoke 100% の両取り。
+- 「プロンプト > 常時注入」「末尾 > 先頭」という一連の実測知見に整合（v3.11.0 は prefix、本リリースは suffix）。
+
+### Tests
+
+- `exec-context.prompt.test.ts`（+4）：co-scientist で末尾注入 / `co-scientist-*` 検出 / 非割当て no-op / env で無効化。
+
+### ⚠️ 効果検証
+
+次ラウンドで **Uncited が R26 水準（0.1〜0.5）に下がるか**で判定。下がらなければ `AIRA_CITATION_SUFFIX=off` で即時撤回し、別案（skill invoke を一部フェーズに限定 等）へ。
+
+`npm run lint` / `npm test`（365）/ `npm run build` すべてグリーン。
+
 ## [v3.14.3] — 2026-06-09 — skill invoke 検知を `tool.execution_start` 経路に対応（tool_invoked=0 の真因修正）
 
 長く追っていた `tool_invoked=0`（スキルが invoke されていないように見える）の**真因が確定**：Copilot CLI **v1.0.55+ はスキル呼び出しを専用の `skill.invoked` イベントではなく、汎用の `tool.execution_start`（`toolName='skill'`）で流す**。v3.9.1 は `skill.invoked` に賭けたため、新しい CLI では依然 0 のままだった（＝スキルは実際には正しく呼ばれていたのに記録できていなかった）。
