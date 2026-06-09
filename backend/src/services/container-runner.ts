@@ -183,13 +183,22 @@ export function parseLine(
       const a = (data.arguments && typeof data.arguments === 'object')
         ? data.arguments as Record<string, unknown> : {};
       cbs.onProgress(formatToolStart(n, a));
+      // The CLI routes skill invocations through the generic `skill` tool.
+      // Older CLIs emitted a dedicated `skill.invoked` event (handled below),
+      // but v1.0.55+ only emits `tool.execution_start` with toolName "skill".
+      // Detect both paths so AIRA records the invocation regardless of version.
+      if (n === 'skill') {
+        const skillName = typeof a.skill === 'string' ? a.skill : '';
+        if (skillName) {
+          console.log(`[copilot-cli] Skill invoked (via tool.execution_start): ${skillName}`);
+          cbs.onSkillRouting?.({ type: 'tool_invoked', payload: { skill: skillName } });
+        }
+      }
       break;
     }
     case 'skill.invoked': {
-      // v3.9.1: the CLI emits skill.invoked (name/path/content) when it actually
-      // engages a skill via the skill tool — the accurate "skill engaged" signal.
-      // (The pre-v3.9.1 heuristic scanned tool args for a `.github/skills/` path,
-      // which skill invocations never contain, so it always recorded zero.)
+      // Legacy path: older CLI versions emitted a dedicated skill.invoked event.
+      // Kept for backward compatibility.
       const name = typeof data.name === 'string' ? data.name : '';
       const skillPath = typeof data.path === 'string' ? data.path : '';
       if (name) {

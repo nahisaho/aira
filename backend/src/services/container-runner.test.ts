@@ -41,6 +41,23 @@ describe('parseLine — skill routing capture (v3.9.1)', () => {
     expect(routing[0]!.payload.skills).toEqual(['a', 'b']);
   });
 
+  it('records a skill invocation from tool.execution_start with toolName "skill" (v1.0.55+ CLI path)', () => {
+    const routing: SkillRoutingEvent[] = [];
+    const onProgress = vi.fn();
+    parseLine(
+      JSON.stringify({
+        type: 'tool.execution_start',
+        data: { toolName: 'skill', arguments: { skill: 'co-scientist-literature-review' } },
+      }),
+      freshState(),
+      { onChunk: () => {}, onProgress, onFileCreated: () => {}, onSkillRouting: (e) => routing.push(e) },
+    );
+    expect(routing).toHaveLength(1);
+    expect(routing[0]!.type).toBe('tool_invoked');
+    expect(routing[0]!.payload.skill).toBe('co-scientist-literature-review');
+    expect(onProgress).toHaveBeenCalled(); // still surfaces progress
+  });
+
   it('does NOT fire a skill invocation for an ordinary tool that merely reads a SKILL.md path (the old false-positive heuristic is gone)', () => {
     const routing: SkillRoutingEvent[] = [];
     const onProgress = vi.fn();
