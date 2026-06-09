@@ -2,6 +2,28 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.14.2] — 2026-06-09 — AGENTS.md のさらなる軽量化（引用密度回復）
+
+常時ロードされる AGENTS.md がプロンプトのゴールデンルールと注意を奪い合い引用密度を下げる、という分析（v3.9.0 で一次圧縮済み）を受け、その後の追記で残った**低操作価値の参照情報**をさらに削減。
+
+### Changed — `skills/co-scientist/AGENTS.md`：863語 → 662語（−23%）
+
+- **Custom agents 表を削除**（5エージェント）。実運用で invoke されておらず、純粋な参照ノイズだった。
+- **Final-response テンプレ**：20行の markdown コードブロック → 1行の簡潔な仕様に圧縮。
+- **Science LLM 節**：HF モデル表・詳細手順を要点2文に圧縮。
+- **Routing の invoke 指示**：v3.11.0 でプロンプト注入（効く場所）に移ったため、AGENTS.md 側は1文に短縮。
+- **method-selection 正当化**：copilot-instructions.md の quality gates と重複していたため、AGENTS.md 側はポインタ化（depth-first 原則は保持）。
+
+### 保持
+
+PHASE 0 / 検証ループ / ルーティング表 / 研究ライフサイクル / paper.md 必須 / skill_usage_mismatch 連動 / Deep Review。重い provenance ルール（4ゲート・citation format・word counts・repair loop）は元々 copilot-instructions.md 側で、無変更。
+
+### ⚠️ 留意点（正直に）
+
+これは**漸進的な削減**で、常時ロード合計は 1,932→1,731 語（約 −10%）。引用密度が実際に回復するかは**次の検証ラウンドで実測**が必要。さらに効果を求める場合の次レバーは (a) copilot-instructions.md（1,069語・ただし操作ルールの本体なので慎重に）、(b) プロンプトに直接ゴールデンルールを最末尾再掲、など。
+
+`npm run lint` / `npm test`（360）/ `npm run build` すべてグリーン。
+
 ## [v3.14.1] — 2026-06-09 — value_mismatch 急増の修正（validator が stdout 全体を照合）
 
 R38 の `value_mismatches` 急増は **LLM の非決定性ではなく、トレース形式変更に伴う validator の互換性問題**だった（根本原因特定に感謝）。
