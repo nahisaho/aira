@@ -2,6 +2,17 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.14.0] — 2026-06-09 — 設定画面に「全カーネル停止」ボタン
+
+v3.13.0 で追加した手動停止はノートブックタブ内（iframe 到達可能時のみ表示）だったが、Jupyter Server は全プロジェクト共通のサーバ単位リソース。**どこからでも押せるグローバルな停止操作**を設定画面に追加。
+
+### Added
+
+- `SettingsPane.tsx`: 「Jupyter」セクションと **⏹ 全カーネルを停止** ボタンを追加。既存の `jupyterApi.stopKernels()` / `POST /api/settings/jupyter/kernels/stop`（v3.13.0）を再利用し、稼働中の全カーネルを graceful 停止（サーバーは起動継続）。停止数 / 未起動 / 失敗を表示。i18n (ja/en)。
+- ノートブックタブ内の `⏹ カーネル停止`（v3.13.0）も維持。設定画面のものは**タブ・iframe 到達性に依存せず**常時アクセス可能。
+
+`npm run lint` / `npm test`（359）/ `npm run build` すべてグリーン。
+
 ## [v3.13.0] — 2026-06-09 — Jupyter kernel 停止機能（強制終了後の孤児カーネル対策）
 
 AIRA を強制終了（SIGKILL）すると、子プロセスだった Jupyter Server とその kernel が孤児化して生き残ることがある。これを止める手段を追加。

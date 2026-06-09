@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settings';
 import { usePreferencesStore, type Theme, type SendKey } from '../../stores/preferences';
 import { useT } from '../../useT';
-import { settingsApi, agentsRepoApi } from '../../api/client';
+import { settingsApi, agentsRepoApi, jupyterApi } from '../../api/client';
 import type { AgentsRepo } from '../../api/client';
 import type { Locale } from '../../i18n';
 
@@ -29,6 +29,8 @@ export function SettingsPane({ onClose }: { onClose: () => void }) {
           <AuthSettings />
           <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
           <CliUpdateSettings />
+          <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
+          <JupyterMaintenanceSettings />
           <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
           <AgentsRepoSettings />
           <hr className="border-gray-700 dark:border-gray-700 light:border-gray-200" />
@@ -296,6 +298,56 @@ function CliUpdateSettings() {
         </div>
         {result && (
           <p className={`text-xs ${result.success ? 'text-green-400' : 'text-red-400'}`}>
+            {result.message}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// v3.14.0 — global "stop all Jupyter kernels" maintenance action. The Jupyter
+// Server is shared across all projects, so this stops every running kernel
+// regardless of the current view; the server stays up.
+function JupyterMaintenanceSettings() {
+  const t = useT();
+  const [stopping, setStopping] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const handleStop = async () => {
+    setStopping(true);
+    setResult(null);
+    try {
+      const res = await jupyterApi.stopKernels();
+      setResult(res.running
+        ? { ok: true, message: t('settings.kernelsStopped').replace('{n}', String(res.stopped)) }
+        : { ok: false, message: t('settings.jupyterDown') });
+    } catch {
+      setResult({ ok: false, message: t('settings.kernelsStopFailed') });
+    }
+    setStopping(false);
+  };
+
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-gray-300 dark:text-gray-300 light:text-gray-700 mb-3">
+        {t('settings.jupyter')}
+      </h3>
+      <div className="space-y-2">
+        <button
+          onClick={handleStop}
+          disabled={stopping}
+          className={`text-xs px-3 py-1 rounded transition-colors ${
+            stopping
+              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              : 'bg-red-600 text-white hover:bg-red-500'
+          }`}
+        >
+          {stopping ? t('settings.kernelsStopping') : `⏹ ${t('settings.stopAllKernels')}`}
+        </button>
+        <p className="text-xs text-gray-500">{t('settings.stopAllKernelsHint')}</p>
+        {result && (
+          <p className={`text-xs ${result.ok ? 'text-green-400' : 'text-yellow-400'}`}>
             {result.message}
           </p>
         )}
