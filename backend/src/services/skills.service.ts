@@ -32,6 +32,12 @@ const BUILTIN_SKILLS = [
     description: '文部科学省 AI for Science 萌芽的挑戦研究創出事業（SPReAD）公募支援スイート。研究プラン策定から Azure 構築・申請書作成・応募手続きまで 12 の専門サブスキルで支援。',
     repo_url: 'https://github.com/nahisaho/spread1000-assistant/tree/main/src',
   },
+  {
+    slug: 'research-planner',
+    name: 'research-planner',
+    description: 'Planning-only meta-agent (v3.16.0): decomposes a long / complex / ambiguous research request into a reviewable task plan plus ready-to-paste focused step prompts to run, in order, in a Co-Scientist project. Does NOT do the research itself — assign it to a dedicated planning project.',
+    repo_url: 'https://github.com/nahisaho/aira/tree/main/skills/research-planner',
+  },
 ];
 
 /**
