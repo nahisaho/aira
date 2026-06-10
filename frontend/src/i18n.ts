@@ -147,9 +147,9 @@ const translations = {
     'validate.close': '閉じる',
 
     // Skills
-    'skills.title': 'Agent Skills',
+    'skills.title': 'Agent',
     'skills.assigned': '割り当て済み',
-    'skills.available': '利用可能なスキル',
+    'skills.available': '利用可能なAgent',
     'skills.noSkills': 'スキルなし',
     'skills.assign': '追加',
     'skills.unassign': '解除',
@@ -327,9 +327,9 @@ const translations = {
     'validate.close': 'Close',
 
     // Skills
-    'skills.title': 'Agent Skills',
+    'skills.title': 'Agent',
     'skills.assigned': 'Assigned',
-    'skills.available': 'Available Skills',
+    'skills.available': 'Available Agents',
     'skills.noSkills': 'No skills',
     'skills.assign': 'Add',
     'skills.unassign': 'Remove',

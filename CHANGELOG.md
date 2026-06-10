@@ -2,6 +2,17 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.16.1] — 2026-06-10 — UI ラベル変更（Skills → Agent）
+
+プロジェクト設定の用語を「スキル」から「Agent」に統一。
+
+### Changed — `frontend/src/i18n.ts`
+
+- `skills.title`: 「Agent Skills」→ **「Agent」**（ja/en）
+- `skills.available`: 「利用可能なスキル」→ **「利用可能なAgent」**、「Available Skills」→ **「Available Agents」**
+
+ラベルのみの変更（機能・キーは不変）。`npm test`（365）/ `npm run build` グリーン。
+
 ## [v3.16.0] — 2026-06-10 — Research Planner エージェント（動的タスク分解・計画専用）
 
 長く複雑なプロンプトは、1-shot でも固定5ステップでも対応できない（前者は希釈、後者は単一研究タスク前提）。複雑な入力を**要件抽出 → 不足ヒアリング → 階層分解**し、**レビュー可能な計画＋貼れるステッププロンプト群**を出力する**計画専用エージェント**を新設。
