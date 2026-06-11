@@ -7,7 +7,7 @@ import type { ServerType } from '@hono/node-server';
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from './app.js';
-import { initializeDatabase, getDatabase, closeDatabase } from './db/index.js';
+import { initializeDatabase, getDatabase, closeDatabase, flushDatabase } from './db/index.js';
 import { runPreflight } from './services/preflight.js';
 import { attachWebSocket } from './services/ws.service.js';
 import { seedBuiltinSkills } from './services/skills.service.js';
@@ -143,6 +143,12 @@ export async function startServer(portOrOpts: number | StartOptions): Promise<St
 /** Stop the AIRA backend gracefully. */
 export async function stopServer(): Promise<void> {
   console.log('[AIRA] Shutting down...');
+  // Flush pending DB writes first — the later steps can stall (proxy waits for
+  // in-flight requests) past Docker's SIGKILL grace, and the final
+  // closeDatabase() would then never run.
+  try { flushDatabase(); } catch (err) {
+    console.warn(`[AIRA] DB flush at shutdown failed: ${(err as Error).message}`);
+  }
   stopAllRuns();
   await stopJupyterServer();
   if (proxyServer) {

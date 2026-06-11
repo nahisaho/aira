@@ -2,6 +2,54 @@
 
 All notable changes to AIRA are documented in this file.
 
+## [v3.17.0] — 2026-06-12 — 安定化リリース（起動不能バグ修正・ラン/WS/DBの堅牢化）
+
+コード全体の安定性レビュー（実行パス / ライフサイクル・DB / ルート / フロントエンド）で確認された問題を一括修正。
+
+### Fixed — 起動不能バグ（最重要）— `backend/src/db/index.ts`
+
+- **根本原因: sql.js の `db.export()` が全 PRAGMA をリセットする**。フラッシュ（100ms毎）のたびに `foreign_keys` が OFF になり、`ON DELETE CASCADE` が一切効かず孤児行が蓄積（実DBで mcp 設定 1798 行中 1771 行が孤児）。その孤児行が `http` 型追加のテーブル再構築マイグレーションを FK 違反で失敗させ、**該当 DB では起動がクラッシュ**していた。
+  - `flushToDisk()` の export 後に毎回 `PRAGMA foreign_keys = ON` を再設定
+  - マイグレーションを冪等化：`DROP TABLE IF EXISTS *_new`（自己修復）＋ INSERT 前に孤児行 purge
+  - `createSchema` 末尾に**孤児行スイープ**追加（agent_runs / messages / project_skills / project_mcp_configs / project_files / rag_knowledge / rag_settings / skill_routing_logs / rag_index）
+  - マイグレーション失敗時は in-memory DB を破棄し、**中途半端な状態をディスクへ書かない**
+- `flushToDisk()` を try/catch 化（ENOSPC 等の一時的 FS エラーで**プロセスごと落ちていた** → 1秒後リトライ）
+- `flushDatabase()` 新設：シャットダウン冒頭で先行フラッシュ（後続処理が Docker の SIGKILL 猶予を超えても書込みを失わない）
+
+### Fixed — ラン実行パス — `backend/src/services/container-runner.ts`
+
+- **キャンセルしたランが復活**：意図的 kill（停止ボタン / WS 切断 / タイムアウト / シャットダウン）が `--resume` 失敗と区別されず、追跡不能な CLI プロセスとして再スポーンしていた → `stopRequested` フラグでリトライ抑止
+- **新しいランが停止不能化**：旧ランの終了コールバックが新ランのレジストリエントリを無条件削除（以後 stop/切断 kill が no-op、3時間タイムアウトまでゾンビ化）→ 同一性チェック付き削除
+- CLI 不在等の spawn 失敗時に DB のラン行が `running` のまま残留 → 通常の onError 経路で failed に確定
+- `CONTAINER_TIMEOUT` 不正値で `setTimeout(NaN)` → 即タイムアウトする問題をガード
+- メッセージ毎の `execSync copilot --version`（イベントループを数百ms〜10s ブロック）→ 初回解決をキャッシュ
+
+### Fixed — プロセス堅牢化 — `backend/src/server.ts`, `lifecycle.ts`, `routes/files.ts`, `routes/settings.ts`
+
+- `uncaughtException` / `unhandledRejection` ハンドラ追加（graceful shutdown → 非ゼロ終了。ZIP ダウンロード中断の unhandled rejection で**サーバ全体が落ちていた**のを防止）
+- `download-all`：クライアント切断時の writer promise 拒否を処理
+- 再起動 API（exit 42）と起動失敗時に `stopServer()` を経由（CLI ラン / Jupyter / credential proxy の孤児化防止）
+
+### Fixed — フロントエンド — `frontend/src/api/ws.ts`, `stores/chat.ts`, `stores/pipeline.ts`, `api/client.ts`
+
+- **プロジェクト切替で WebSocket 二重接続**（チャンク二重表示の温床）→ stale ソケットのハンドラ無効化＋世代ガード
+- **再接続中の送信が黙って消え「送信中」のまま固まる** → `send()` が成否を返し、失敗時に UI 復帰
+- **切断中に終了イベントを取りこぼすと永遠に「実行中」表示** → 再接続時に `runs/current` で再同期
+- 切断バナーが初回接続以降表示されない問題（`reconnecting` を通知）
+- プロジェクト切替時の stale メッセージ表示・stale チャンク混入（`reset()` でバッファ破棄、fetch 結果の鮮度ガード）
+- アップロードの CSRF 403 リトライ（サーバ再起動後にアップロードだけ恒久故障していた）
+- キャンセル時にパイプライン表示が「実行中」のまま固着
+
+### Added — Jupyter カーネル数表示
+
+- 設定画面に起動中カーネル数を表示（`GET /api/settings/jupyter/kernels/count`、停止後に自動更新）
+
+### 検証
+
+- ユニットテスト 365（backend 340 / frontend 25）グリーン、lint エラーなし
+- E2E 100 通過（失敗2件は実 CLI の長時間実行がテスト側 5 分タイムアウトを超過する環境依存項目）
+- 実 DB でのマイグレーション・孤児スイープ・CASCADE 動作を実機検証（修正前バックアップ: `data/aira.db.bak-20260612-pre-migration`）
+
 ## [v3.16.1] — 2026-06-10 — UI ラベル変更（Skills → Agent）
 
 プロジェクト設定の用語を「スキル」から「Agent」に統一。

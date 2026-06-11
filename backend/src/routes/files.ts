@@ -392,11 +392,18 @@ fileRoutes.get('/api/projects/:id/files/download-all', (c) => {
   const { readable, writable } = new TransformStream();
   const writer = writable.getWriter();
 
-  archive.on('data', (chunk: Buffer) => writer.write(chunk));
-  archive.on('end', () => writer.close());
+  // Every writer promise needs a rejection handler: when the client aborts the
+  // download mid-stream the writable side errors, and an unhandled rejection
+  // here would crash the whole process.
+  archive.on('data', (chunk: Buffer) => {
+    writer.write(chunk).catch(() => archive.destroy());
+  });
+  archive.on('end', () => {
+    writer.close().catch(() => { /* client already gone */ });
+  });
   archive.on('error', (err) => {
     console.error('[files] archive error:', (err as Error).message);
-    writer.abort(err);
+    writer.abort(err).catch(() => { /* already errored */ });
   });
 
   return new Response(readable, {

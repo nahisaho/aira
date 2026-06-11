@@ -13,6 +13,7 @@ import {
   isJupyterRunning,
   isJupyterPubliclyReachable,
   stopAllKernels,
+  getKernelCount,
 } from '../services/jupyter-server.js';
 
 const settingsRoutes = new Hono();
@@ -69,6 +70,15 @@ settingsRoutes.post('/api/settings/jupyter/kernels/stop', async (c) => {
   }
   const { stopped } = await stopAllKernels();
   return c.json({ stopped, running: true });
+});
+
+// GET /api/settings/jupyter/kernels/count — number of active Jupyter kernels.
+settingsRoutes.get('/api/settings/jupyter/kernels/count', async (c) => {
+  if (!isJupyterRunning()) {
+    return c.json({ count: 0, running: false });
+  }
+  const count = await getKernelCount();
+  return c.json({ count, running: true });
 });
 
 // PUT /api/settings/token — register/update token
@@ -214,8 +224,16 @@ settingsRoutes.post('/api/settings/clean-projects', (c) => {
 // Exit code 42 signals the entrypoint wrapper to restart the process.
 settingsRoutes.post('/api/settings/restart', (c) => {
   // Respond before restarting
-  setTimeout(() => {
+  setTimeout(async () => {
     console.log('[AIRA] Restart requested via API');
+    // Graceful shutdown first: flush the DB and stop child processes (CLI
+    // runs, Jupyter, credential proxy) instead of orphaning them.
+    try {
+      const { stopServer } = await import('../lifecycle.js');
+      await stopServer();
+    } catch (err) {
+      console.error('[AIRA] Shutdown before restart failed:', err);
+    }
     process.exit(42);
   }, 500);
   return c.json({ status: 'restarting' });

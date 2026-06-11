@@ -313,6 +313,22 @@ function JupyterMaintenanceSettings() {
   const t = useT();
   const [stopping, setStopping] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [kernelCount, setKernelCount] = useState<number | null>(null);
+  const [serverRunning, setServerRunning] = useState<boolean | null>(null);
+
+  const fetchKernelCount = async () => {
+    try {
+      const res = await jupyterApi.getKernelCount();
+      setKernelCount(res.count);
+      setServerRunning(res.running);
+    } catch {
+      setKernelCount(null);
+      setServerRunning(null);
+    }
+  };
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchKernelCount() loads + sets state on mount
+  useEffect(() => { fetchKernelCount(); }, []);
 
   const handleStop = async () => {
     setStopping(true);
@@ -322,6 +338,8 @@ function JupyterMaintenanceSettings() {
       setResult(res.running
         ? { ok: true, message: t('settings.kernelsStopped').replace('{n}', String(res.stopped)) }
         : { ok: false, message: t('settings.jupyterDown') });
+      // Refresh kernel count after stopping
+      await fetchKernelCount();
     } catch {
       setResult({ ok: false, message: t('settings.kernelsStopFailed') });
     }
@@ -334,6 +352,13 @@ function JupyterMaintenanceSettings() {
         {t('settings.jupyter')}
       </h3>
       <div className="space-y-2">
+        {serverRunning !== null && (
+          <p className="text-xs text-gray-400">
+            {serverRunning
+              ? `${t('settings.kernelCount')}: ${kernelCount ?? 0}`
+              : t('settings.jupyterDown')}
+          </p>
+        )}
         <button
           onClick={handleStop}
           disabled={stopping}

@@ -38,7 +38,11 @@ import { getProxyAuth } from './credential-proxy.js';
 // ── Constants ──────────────────────────────────────────────────────────────
 
 /** Max time (ms) a single Copilot CLI run is allowed to take. */
-const RUN_TIMEOUT_MS = parseInt(process.env.CONTAINER_TIMEOUT ?? String(3 * 60 * 60 * 1000), 10);
+const DEFAULT_TIMEOUT_MS = 3 * 60 * 60 * 1000;
+const parsedTimeout = parseInt(process.env.CONTAINER_TIMEOUT ?? '', 10);
+const RUN_TIMEOUT_MS = Number.isFinite(parsedTimeout) && parsedTimeout > 0
+  ? parsedTimeout
+  : DEFAULT_TIMEOUT_MS;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -94,7 +98,18 @@ export function clearSession(projectId: string): void {
 
 // ── CLI resolution ─────────────────────────────────────────────────────────
 
+// Cached after the first successful resolution — `copilot --version` is a full
+// Node CLI boot via execSync, which would otherwise block the event loop (and
+// all WS streaming) for hundreds of ms on every chat message.
+let cachedCli: { command: string; argsPrefix: string[] } | null = null;
+
 function resolveHostCli(): { command: string; argsPrefix: string[] } {
+  if (cachedCli) return cachedCli;
+  cachedCli = resolveHostCliUncached();
+  return cachedCli;
+}
+
+function resolveHostCliUncached(): { command: string; argsPrefix: string[] } {
   if (process.platform === 'win32') {
     try {
       const cmdPath = execSync('where copilot.cmd', { encoding: 'utf8', timeout: 10_000 })
@@ -307,6 +322,10 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
 
   // Mutable stop handle — updated on retry so callers always cancel the active child.
   let currentStop: (() => void) | null = null;
+  // Set when the run is killed on purpose (stop button, WS disconnect, timeout,
+  // shutdown, replaced by a newer run). Suppresses the --resume → --name retry,
+  // which would otherwise resurrect a cancelled run as an untracked orphan.
+  let stopRequested = false;
 
   function spawnCli(sessionArg: '--resume' | '--name', sessionName: string): void {
     const args = [
@@ -388,8 +407,9 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
       }
 
       // If --resume failed (e.g., no such session or multiple matches), retry with --name.
-      // Only retry if no user-visible output was emitted to avoid duplicating content.
-      if (error && sessionArg === '--resume' && !state.deltasSeen && !state.finalMessage) {
+      // Only retry if no user-visible output was emitted to avoid duplicating content,
+      // and never when the kill was intentional (cancel/disconnect/timeout/shutdown).
+      if (error && sessionArg === '--resume' && !stopRequested && !state.deltasSeen && !state.finalMessage) {
         console.warn(`[copilot-cli] resume failed: ${error.split('\n')[0]}, retrying with --name`);
         projectSessions.delete(opts.projectId);
         const uniqueName = `${baseSessionName}-${Date.now().toString(36)}`;
@@ -425,8 +445,10 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
     }, RUN_TIMEOUT_MS);
 
     function stopFn(): void {
+      stopRequested = true;
       child.kill('SIGTERM');
-      setTimeout(() => { if (child.exitCode === null) child.kill('SIGKILL'); }, 5_000);
+      const killTimer = setTimeout(() => { if (child.exitCode === null) child.kill('SIGKILL'); }, 5_000);
+      killTimer.unref?.();
     }
 
     // Update the mutable stop handle so outer callers cancel the right child.
@@ -468,23 +490,42 @@ export function startRun(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
   const placeholder: ActiveRun = { stop: () => {} };
   activeRuns.set(opts.projectId, placeholder);
 
+  // Only release the registry slot if it still belongs to THIS run. A stale
+  // run's close event must not delete a newer run's entry — that made the
+  // replacement run unkillable (stop/disconnect no-ops until the 3h timeout).
+  let self: ActiveRun = placeholder;
+  const releaseSlot = () => {
+    if (activeRuns.get(opts.projectId) === self) activeRuns.delete(opts.projectId);
+  };
+
   const wrapped: RunnerCallbacks = {
     onChunk:    (c) => cbs.onChunk(c),
     onProgress: (m) => cbs.onProgress(m),
     onFileCreated: (p) => cbs.onFileCreated?.(p),
     onSkillRouting: (e) => cbs.onSkillRouting?.(e),
     onDone: (code) => {
-      activeRuns.delete(opts.projectId);
+      releaseSlot();
       cbs.onDone(code);
     },
     onError: (msg) => {
-      activeRuns.delete(opts.projectId);
+      releaseSlot();
       cbs.onError(msg);
     },
   };
 
-  const run = runOnHost(opts, wrapped);
+  let run: ActiveRun;
+  try {
+    run = runOnHost(opts, wrapped);
+  } catch (err) {
+    // Spawn-time failure (e.g. CLI not found): release the slot and surface it
+    // through the normal onError path so the DB run row is finalized as failed
+    // instead of sticking at 'running' with a leaked placeholder.
+    releaseSlot();
+    queueMicrotask(() => cbs.onError((err as Error).message));
+    return { stop: () => {} };
+  }
   console.log(`[copilot-cli] project=${opts.projectId.slice(0, 8)}`);
+  self = run;
   activeRuns.set(opts.projectId, run);
   return run;
 }

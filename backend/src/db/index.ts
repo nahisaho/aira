@@ -45,15 +45,33 @@ function scheduleSave(): void {
   }, SAVE_DEBOUNCE_MS);
 }
 
+const FLUSH_RETRY_MS = 1000;
+
 function flushToDisk(): void {
   if (!rawDb || !dirty) return;
-  const data = rawDb.export();
-  const buffer = Buffer.from(data);
-  const dbPath = DB_PATH();
-  const tmpPath = dbPath + '.tmp';
-  fs.writeFileSync(tmpPath, buffer);
-  fs.renameSync(tmpPath, dbPath);
-  dirty = false;
+  try {
+    const data = rawDb.export();
+    // sql.js export() internally reopens the DB handle, which resets all
+    // pragmas — silently disabling FK enforcement (and ON DELETE CASCADE)
+    // for the rest of the process lifetime. Re-enable it every flush.
+    rawDb.run('PRAGMA foreign_keys = ON');
+    const buffer = Buffer.from(data);
+    const dbPath = DB_PATH();
+    const tmpPath = dbPath + '.tmp';
+    fs.writeFileSync(tmpPath, buffer);
+    fs.renameSync(tmpPath, dbPath);
+    dirty = false;
+  } catch (err) {
+    // A transient FS error (ENOSPC, EPERM, AV lock) must not crash the process —
+    // this runs inside a bare setTimeout. Keep dirty=true and retry shortly.
+    console.error(`[db] flush failed (will retry in ${FLUSH_RETRY_MS}ms): ${(err as Error).message}`);
+    if (!saveTimer) {
+      saveTimer = setTimeout(() => {
+        saveTimer = null;
+        flushToDisk();
+      }, FLUSH_RETRY_MS);
+    }
+  }
 }
 
 function normalizeParams(params: unknown[]): BindParams | undefined {
@@ -208,7 +226,18 @@ export async function initializeDatabase(): Promise<void> {
   db.run("PRAGMA foreign_keys = ON");
 
   const wrapper = createWrapper(db);
-  createSchema(wrapper);
+  try {
+    createSchema(wrapper);
+  } catch (err) {
+    // Never persist a half-applied migration: discard the in-memory DB so a
+    // later flush (shutdown cleanup) can't overwrite the on-disk file with
+    // partial state. The original file stays untouched for the next attempt.
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    dirty = false;
+    rawDb = null;
+    db.close();
+    throw err;
+  }
   dbInstance = wrapper;
 
   // Flush initial schema creation
@@ -224,6 +253,19 @@ export function getDatabase(): CompatDatabase {
     throw new Error('Database not initialized. Call initializeDatabase() first.');
   }
   return dbInstance;
+}
+
+/**
+ * Force an immediate flush of pending writes to disk. Called at shutdown entry
+ * so the debounced write-back can't be lost if a later shutdown step stalls
+ * past the supervisor's kill grace (e.g. Docker's 10s SIGTERM→SIGKILL window).
+ */
+export function flushDatabase(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  flushToDisk();
 }
 
 export function closeDatabase(): void {
@@ -440,6 +482,9 @@ function createSchema(db: CompatDatabase): void {
       .map(c => c.name);
     const hasBuiltin = existingCols.includes('builtin');
 
+    // Self-heal: a previous boot may have crashed mid-migration after the
+    // CREATE but before the RENAME, leaving the _new table behind on disk.
+    db.exec('DROP TABLE IF EXISTS project_mcp_configs_new');
     db.exec(`
       CREATE TABLE project_mcp_configs_new (
         id          TEXT PRIMARY KEY,
@@ -454,6 +499,11 @@ function createSchema(db: CompatDatabase): void {
         updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    // Purge orphan rows first: configs whose project was deleted while FK
+    // enforcement was off survive in old DBs, and copying them into the new
+    // table violates its FK — which aborted the whole migration and left the
+    // app unable to boot on such databases.
+    db.exec('DELETE FROM project_mcp_configs WHERE project_id NOT IN (SELECT id FROM projects)');
     const builtinSelect = hasBuiltin ? 'COALESCE(builtin, 0)' : '0';
     db.exec(`
       INSERT INTO project_mcp_configs_new
@@ -476,6 +526,8 @@ function createSchema(db: CompatDatabase): void {
     db.exec("DELETE FROM skills WHERE id = '__constraint_test__'");
   } catch {
     // Constraint doesn't allow 'github-agents' — recreate table
+    // Self-heal a leftover _new table from a crashed earlier migration.
+    db.exec('DROP TABLE IF EXISTS skills_new');
     db.exec(`
       CREATE TABLE skills_new (
         id          TEXT PRIMARY KEY,
@@ -495,6 +547,34 @@ function createSchema(db: CompatDatabase): void {
     db.exec(`INSERT INTO skills_new SELECT id, name, description, source_type, source_url, skill_path, status, last_error, created_at, updated_at, COALESCE(builtin, 0) FROM skills`);
     db.exec('DROP TABLE skills');
     db.exec('ALTER TABLE skills_new RENAME TO skills');
+  }
+
+  // Orphan sweep: FK enforcement was silently disabled for years because
+  // sql.js export() (called on every flush) resets PRAGMA foreign_keys, so
+  // ON DELETE CASCADE never fired and rows of deleted projects accumulated
+  // unreachably (one production DB had 1771 of 1798 mcp-config rows orphaned).
+  // Remove what CASCADE would have removed. Runs cheaply when there's nothing.
+  const orphanTables = [
+    'agent_runs', 'messages', 'project_skills', 'project_mcp_configs',
+    'project_files', 'rag_knowledge', 'rag_settings', 'skill_routing_logs',
+  ];
+  for (const table of orphanTables) {
+    try {
+      const r = db.prepare(
+        `DELETE FROM ${table} WHERE project_id NOT IN (SELECT id FROM projects)`,
+      ).run();
+      if (r.changes > 0) console.log(`[db] orphan sweep: removed ${r.changes} row(s) from ${table}`);
+    } catch (err) {
+      console.warn(`[db] orphan sweep failed for ${table}: ${(err as Error).message}`);
+    }
+  }
+  try {
+    const r = db.prepare(
+      'DELETE FROM rag_index WHERE knowledge_id NOT IN (SELECT id FROM rag_knowledge)',
+    ).run();
+    if (r.changes > 0) console.log(`[db] orphan sweep: removed ${r.changes} row(s) from rag_index`);
+  } catch (err) {
+    console.warn(`[db] orphan sweep failed for rag_index: ${(err as Error).message}`);
   }
 }
 

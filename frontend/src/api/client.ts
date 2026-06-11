@@ -211,12 +211,21 @@ export const filesApi = {
     for (const file of files) {
       formData.append('files', file);
     }
-    const token = await getCsrfToken();
-    const res = await fetch(`${API_BASE}/projects/${projectId}/files/upload`, {
-      method: 'POST',
-      headers: { 'X-AIRA-Token': token },
-      body: formData,
-    });
+    const doPost = async () => {
+      const token = await getCsrfToken();
+      return fetch(`${API_BASE}/projects/${projectId}/files/upload`, {
+        method: 'POST',
+        headers: { 'X-AIRA-Token': token },
+        body: formData,
+      });
+    };
+    let res = await doPost();
+    // Retry once on CSRF token invalidation (e.g. server restart) — same
+    // policy as request(); without it uploads stay broken until a reload.
+    if (res.status === 403) {
+      csrfToken = null;
+      res = await doPost();
+    }
     if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
     return res.json();
   },
@@ -337,6 +346,9 @@ export const jupyterApi = {
   /** Stop all running Jupyter kernels (server stays up). v3.13.0. */
   stopKernels: () =>
     request<{ stopped: number; running: boolean }>('/settings/jupyter/kernels/stop', { method: 'POST' }),
+  /** Get the number of active Jupyter kernels. */
+  getKernelCount: () =>
+    request<{ count: number; running: boolean }>('/settings/jupyter/kernels/count'),
 };
 
 // ─── Computational Provenance (v3.2.0) ───

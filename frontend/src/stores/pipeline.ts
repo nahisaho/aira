@@ -47,7 +47,7 @@ wsClient.onEvent((event) => {
     case 'status':
       if (event.status === 'running') {
         usePipelineStore.setState({ steps: [], currentStep: -1 });
-      } else if (event.status === 'completed' || event.status === 'failed') {
+      } else if (event.status === 'completed' || event.status === 'failed' || event.status === 'cancelled') {
         const { steps } = usePipelineStore.getState();
         if (steps.length > 0) {
           usePipelineStore.setState({

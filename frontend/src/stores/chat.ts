@@ -50,6 +50,10 @@ export const useChatStore = create<ChatStore>((set) => ({
     set({ loading: true });
     try {
       const messages = await messagesApi.list(projectId);
+      // Drop stale responses: if the user switched projects while this fetch
+      // was in flight, applying it would show project A's messages in B.
+      const { useProjectStore } = await import('./project');
+      if (useProjectStore.getState().activeProjectId !== projectId) return;
       // Clear any buffered streaming chunks to avoid duplication.
       // DB content already includes everything that was streamed so far.
       // After this, future WS chunks will be appended normally.
@@ -71,7 +75,12 @@ export const useChatStore = create<ChatStore>((set) => ({
 
       // Trigger agent execution via WebSocket. No model field is sent — the
       // Copilot CLI uses its own routing (equivalent to the old "Auto" choice).
-      wsClient.send({ type: 'chat', content, messageId: message.id });
+      const delivered = wsClient.send({ type: 'chat', content, messageId: message.id });
+      if (!delivered) {
+        // Socket was down (reconnecting): no run will start, so no WS event
+        // will ever clear `sending`. Reset instead of locking the input forever.
+        set({ sending: false, progressMessage: null });
+      }
     } catch {
       set({ sending: false });
     }
@@ -80,8 +89,9 @@ export const useChatStore = create<ChatStore>((set) => ({
   requestReview: () => {
     // Server builds the reviewer prompt and runs it through the normal chat path;
     // the assistant response streams in like any turn.
-    set({ sending: true });
-    wsClient.send({ type: 'review' });
+    if (wsClient.send({ type: 'review' })) {
+      set({ sending: true });
+    }
   },
 
   clearMessages: async (projectId: string) => {
@@ -118,7 +128,13 @@ export const useChatStore = create<ChatStore>((set) => ({
 
   setProgressMessage: (message) => set({ progressMessage: message }),
 
-  reset: () => set({ messages: [], loading: false, sending: false, runStatus: 'idle', progressMessage: null }),
+  reset: () => {
+    // Drop buffered stream chunks from the previous project — flushing them
+    // after the switch would create a phantom assistant message in the new one.
+    chunkBuffer = '';
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+    set({ messages: [], loading: false, sending: false, runStatus: 'idle', progressMessage: null });
+  },
 }));
 
 // Wire WS events to chat store
@@ -150,6 +166,27 @@ wsClient.onEvent((event) => {
             }
           });
         });
+      } else if (event.status === 'connected') {
+        // (Re)connected. If we believe a run is active, the terminal event may
+        // have been missed while disconnected (the backend also kills the run
+        // when the last client drops) — resync from the server instead of
+        // showing the thinking indicator forever.
+        const s = useChatStore.getState();
+        if (s.runStatus === 'running' || s.sending) {
+          import('./project').then(async ({ useProjectStore }) => {
+            const projectId = useProjectStore.getState().activeProjectId;
+            if (!projectId) return;
+            try {
+              const { runsApi } = await import('../api/client');
+              const current = await runsApi.current(projectId);
+              const stillRunning = current.status === 'running' || current.status === 'queued';
+              if (!stillRunning) {
+                useChatStore.setState({ runStatus: 'idle', sending: false, progressMessage: null });
+                useChatStore.getState().fetchMessages(projectId);
+              }
+            } catch { /* keep current state; the next WS event will correct it */ }
+          });
+        }
       } else if (event.status === 'completed' || event.status === 'failed' || event.status === 'cancelled') {
         // Flush any remaining buffered chunks before finalizing
         if (chunkBuffer) flushChunkBuffer();

@@ -443,6 +443,26 @@ export async function reapOrphanedJupyterServer(): Promise<{ killed: number }> {
 }
 
 /**
+ * Return the number of active kernels on the running Jupyter Server.
+ * Returns 0 if the server is not running or unreachable.
+ */
+export async function getKernelCount(): Promise<number> {
+  const url = getJupyterUrl();
+  if (!url || !_token) return 0;
+  try {
+    const res = await fetch(`${url}/api/kernels`, {
+      headers: { Authorization: `token ${_token}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return 0;
+    const kernels = (await res.json()) as unknown;
+    return Array.isArray(kernels) ? kernels.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Stop all kernels of the currently-running Jupyter Server via its REST API
  * (graceful per-kernel shutdown), leaving the server itself up so the JupyterLab
  * iframe keeps working. Used by the "Stop kernels" action. Returns how many were
