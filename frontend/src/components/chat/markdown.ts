@@ -5,7 +5,8 @@
  */
 
 import DOMPurify from 'dompurify';
-import { marked } from 'marked';
+import katex from 'katex';
+import { marked, type Tokens } from 'marked';
 
 const URI_BLOCKLIST = /^(javascript|vbscript|data:text\/html)/i;
 
@@ -19,14 +20,87 @@ const ALLOWED_TAGS = [
   'a', 'img',
   'table', 'thead', 'tbody', 'tr', 'th', 'td',
   'div', 'span',
+  'math', 'semantics', 'annotation',
+  'mrow', 'mi', 'mn', 'mo', 'ms', 'mtext', 'mspace',
+  'msup', 'msub', 'msubsup', 'mfrac', 'mroot', 'msqrt',
+  'mtable', 'mtr', 'mtd', 'mover', 'munder', 'munderover',
+  'menclose', 'mpadded', 'mphantom',
 ];
-const ALLOWED_ATTR = ['href', 'src', 'alt', 'title', 'class', 'target', 'rel'];
+const ALLOWED_ATTR = [
+  'href', 'src', 'alt', 'title', 'class', 'target', 'rel',
+  'xmlns', 'display', 'encoding', 'mathvariant', 'stretchy', 'fence',
+  'separator', 'lspace', 'rspace', 'minsize', 'maxsize', 'accent',
+  'accentunder', 'columnalign', 'rowspacing', 'columnspacing',
+  'scriptlevel', 'width', 'height', 'depth', 'voffset', 'notation',
+];
 const FORBID_TAGS = ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'svg'];
 
 // Configure marked
 marked.setOptions({
   gfm: true,
   breaks: true,
+});
+
+interface MathToken extends Tokens.Generic {
+  text: string;
+  displayMode: boolean;
+}
+
+const inlineMathRule = /^(\${1,2})(?!\$)((?:\\.|[^\\\n])*?(?:\\.|[^\\\n$]))\1(?=[\s?!.,:？！。，：]|$)/;
+const blockMathRule = /^\$\$\n((?:\\[^]|[^\\])+?)\n\$\$(?:\n|$)/;
+const inlineBracketMathRule = /^\\\((.+?)\\\)/;
+const blockBracketMathRule = /^\\\[\s*\n?([\s\S]+?)\n?\\\](?:\n|$)/;
+const renderMath = (token: MathToken) => katex.renderToString(token.text, {
+  displayMode: token.displayMode,
+  output: 'mathml',
+  throwOnError: false,
+  strict: 'error',
+  trust: false,
+});
+
+marked.use({
+  extensions: [
+    {
+      name: 'inlineMath',
+      level: 'inline',
+      start(src) {
+        const dollarIndex = src.indexOf('$');
+        const bracketIndex = src.indexOf('\\(');
+        const indexes = [dollarIndex, bracketIndex].filter((index) => index >= 0);
+        return indexes.length > 0 ? Math.min(...indexes) : undefined;
+      },
+      tokenizer(src) {
+        const match = src.match(inlineMathRule) ?? src.match(inlineBracketMathRule);
+        if (!match) return;
+        return {
+          type: 'inlineMath',
+          raw: match[0],
+          text: (match[2] ?? match[1]).trim(),
+          displayMode: match[2] !== undefined && match[1].length === 2,
+        };
+      },
+      renderer(token) {
+        return renderMath(token as MathToken);
+      },
+    },
+    {
+      name: 'blockMath',
+      level: 'block',
+      tokenizer(src) {
+        const match = src.match(blockMathRule) ?? src.match(blockBracketMathRule);
+        if (!match) return;
+        return {
+          type: 'blockMath',
+          raw: match[0],
+          text: match[1].trim(),
+          displayMode: true,
+        };
+      },
+      renderer(token) {
+        return `<div class="katex-display">${renderMath(token as MathToken)}</div>\n`;
+      },
+    },
+  ],
 });
 
 // Custom link renderer to block dangerous URIs

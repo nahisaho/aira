@@ -27,6 +27,40 @@ describe('renderMarkdown', () => {
     expect(html).toContain('<code>npm install</code>');
   });
 
+  it('renders inline LaTeX as MathML', () => {
+    const html = renderMarkdown('Einstein wrote $E=mc^2$.');
+    expect(html).toContain('<math');
+    expect(html).toContain('<msup>');
+    expect(html).toContain('E=mc^2');
+  });
+
+  it('renders block LaTeX as display MathML', () => {
+    const html = renderMarkdown('$$\n\\frac{a}{b}\n$$');
+    expect(html).toContain('class="katex-display"');
+    expect(html).toContain('display="block"');
+    expect(html).toContain('<mfrac>');
+  });
+
+  it('renders bracket-delimited block LaTeX', () => {
+    const html = renderMarkdown('\\[\n\\sum_t x_t\n\\]');
+    expect(html).toContain('class="katex-display"');
+    expect(html).toContain('display="block"');
+    expect(html).toContain('<munder>');
+  });
+
+  it('renders parenthesis-delimited inline LaTeX', () => {
+    const html = renderMarkdown('Value: \\(x^2\\).');
+    expect(html).toContain('<math');
+    expect(html).toContain('<msup>');
+    expect(html).not.toContain('display="block"');
+  });
+
+  it('does not enable trusted KaTeX HTML commands', () => {
+    const html = renderMarkdown('$\\href{javascript:alert(1)}{click}$');
+    expect(html).not.toContain('<a ');
+    expect(html).not.toContain('href=');
+  });
+
   it('renders links with target=_blank', () => {
     const html = renderMarkdown('[GitHub](https://github.com)');
     expect(html).toContain('href="https://github.com"');

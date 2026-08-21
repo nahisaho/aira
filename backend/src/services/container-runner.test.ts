@@ -1,9 +1,26 @@
 import { describe, it, expect, vi } from 'vitest';
-import { parseLine, type ParseState, type SkillRoutingEvent } from './container-runner.js';
+import { normalizeExitCode, parseLine, type ParseState, type SkillRoutingEvent } from './container-runner.js';
 
 function freshState(): ParseState {
-  return { deltasSeen: false, finalMessage: '' };
+  return { deltasSeen: false, finalMessage: '', resultSeen: false };
 }
+
+describe('parseLine — run completion', () => {
+  it('records the terminal result event', () => {
+    const state = freshState();
+    parseLine(
+      JSON.stringify({ type: 'result', data: {} }),
+      state,
+      { onChunk: () => {}, onProgress: () => {} },
+    );
+    expect(state.resultSeen).toBe(true);
+    expect(normalizeExitCode(null, state)).toBe(0);
+  });
+
+  it('does not convert a signal exit without a terminal result into success', () => {
+    expect(normalizeExitCode(null, freshState())).toBeNull();
+  });
+});
 
 describe('parseLine — skill routing capture (v3.9.1)', () => {
   it('records a real skill invocation from the CLI skill.invoked event', () => {

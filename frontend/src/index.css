@@ -51,6 +51,19 @@ pre.not-prose {
   color: #1e293b;
 }
 
+/* Native MathML emitted by the Markdown viewer. */
+.katex-display {
+  margin: 1em 0;
+  overflow-x: auto;
+  text-align: center;
+}
+.katex-display .katex {
+  display: block;
+}
+.katex math {
+  font-size: 1.1em;
+}
+
 /* Excel table styles */
 .excel-table table {
   border-collapse: collapse;
@@ -72,4 +85,3 @@ pre.not-prose {
 .excel-dark th { background: #1e293b; border-color: #475569; font-weight: 600; }
 .excel-dark td { border-color: #334155; }
 .excel-dark tr:hover td { background: #1e293b; }
-

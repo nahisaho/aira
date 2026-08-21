@@ -152,6 +152,11 @@ function formatToolStart(toolName: string, args: Record<string, unknown>): strin
 export interface ParseState {
   deltasSeen: boolean;
   finalMessage: string;
+  resultSeen: boolean;
+}
+
+export function normalizeExitCode(exitCode: number | null, state: ParseState): number | null {
+  return exitCode === null && state.resultSeen ? 0 : exitCode;
 }
 
 /** Exported for unit tests. Parses one CLI JSON event line and fires callbacks. */
@@ -189,6 +194,9 @@ export function parseLine(
       break;
     case 'assistant.message':
       if (typeof data.content === 'string') state.finalMessage = data.content.trim();
+      break;
+    case 'result':
+      state.resultSeen = true;
       break;
     case 'assistant.turn_start':
       cbs.onProgress('Analyzing…');
@@ -353,7 +361,7 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
     const mode = sessionArg === '--resume' ? 'resume' : 'new';
     console.log(`[copilot-cli] ${mode} session="${sessionName}" prompt=${inputPrompt.length}chars`);
 
-    const state: ParseState = { deltasSeen: false, finalMessage: '' };
+    const state: ParseState = { deltasSeen: false, finalMessage: '', resultSeen: false };
 
     const child = spawn(cli.command, args, {
       cwd: opts.workspaceDir,
@@ -398,12 +406,13 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
       if (settled) return;
       settled = true;
       if (timeoutHandle) { clearTimeout(timeoutHandle); timeoutHandle = null; }
-      console.log(`[copilot-cli] settle: exitCode=${exitCode} deltasSeen=${state.deltasSeen} finalMsg=${state.finalMessage.length}chars stderr=${stderrBuf.length}chars`);
+      const effectiveExitCode = normalizeExitCode(exitCode, state);
+      console.log(`[copilot-cli] settle: exitCode=${exitCode} effectiveExitCode=${effectiveExitCode} resultSeen=${state.resultSeen} deltasSeen=${state.deltasSeen} finalMsg=${state.finalMessage.length}chars stderr=${stderrBuf.length}chars`);
 
       // If CLI exited with error and produced no output, report stderr as error
-      if (!error && exitCode !== 0 && !state.deltasSeen && !state.finalMessage) {
+      if (!error && effectiveExitCode !== 0 && !state.deltasSeen && !state.finalMessage) {
         const stderrMsg = stderrBuf.trim();
-        error = stderrMsg || `CLI exited with code ${exitCode}`;
+        error = stderrMsg || `CLI exited with code ${effectiveExitCode}`;
       }
 
       // If --resume failed (e.g., no such session or multiple matches), retry with --name.
@@ -428,11 +437,11 @@ function runOnHost(opts: RunnerOptions, cbs: RunnerCallbacks): ActiveRun {
         }
 
         // Surface stderr as a warning when CLI exits non-zero but produced partial output
-        if (exitCode !== null && exitCode !== 0 && stderrBuf.trim()) {
-          console.warn(`[copilot-cli] non-zero exit (${exitCode}) with partial output. stderr: ${stderrBuf.trim().slice(0, 500)}`);
+        if (effectiveExitCode !== null && effectiveExitCode !== 0 && stderrBuf.trim()) {
+          console.warn(`[copilot-cli] non-zero exit (${effectiveExitCode}) with partial output. stderr: ${stderrBuf.trim().slice(0, 500)}`);
         }
 
-        cbs.onDone(exitCode);
+        cbs.onDone(effectiveExitCode);
       }
     }
 
